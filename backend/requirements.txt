@@ -19,6 +19,9 @@ scikit-learn==1.3.2
 pandas==2.1.3
 numpy==1.25.2
 nltk==3.8.1
+prophet==1.1.5                  # Facebook Prophet for predictions
+matplotlib==3.7.2              # For prediction charts
+seaborn==0.12.2                 # Statistical visualizations
 
 # Indonesian Language Support
 sastrawi==1.0.1                # Indonesian stemmer (lighter than IndoBERT)
