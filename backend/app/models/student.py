@@ -1,23 +1,49 @@
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, GetJsonSchemaHandler
+from pydantic.json_schema import JsonSchemaValue
+from pydantic_core import core_schema
 from bson import ObjectId
 from enum import Enum
 
 class PyObjectId(ObjectId):
+    """
+    Custom ObjectId class compatible with Pydantic v2
+    """
+    
     @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
+    def __get_pydantic_core_schema__(
+        cls, source_type: Any, handler: Any
+    ) -> core_schema.CoreSchema:
+        return core_schema.union_schema([
+            core_schema.is_instance_schema(ObjectId),
+            core_schema.chain_schema([
+                core_schema.str_schema(),
+                core_schema.no_info_plain_validator_function(cls.validate),
+            ]),
+        ])
 
     @classmethod
-    def validate(cls, v):
-        if not ObjectId.is_valid(v):
-            raise ValueError("Invalid objectid")
-        return ObjectId(v)
+    def __get_pydantic_json_schema__(
+        cls, schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
+    ) -> JsonSchemaValue:
+        return {"type": "string", "format": "objectid"}
 
     @classmethod
-    def __modify_schema__(cls, field_schema):
-        field_schema.update(type="string")
+    def validate(cls, v: Any) -> ObjectId:
+        if isinstance(v, ObjectId):
+            return v
+        if isinstance(v, str):
+            if ObjectId.is_valid(v):
+                return ObjectId(v)
+            raise ValueError("Invalid ObjectId")
+        raise ValueError("Invalid ObjectId")
+
+    def __str__(self) -> str:
+        return str(super())
+
+    def __repr__(self) -> str:
+        return f"PyObjectId('{super().__str__()}')"
 
 class OTPType(str, Enum):
     REGISTRATION = "registration"
@@ -261,11 +287,11 @@ class Student(BaseModel):
                 self.failed_login_attempts = 0
         return False
 
-    class Config:
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
-        schema_extra = {
+    model_config = {
+        "populate_by_name": True,
+        "arbitrary_types_allowed": True,
+        "json_encoders": {ObjectId: str},
+        "json_schema_extra": {
             "example": {
                 "email": "student@univ.ac.id",
                 "profile": {
@@ -283,6 +309,7 @@ class Student(BaseModel):
                 }
             }
         }
+    }
 
 # Request/Response Models
 class StudentCreate(BaseModel):
@@ -305,8 +332,7 @@ class StudentResponse(BaseModel):
     last_login: Optional[datetime] = None
     is_active: bool
 
-    class Config:
-        allow_population_by_field_name = True
+    model_config = {"populate_by_name": True}
 
 # OTP Related Request/Response Models
 class OTPRequest(BaseModel):
