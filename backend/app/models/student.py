@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field, EmailStr
 from bson import ObjectId
@@ -18,6 +18,46 @@ class PyObjectId(ObjectId):
     @classmethod
     def __modify_schema__(cls, field_schema):
         field_schema.update(type="string")
+
+class OTPType(str, Enum):
+    REGISTRATION = "registration"
+    FORGOT_PASSWORD = "forgot_password"
+    EMAIL_VERIFICATION = "email_verification"
+    LOGIN_VERIFICATION = "login_verification"
+
+class OTPStatus(str, Enum):
+    PENDING = "pending"
+    VERIFIED = "verified"
+    EXPIRED = "expired"
+    USED = "used"
+
+class OTPRecord(BaseModel):
+    code: str = Field(..., description="6-digit OTP code")
+    type: OTPType
+    status: OTPStatus = OTPStatus.PENDING
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    expires_at: datetime = Field(default_factory=lambda: datetime.utcnow() + timedelta(minutes=10))
+    verified_at: Optional[datetime] = None
+    attempts: int = 0
+    max_attempts: int = 3
+    
+    def is_expired(self) -> bool:
+        return datetime.utcnow() > self.expires_at
+    
+    def is_valid(self) -> bool:
+        return (
+            self.status == OTPStatus.PENDING and 
+            not self.is_expired() and 
+            self.attempts < self.max_attempts
+        )
+
+class AccountVerification(BaseModel):
+    email_verified: bool = False
+    email_verified_at: Optional[datetime] = None
+    phone_verified: bool = False
+    phone_verified_at: Optional[datetime] = None
+    registration_completed: bool = False
+    registration_completed_at: Optional[datetime] = None
 
 class IncomeSource(BaseModel):
     type: str = Field(..., description="allowance, part_time, scholarship, freelance")
@@ -67,6 +107,7 @@ class Profile(BaseModel):
     full_name: str
     nickname: Optional[str] = None
     avatar_url: Optional[str] = None
+    phone_number: Optional[str] = None
     
     # University Info
     university: str
@@ -138,17 +179,87 @@ class Student(BaseModel):
     # Student Profile
     profile: Profile
     
+    # Account Verification
+    verification: AccountVerification = Field(default_factory=AccountVerification)
+    
+    # OTP Records
+    otp_records: List[OTPRecord] = []
+    
     # Settings
     settings: Settings = Field(default_factory=Settings)
     
     # Gamification
     gamification: Gamification = Field(default_factory=Gamification)
     
+    # Security
+    password_reset_token: Optional[str] = None
+    password_reset_expires: Optional[datetime] = None
+    failed_login_attempts: int = 0
+    account_locked_until: Optional[datetime] = None
+    
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     last_login: Optional[datetime] = None
     is_active: bool = True
+
+    def add_otp_record(self, code: str, otp_type: OTPType) -> OTPRecord:
+        """Add new OTP record and deactivate previous ones of the same type"""
+        # Deactivate previous OTP records of the same type
+        for otp in self.otp_records:
+            if otp.type == otp_type and otp.status == OTPStatus.PENDING:
+                otp.status = OTPStatus.EXPIRED
+        
+        # Create new OTP record
+        new_otp = OTPRecord(code=code, type=otp_type)
+        self.otp_records.append(new_otp)
+        return new_otp
+    
+    def get_active_otp(self, otp_type: OTPType) -> Optional[OTPRecord]:
+        """Get active OTP record for specific type"""
+        for otp in reversed(self.otp_records):  # Get most recent first
+            if otp.type == otp_type and otp.is_valid():
+                return otp
+        return None
+    
+    def verify_otp(self, code: str, otp_type: OTPType) -> bool:
+        """Verify OTP code"""
+        otp_record = self.get_active_otp(otp_type)
+        if not otp_record:
+            return False
+        
+        otp_record.attempts += 1
+        
+        if otp_record.code == code:
+            otp_record.status = OTPStatus.VERIFIED
+            otp_record.verified_at = datetime.utcnow()
+            
+            # Update verification status based on OTP type
+            if otp_type == OTPType.REGISTRATION:
+                self.verification.email_verified = True
+                self.verification.email_verified_at = datetime.utcnow()
+                self.verification.registration_completed = True
+                self.verification.registration_completed_at = datetime.utcnow()
+            elif otp_type == OTPType.EMAIL_VERIFICATION:
+                self.verification.email_verified = True
+                self.verification.email_verified_at = datetime.utcnow()
+            
+            return True
+        else:
+            if otp_record.attempts >= otp_record.max_attempts:
+                otp_record.status = OTPStatus.EXPIRED
+            return False
+    
+    def is_account_locked(self) -> bool:
+        """Check if account is locked due to failed login attempts"""
+        if self.account_locked_until:
+            if datetime.utcnow() < self.account_locked_until:
+                return True
+            else:
+                # Reset lock if time has passed
+                self.account_locked_until = None
+                self.failed_login_attempts = 0
+        return False
 
     class Config:
         allow_population_by_field_name = True
@@ -187,6 +298,7 @@ class StudentResponse(BaseModel):
     id: str = Field(alias="_id")
     email: EmailStr
     profile: Profile
+    verification: AccountVerification
     settings: Settings
     gamification: Gamification
     created_at: datetime
@@ -195,3 +307,31 @@ class StudentResponse(BaseModel):
 
     class Config:
         allow_population_by_field_name = True
+
+# OTP Related Request/Response Models
+class OTPRequest(BaseModel):
+    email: EmailStr
+    type: OTPType
+
+class OTPVerification(BaseModel):
+    email: EmailStr
+    code: str
+    type: OTPType
+
+class OTPResponse(BaseModel):
+    message: str
+    expires_at: datetime
+    attempts_remaining: int
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    otp_code: str
+    new_password: str
+
+class VerificationStatusResponse(BaseModel):
+    email_verified: bool
+    phone_verified: bool
+    registration_completed: bool
