@@ -26,7 +26,7 @@ from app.core.exceptions import (
     InvalidStudentEmailException, ValidationException,
     AccountLockedException, InvalidOTPException,
     OTPExpiredException, TooManyOTPAttemptsException,
-    AccountNotVerifiedException
+    AccountNotVerifiedException, AccountNotVerifiedException
 )
 from app.config.settings import settings
 import logging
@@ -195,14 +195,15 @@ async def register_student(
             detail="Registration failed. Please try again."
         )
 
-
 @router.post("/login", response_model=LoginResponse)
 async def login_student(
     login_data: LoginRequest,
     request: Request = None,
     _: None = Depends(check_auth_rate_limit)
 ):
-    """Authenticate student and return tokens"""
+    """
+    Authenticate student and return tokens with user data
+    """
     try:
         # Authenticate student
         student = await student_crud.authenticate_student(
@@ -213,18 +214,51 @@ async def login_student(
         if not student:
             raise InvalidCredentialsException()
         
-        # Check if account is verified (optional - you can allow unverified login)
+        # Check if account is active
+        if not student.is_active:
+            logger.warning(f"Inactive account login attempt: {login_data.email}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Akun Anda tidak aktif. Silakan hubungi admin."
+            )
+        
+        # Check if account is locked
+        if student.is_account_locked():
+            logger.warning(f"Locked account login attempt: {login_data.email}")
+            raise AccountLockedException()
+        
+        # Check email verification
         if not student.verification.email_verified:
-            logger.warning(f"Unverified user login attempt: {login_data.email}")
-            # You can choose to block unverified users or allow with warning
-            # raise AccountNotVerifiedException()
+            logger.warning(f"Unverified email login attempt: {login_data.email}")
+            
+            # Reset failed login attempts karena credentials benar
+            if student.failed_login_attempts > 0:
+                await student_crud.reset_failed_login_attempts(student.email)
+            
+            # Return specific error untuk email not verified
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error_code": "EMAIL_NOT_VERIFIED",
+                    "message": "Email Anda belum diverifikasi. Silakan verifikasi email terlebih dahulu.",
+                    "email": student.email,
+                    "verification_required": True
+                }
+            )
+        
+        # Reset failed login attempts on successful authentication
+        if student.failed_login_attempts > 0:
+            await student_crud.reset_failed_login_attempts(student.email)
+        
+        # Update last login timestamp
+        await student_crud.update_last_login(student.email)
         
         # Generate tokens
         tokens = auth_utils.create_tokens_for_student(student)
         
-        # Create response
+        # Create response dengan user data - INI YANG PENTING!
         student_response = StudentResponse(
-            id=str(student.id),
+            _id=str(student.id),  # Use _id as per model
             email=student.email,
             profile=student.profile,
             verification=student.verification,
@@ -237,28 +271,40 @@ async def login_student(
         
         logger.info(f"Successful login: {login_data.email}")
         
-        return LoginResponse(
-            access_token=tokens["access_token"],
-            refresh_token=tokens["refresh_token"],
-            token_type=tokens["token_type"],
-            user=student_response,
-            message="Login successful"
-        )
+        # RETURN FORMAT YANG BENAR - INCLUDE USER DATA
+        return {
+            "access_token": tokens["access_token"],
+            "refresh_token": tokens["refresh_token"],
+            "token_type": tokens["token_type"],
+            "user": student_response.model_dump(by_alias=True),  # TAMBAH INI!
+            "message": "Login berhasil"
+        }
         
-    except (InvalidCredentialsException, AccountLockedException) as e:
+    except HTTPException:
+        # Re-raise HTTPException as is
+        raise
+    except (
+        InvalidCredentialsException, 
+        AccountLockedException
+    ) as e:
+        # Increment failed login attempts for authentication failures
+        if isinstance(e, InvalidCredentialsException):
+            try:
+                await student_crud.increment_failed_login_attempts(login_data.email)
+            except:
+                pass  # Don't fail login if we can't update attempts
+        
         logger.warning(f"Failed login attempt for {login_data.email}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e)
+            detail="Email atau password salah"
         )
     except Exception as e:
-        logger.error(f"Login error: {str(e)}")
+        logger.error(f"Login error for {login_data.email}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Login failed. Please try again."
+            detail="Terjadi kesalahan sistem. Silakan coba lagi."
         )
-
-
 @router.post("/refresh", response_model=Dict[str, str])
 async def refresh_access_token(
     refresh_data: RefreshTokenRequest,

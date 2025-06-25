@@ -40,15 +40,36 @@ class EmailService:
             html_part = MIMEText(html_content, "html", "utf-8")
             message.attach(html_part)
 
-            # Send email
-            await aiosmtplib.send(
-                message,
-                hostname=self.smtp_host,
-                port=self.smtp_port,
-                start_tls=True,
-                username=self.smtp_username,
-                password=self.smtp_password,
-            )
+            # Determine SSL/TLS settings based on port
+            if self.smtp_port == 465:
+                # Port 465 uses implicit SSL (SSL from the start)
+                await aiosmtplib.send(
+                    message,
+                    hostname=self.smtp_host,
+                    port=self.smtp_port,
+                    use_tls=True,  # Use SSL from connection start
+                    username=self.smtp_username,
+                    password=self.smtp_password,
+                )
+            elif self.smtp_port == 587:
+                # Port 587 uses explicit TLS (STARTTLS)
+                await aiosmtplib.send(
+                    message,
+                    hostname=self.smtp_host,
+                    port=self.smtp_port,
+                    start_tls=True,  # Use STARTTLS
+                    username=self.smtp_username,
+                    password=self.smtp_password,
+                )
+            else:
+                # For other ports, try without encryption first
+                await aiosmtplib.send(
+                    message,
+                    hostname=self.smtp_host,
+                    port=self.smtp_port,
+                    username=self.smtp_username,
+                    password=self.smtp_password,
+                )
             
             logger.info(f"Email sent successfully to {to_email}")
             return True
@@ -56,6 +77,86 @@ class EmailService:
         except Exception as e:
             logger.error(f"Failed to send email to {to_email}: {str(e)}")
             return False
+
+    async def send_email_with_retry(
+        self,
+        to_email: str,
+        subject: str,
+        html_content: str,
+        text_content: Optional[str] = None,
+        max_retries: int = 3
+    ) -> bool:
+        """Send email with retry mechanism"""
+        for attempt in range(max_retries):
+            try:
+                message = MIMEMultipart("alternative")
+                message["Subject"] = subject
+                message["From"] = f"{self.from_name} <{self.from_email}>"
+                message["To"] = to_email
+
+                if text_content:
+                    text_part = MIMEText(text_content, "plain", "utf-8")
+                    message.attach(text_part)
+
+                html_part = MIMEText(html_content, "html", "utf-8")
+                message.attach(html_part)
+
+                # Try different connection methods
+                connection_methods = [
+                    # Method 1: SSL from start (port 465)
+                    {
+                        "use_tls": True,
+                        "start_tls": False,
+                        "port": 465
+                    },
+                    # Method 2: STARTTLS (port 587)
+                    {
+                        "use_tls": False,
+                        "start_tls": True,
+                        "port": 587
+                    },
+                    # Method 3: Use configured port with SSL
+                    {
+                        "use_tls": True,
+                        "start_tls": False,
+                        "port": self.smtp_port
+                    },
+                    # Method 4: Use configured port with STARTTLS
+                    {
+                        "use_tls": False,
+                        "start_tls": True,
+                        "port": self.smtp_port
+                    }
+                ]
+
+                for method in connection_methods:
+                    try:
+                        await aiosmtplib.send(
+                            message,
+                            hostname=self.smtp_host,
+                            port=method["port"],
+                            use_tls=method["use_tls"],
+                            start_tls=method["start_tls"],
+                            username=self.smtp_username,
+                            password=self.smtp_password,
+                            timeout=30  # Add timeout
+                        )
+                        
+                        logger.info(f"Email sent successfully to {to_email} using port {method['port']}")
+                        return True
+                        
+                    except Exception as method_error:
+                        logger.warning(f"Connection method failed (port {method['port']}): {str(method_error)}")
+                        continue
+
+                # If all methods failed for this attempt
+                logger.warning(f"Attempt {attempt + 1} failed for {to_email}")
+                
+            except Exception as e:
+                logger.error(f"Attempt {attempt + 1} failed for {to_email}: {str(e)}")
+
+        logger.error(f"All {max_retries} attempts failed for {to_email}")
+        return False
 
     async def send_otp_email(self, to_email: str, otp_code: str, otp_type: str) -> bool:
         """Send OTP verification email"""
@@ -178,7 +279,8 @@ class EmailService:
         © 2024 Student Finance App
         """
         
-        return await self.send_email(to_email, subject, html_content, text_content)
+        # Use retry mechanism for important emails like OTP
+        return await self.send_email_with_retry(to_email, subject, html_content, text_content)
 
     async def send_welcome_email(self, to_email: str, student_name: str) -> bool:
         """Send welcome email after successful registration"""

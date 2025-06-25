@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from bson import ObjectId
@@ -29,6 +29,12 @@ class RuleConditions(BaseModel):
 
 
 class PredictionRule(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
+    
     id: Optional[str] = Field(None, alias="_id")
     rule_name: str = Field(..., description="Name of the prediction rule")
     rule_type: str = Field(..., description="Type: debt_impact, event_impact, seasonal, behavioral")
@@ -46,11 +52,6 @@ class PredictionRule(BaseModel):
     is_active: bool = Field(True)
     usage_count: int = Field(0, description="How often this rule has been used")
     success_rate: float = Field(0.0, description="Success rate of prediction improvements")
-
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
 
 
 # Example rules for reference:

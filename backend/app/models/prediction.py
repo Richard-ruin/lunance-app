@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from bson import ObjectId
 from app.models.base import PyObjectId
 
@@ -48,6 +48,12 @@ class PredictionInsight(BaseModel):
 
 
 class ProphetPrediction(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
+    
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     student_id: PyObjectId
     
@@ -68,24 +74,19 @@ class ProphetPrediction(BaseModel):
     forecast_data: List[ForecastDataPoint]
     
     # Business Logic Adjustments
-    adjustments: List[PredictionAdjustment] = []
+    adjustments: List[PredictionAdjustment] = Field(default_factory=list)
     
     # Model Performance
     model_metrics: ModelMetrics
     
     # Insights Generated
-    insights: List[PredictionInsight] = []
+    insights: List[PredictionInsight] = Field(default_factory=list)
     
     # Cache Info
     cache_until: datetime
     prediction_hash: str  # for caching similar predictions
     
     is_active: bool = True
-    
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
 
 
 class ProphetPredictionInDB(ProphetPrediction):
@@ -113,10 +114,10 @@ class PredictionResponse(BaseModel):
 
 # Business Rules for Predictions
 class PredictionConditions(BaseModel):
-    student_criteria: Dict[str, Any] = {}  # semester, university, etc.
-    financial_criteria: Dict[str, Any] = {}  # debt_level, income_range, etc.
-    temporal_criteria: Dict[str, Any] = {}  # time of year, academic calendar
-    transaction_criteria: Dict[str, Any] = {}  # spending patterns, categories
+    student_criteria: Dict[str, Any] = Field(default_factory=dict)  # semester, university, etc.
+    financial_criteria: Dict[str, Any] = Field(default_factory=dict)  # debt_level, income_range, etc.
+    temporal_criteria: Dict[str, Any] = Field(default_factory=dict)  # time of year, academic calendar
+    transaction_criteria: Dict[str, Any] = Field(default_factory=dict)  # spending patterns, categories
 
 
 class PredictionAdjustmentRule(BaseModel):
@@ -127,12 +128,18 @@ class PredictionAdjustmentRule(BaseModel):
 
 
 class PredictionAdjustments(BaseModel):
-    income_adjustments: List[PredictionAdjustmentRule] = []
-    expense_adjustments: List[PredictionAdjustmentRule] = []
-    balance_adjustments: List[PredictionAdjustmentRule] = []
+    income_adjustments: List[PredictionAdjustmentRule] = Field(default_factory=list)
+    expense_adjustments: List[PredictionAdjustmentRule] = Field(default_factory=list)
+    balance_adjustments: List[PredictionAdjustmentRule] = Field(default_factory=list)
 
 
 class PredictionRule(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
+    
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     
     rule_name: str
@@ -151,8 +158,3 @@ class PredictionRule(BaseModel):
     is_active: bool = True
     usage_count: int = 0
     success_rate: float = 0.0  # how often this rule improves prediction accuracy
-    
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}

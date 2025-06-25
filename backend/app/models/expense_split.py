@@ -1,23 +1,28 @@
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from bson import ObjectId
 from enum import Enum
 
 class PyObjectId(ObjectId):
     @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
-
-    @classmethod
-    def validate(cls, v):
-        if not ObjectId.is_valid(v):
-            raise ValueError("Invalid objectid")
-        return ObjectId(v)
-
-    @classmethod
-    def __modify_schema__(cls, field_schema):
-        field_schema.update(type="string")
+    def __get_pydantic_core_schema__(cls, source_type, handler):
+        from pydantic._internal._core_utils import CoreMetadataHandler
+        from pydantic._internal._generate_schema import GenerateSchema
+        from pydantic_core import core_schema
+        
+        def validate_object_id(value):
+            if isinstance(value, ObjectId):
+                return value
+            if isinstance(value, str):
+                if ObjectId.is_valid(value):
+                    return ObjectId(value)
+            raise ValueError("Invalid ObjectId")
+        
+        return core_schema.no_info_plain_validator_function(
+            validate_object_id,
+            serialization=core_schema.plain_serializer_function(str)
+        )
 
 class SplitMethod(str, Enum):
     EQUAL = "equal"
@@ -31,17 +36,24 @@ class ExpenseSplitStatus(str, Enum):
     CANCELLED = "cancelled"
 
 class Participant(BaseModel):
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
+    
     student_id: PyObjectId
     student_name: str
     amount_owed: float
     has_paid: bool = False
     paid_date: Optional[datetime] = None
-    
-    class Config:
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
 
 class ExpenseSplit(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
+    
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     created_by: PyObjectId
     
@@ -67,26 +79,25 @@ class ExpenseSplit(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     completed_at: Optional[datetime] = None
 
-    class Config:
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
-        schema_extra = {
-            "example": {
-                "title": "Makan di KFC",
-                "total_amount": 120000,
-                "currency": "IDR",
-                "split_method": "equal",
-                "participants": [
-                    {
-                        "student_name": "Ahmad",
-                        "amount_owed": 40000,
-                        "has_paid": False
-                    }
-                ],
-                "notes": "Makan bareng setelah ujian"
-            }
+    @classmethod
+    def model_json_schema(cls, by_alias: bool = True, ref_template: str = '#/$defs/{model}') -> Dict[str, Any]:
+        schema = super().model_json_schema(by_alias=by_alias, ref_template=ref_template)
+        # Add the example to the schema
+        schema['example'] = {
+            "title": "Makan di KFC",
+            "total_amount": 120000,
+            "currency": "IDR",
+            "split_method": "equal",
+            "participants": [
+                {
+                    "student_name": "Ahmad",
+                    "amount_owed": 40000,
+                    "has_paid": False
+                }
+            ],
+            "notes": "Makan bareng setelah ujian"
         }
+        return schema
 
 # Request/Response Models
 class ParticipantCreate(BaseModel):
@@ -123,6 +134,10 @@ class ParticipantResponse(BaseModel):
     paid_date: Optional[datetime]
 
 class ExpenseSplitResponse(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True
+    )
+    
     id: str = Field(alias="_id")
     created_by: str
     title: str
@@ -144,9 +159,6 @@ class ExpenseSplitResponse(BaseModel):
     my_share: Optional[float] = None
     i_owe: Optional[float] = None
     owed_to_me: Optional[float] = None
-
-    class Config:
-        allow_population_by_field_name = True
 
 class PaymentUpdate(BaseModel):
     participant_student_id: str

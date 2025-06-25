@@ -1,11 +1,17 @@
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from bson import ObjectId
 from app.models.base import PyObjectId
 
 
 class FutureEvent(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
+    
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     student_id: PyObjectId
     
@@ -26,7 +32,7 @@ class FutureEvent(BaseModel):
     recurrence_pattern: Optional[str] = None  # monthly, semester, yearly
     
     # Context for Predictions
-    affects_categories: List[str] = []
+    affects_categories: List[str] = Field(default_factory=list)
     requires_preparation: bool = False  # need to save beforehand
     preparation_months: int = 0
     
@@ -36,11 +42,6 @@ class FutureEvent(BaseModel):
     
     created_at: datetime = Field(default_factory=datetime.utcnow)
     is_active: bool = True
-    
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
 
 
 class FutureEventInDB(FutureEvent):
@@ -56,7 +57,7 @@ class FutureEventCreate(BaseModel):
     date_flexibility: int = 0
     is_recurring: bool = False
     recurrence_pattern: Optional[str] = None
-    affects_categories: List[str] = []
+    affects_categories: List[str] = Field(default_factory=list)
     requires_preparation: bool = False
     preparation_months: int = 0
     notes: Optional[str] = None

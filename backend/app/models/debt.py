@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from bson import ObjectId
 from app.models.base import PyObjectId
 
@@ -12,6 +12,12 @@ class PredictionImpact(BaseModel):
 
 
 class DebtLoan(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
+    
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     student_id: PyObjectId
     
@@ -43,11 +49,6 @@ class DebtLoan(BaseModel):
     
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
 
 
 class DebtLoanInDB(DebtLoan):
@@ -86,6 +87,12 @@ class DebtLoanUpdate(BaseModel):
 
 
 class PaymentRecord(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
+    
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     debt_id: PyObjectId
     student_id: PyObjectId
@@ -94,11 +101,6 @@ class PaymentRecord(BaseModel):
     remaining_balance: float
     notes: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
 
 
 class PaymentRecordCreate(BaseModel):

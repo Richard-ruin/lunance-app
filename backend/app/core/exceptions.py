@@ -49,6 +49,14 @@ class InvalidCredentialsException(AuthenticationException):
             details=details
         )
 
+class AccountNotVerifiedException(AuthenticationException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email belum diverifikasi. Silakan verifikasi email terlebih dahulu.",
+            headers={"X-Error-Code": "EMAIL_NOT_VERIFIED"}
+        )
+
 
 class AccountLockedException(AuthenticationException):
     """Raised when account is locked due to failed attempts"""

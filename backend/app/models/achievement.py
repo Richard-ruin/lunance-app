@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Dict, Any, Optional
 from datetime import datetime
 from bson import ObjectId
@@ -12,6 +12,12 @@ class AchievementCriteria(BaseModel):
 
 
 class Achievement(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
+    
     id: Optional[str] = Field(None, alias="_id")
     achievement_id: str = Field(..., description="Unique achievement identifier")
     name: str = Field(..., description="Achievement name")
@@ -32,11 +38,6 @@ class Achievement(BaseModel):
     
     is_active: bool = Field(True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
-
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
 
 
 # Predefined achievements for Indonesian students

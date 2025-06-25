@@ -1,6 +1,7 @@
+
 // lib/shared/widgets/custom_button.dart
 import 'package:flutter/material.dart';
-import '../../core/theme/lunance_colors.dart';
+import "package:lunance/core/theme/lunance_colors.dart";
 
 class CustomButton extends StatelessWidget {
   final String text;
@@ -95,4 +96,3 @@ class CustomButton extends StatelessWidget {
           );
   }
 }
-

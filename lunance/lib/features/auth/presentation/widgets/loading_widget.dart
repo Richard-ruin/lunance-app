@@ -1,6 +1,7 @@
+
 // lib/shared/widgets/loading_widget.dart
 import 'package:flutter/material.dart';
-import '../../core/theme/lunance_colors.dart';
+import "package:lunance/core/theme/lunance_colors.dart";
 
 class LoadingWidget extends StatelessWidget {
   final String? message;

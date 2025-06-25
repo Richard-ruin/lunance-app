@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from bson import ObjectId
 from app.models.base import PyObjectId
 
@@ -12,6 +12,12 @@ class TypicalAmountRange(BaseModel):
 
 
 class Category(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
+    
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     name: str
     parent_id: Optional[PyObjectId] = None
@@ -30,11 +36,6 @@ class Category(BaseModel):
     
     keywords: List[str] = []  # for auto-categorization
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
 
 
 class CategoryInDB(Category):

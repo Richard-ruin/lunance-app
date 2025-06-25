@@ -1,23 +1,20 @@
 from datetime import datetime
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any, Annotated
+from pydantic import BaseModel, Field, ConfigDict, field_validator, BeforeValidator
 from bson import ObjectId
 from enum import Enum
 
-class PyObjectId(ObjectId):
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
+# Custom ObjectId validator for Pydantic v2
+def validate_object_id(v: Any) -> ObjectId:
+    if isinstance(v, ObjectId):
+        return v
+    if isinstance(v, str):
+        if ObjectId.is_valid(v):
+            return ObjectId(v)
+    raise ValueError("Invalid ObjectId")
 
-    @classmethod
-    def validate(cls, v):
-        if not ObjectId.is_valid(v):
-            raise ValueError("Invalid objectid")
-        return ObjectId(v)
-
-    @classmethod
-    def __modify_schema__(cls, field_schema):
-        field_schema.update(type="string")
+# Type alias for ObjectId with validation
+PyObjectId = Annotated[ObjectId, BeforeValidator(validate_object_id)]
 
 class TransactionType(str, Enum):
     INCOME = "income"
@@ -69,7 +66,13 @@ class BudgetImpact(BaseModel):
     category_budget_used: Optional[float] = None
 
 class Transaction(BaseModel):
-    id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
+    
+    id: Optional[PyObjectId] = Field(default_factory=lambda: ObjectId(), alias="_id")
     student_id: PyObjectId
     
     # Basic Info
@@ -106,25 +109,6 @@ class Transaction(BaseModel):
     # Budget tracking
     budget_impact: Optional[BudgetImpact] = None
 
-    class Config:
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
-        schema_extra = {
-            "example": {
-                "type": "expense",
-                "amount": 25000,
-                "currency": "IDR",
-                "title": "Makan Siang",
-                "payment_method": "cash",
-                "account_name": "Cash",
-                "location": {
-                    "name": "Kantin Fakultas",
-                    "type": "campus"
-                }
-            }
-        }
-
 # Student Categories Model
 class CategoryTypicalAmount(BaseModel):
     min: float
@@ -132,7 +116,13 @@ class CategoryTypicalAmount(BaseModel):
     avg: float
 
 class Category(BaseModel):
-    id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
+    
+    id: Optional[PyObjectId] = Field(default_factory=lambda: ObjectId(), alias="_id")
     name: str
     parent_id: Optional[PyObjectId] = None
     type: TransactionType
@@ -147,11 +137,6 @@ class Category(BaseModel):
     # For auto-categorization
     keywords: List[str] = []
     created_at: datetime = Field(default_factory=datetime.utcnow)
-
-    class Config:
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
 
 # Request/Response Models
 class TransactionCreate(BaseModel):
@@ -178,6 +163,8 @@ class TransactionUpdate(BaseModel):
     subcategory: Optional[str] = None
 
 class TransactionResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    
     id: str = Field(alias="_id")
     type: TransactionType
     amount: float
@@ -195,10 +182,9 @@ class TransactionResponse(BaseModel):
     metadata: TransactionMetadata
     budget_impact: Optional[BudgetImpact]
 
-    class Config:
-        allow_population_by_field_name = True
-
 class CategoryResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    
     id: str = Field(alias="_id")
     name: str
     parent_id: Optional[str]
@@ -210,9 +196,6 @@ class CategoryResponse(BaseModel):
     typical_amount_range: Optional[CategoryTypicalAmount]
     keywords: List[str]
     created_at: datetime
-
-    class Config:
-        allow_population_by_field_name = True
 
 # Analytics Models
 class TransactionSummary(BaseModel):
@@ -241,3 +224,17 @@ class MonthlyTransactionSummary(BaseModel):
     summary: TransactionSummary
     category_breakdown: List[CategoryBreakdown]
     weekly_breakdown: List[WeeklyTransactionSummary]
+
+# Example usage and schema
+TRANSACTION_EXAMPLE = {
+    "type": "expense",
+    "amount": 25000,
+    "currency": "IDR",
+    "title": "Makan Siang",
+    "payment_method": "cash",
+    "account_name": "Cash",
+    "location": {
+        "name": "Kantin Fakultas",
+        "type": "campus"
+    }
+}

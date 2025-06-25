@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from bson import ObjectId
 from app.models.base import PyObjectId
 
@@ -17,7 +17,7 @@ class ScholarshipApplication(BaseModel):
     student_id: PyObjectId
     application_date: datetime
     status: str  # pending, approved, rejected, interview, documents_needed
-    documents_submitted: List[str] = []
+    documents_submitted: List[str] = Field(default_factory=list)
     notes: Optional[str] = None
     last_updated: datetime = Field(default_factory=datetime.utcnow)
 
@@ -32,6 +32,12 @@ class ScholarshipDisbursement(BaseModel):
 
 
 class Scholarship(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
+    
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     
     # Scholarship Info
@@ -46,9 +52,9 @@ class Scholarship(BaseModel):
     duration_months: Optional[int] = None
     
     # Eligibility
-    requirements: List[ScholarshipRequirement] = []
-    eligible_majors: List[str] = []
-    eligible_universities: List[str] = []
+    requirements: List[ScholarshipRequirement] = Field(default_factory=list)
+    eligible_majors: List[str] = Field(default_factory=list)
+    eligible_universities: List[str] = Field(default_factory=list)
     min_semester: Optional[int] = None
     max_semester: Optional[int] = None
     
@@ -62,19 +68,14 @@ class Scholarship(BaseModel):
     is_open_for_application: bool = True
     
     # Applications
-    applications: List[ScholarshipApplication] = []
+    applications: List[ScholarshipApplication] = Field(default_factory=list)
     
     # Disbursements (for awarded scholarships)
-    disbursements: List[ScholarshipDisbursement] = []
+    disbursements: List[ScholarshipDisbursement] = Field(default_factory=list)
     
     # Metadata
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
 
 
 class ScholarshipInDB(Scholarship):
@@ -89,9 +90,9 @@ class ScholarshipCreate(BaseModel):
     currency: str = "IDR"
     payment_frequency: str
     duration_months: Optional[int] = None
-    requirements: List[ScholarshipRequirement] = []
-    eligible_majors: List[str] = []
-    eligible_universities: List[str] = []
+    requirements: List[ScholarshipRequirement] = Field(default_factory=list)
+    eligible_majors: List[str] = Field(default_factory=list)
+    eligible_universities: List[str] = Field(default_factory=list)
     min_semester: Optional[int] = None
     max_semester: Optional[int] = None
     application_deadline: Optional[datetime] = None
@@ -116,7 +117,7 @@ class ScholarshipUpdate(BaseModel):
 
 class ScholarshipApplicationCreate(BaseModel):
     scholarship_id: PyObjectId
-    documents_submitted: List[str] = []
+    documents_submitted: List[str] = Field(default_factory=list)
     notes: Optional[str] = None
 
 

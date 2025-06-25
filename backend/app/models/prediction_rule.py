@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from bson import ObjectId
@@ -22,13 +22,31 @@ class PredictionAdjustments(BaseModel):
 
 
 class RuleConditions(BaseModel):
-    student_criteria: Dict[str, Any] = Field(default_factory=dict, description="Student criteria like semester, university")
-    financial_criteria: Dict[str, Any] = Field(default_factory=dict, description="Financial criteria like debt level, income range")
-    temporal_criteria: Dict[str, Any] = Field(default_factory=dict, description="Time-based criteria")
-    transaction_criteria: Dict[str, Any] = Field(default_factory=dict, description="Transaction pattern criteria")
+    student_criteria: Dict[str, Any] = Field(
+        default_factory=dict, 
+        description="Student criteria like semester, university"
+    )
+    financial_criteria: Dict[str, Any] = Field(
+        default_factory=dict, 
+        description="Financial criteria like debt level, income range"
+    )
+    temporal_criteria: Dict[str, Any] = Field(
+        default_factory=dict, 
+        description="Time-based criteria"
+    )
+    transaction_criteria: Dict[str, Any] = Field(
+        default_factory=dict, 
+        description="Transaction pattern criteria"
+    )
 
 
 class PredictionRule(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
+    
     id: Optional[str] = Field(None, alias="_id")
     rule_name: str = Field(..., description="Name of the prediction rule")
     rule_type: str = Field(..., description="Type: debt_impact, event_impact, seasonal, behavioral")
@@ -46,11 +64,13 @@ class PredictionRule(BaseModel):
     is_active: bool = Field(True)
     usage_count: int = Field(0, description="How often this rule has been used")
     success_rate: float = Field(0.0, description="Success rate of prediction improvements")
-
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+    
+    @field_validator('priority')
+    @classmethod
+    def validate_priority(cls, v):
+        if not 1 <= v <= 10:
+            raise ValueError('Priority must be between 1 and 10')
+        return v
 
 
 # Example rules for reference:
