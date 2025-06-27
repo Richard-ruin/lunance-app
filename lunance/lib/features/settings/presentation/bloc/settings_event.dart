@@ -6,85 +6,36 @@ abstract class SettingsEvent extends Equatable {
   const SettingsEvent();
 
   @override
-  List<Object?> get props => [];
+  List<Object> get props => [];
 }
 
-class LoadUserSettings extends SettingsEvent {}
+class LoadUserSettings extends SettingsEvent {
+  const LoadUserSettings();
+}
 
-class UpdateUserSettings extends SettingsEvent {
-  final UserSettings settings;
+class UpdateNotificationSettings extends SettingsEvent {
+  final NotificationSettings notificationSettings;
 
-  const UpdateUserSettings(this.settings);
+  const UpdateNotificationSettings(this.notificationSettings);
 
   @override
-  List<Object?> get props => [settings];
+  List<Object> get props => [notificationSettings];
 }
 
-class ToggleDarkMode extends SettingsEvent {
-  final bool isDarkMode;
+class UpdateDisplaySettings extends SettingsEvent {
+  final DisplaySettings displaySettings;
 
-  const ToggleDarkMode(this.isDarkMode);
+  const UpdateDisplaySettings(this.displaySettings);
 
   @override
-  List<Object?> get props => [isDarkMode];
+  List<Object> get props => [displaySettings];
 }
 
-class ToggleNotifications extends SettingsEvent {
-  final bool isEnabled;
+class UpdatePrivacySettings extends SettingsEvent {
+  final PrivacySettings privacySettings;
 
-  const ToggleNotifications(this.isEnabled);
+  const UpdatePrivacySettings(this.privacySettings);
 
   @override
-  List<Object?> get props => [isEnabled];
+  List<Object> get props => [privacySettings];
 }
-
-class ToggleBiometricAuth extends SettingsEvent {
-  final bool isEnabled;
-
-  const ToggleBiometricAuth(this.isEnabled);
-
-  @override
-  List<Object?> get props => [isEnabled];
-}
-
-class ToggleAutoBackup extends SettingsEvent {
-  final bool isEnabled;
-
-  const ToggleAutoBackup(this.isEnabled);
-
-  @override
-  List<Object?> get props => [isEnabled];
-}
-
-class ChangeCurrency extends SettingsEvent {
-  final String currency;
-
-  const ChangeCurrency(this.currency);
-
-  @override
-  List<Object?> get props => [currency];
-}
-
-class ChangeLanguage extends SettingsEvent {
-  final String language;
-
-  const ChangeLanguage(this.language);
-
-  @override
-  List<Object?> get props => [language];
-}
-
-class UpdateMonthlyBudget extends SettingsEvent {
-  final double budget;
-
-  const UpdateMonthlyBudget(this.budget);
-
-  @override
-  List<Object?> get props => [budget];
-}
-
-class ResetSettings extends SettingsEvent {}
-
-class ExportUserData extends SettingsEvent {}
-
-class DeleteAccount extends SettingsEvent {}

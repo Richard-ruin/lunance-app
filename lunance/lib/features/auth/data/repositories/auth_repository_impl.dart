@@ -1,3 +1,4 @@
+
 // lib/features/auth/data/repositories/auth_repository_impl.dart
 import '../../domain/entities/user.dart';
 import '../../domain/repositories/auth_repository.dart';
@@ -6,6 +7,7 @@ import '../models/login_request_model.dart';
 import '../models/register_request_model.dart';
 import '../models/user_model.dart';
 import '../../../../core/storage/local_storage.dart';
+import 'dart:io';
 
 class AuthRepositoryImpl implements AuthRepository {
   final AuthRemoteDataSource remoteDataSource;
@@ -263,6 +265,68 @@ class AuthRepositoryImpl implements AuthRepository {
         rethrow;
       }
       throw Exception('Request OTP failed: ${e.toString()}');
+    }
+  }
+
+  // NEW METHODS FOR SETTINGS
+  @override
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    try {
+      await remoteDataSource.changePassword(
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+      );
+    } catch (e) {
+      if (e is Exception) {
+        rethrow;
+      }
+      throw Exception('Change password failed: ${e.toString()}');
+    }
+  }
+
+  @override
+  Future<User> updateProfile({
+    required String fullName,
+    String? phoneNumber,
+    required String university,
+    required String faculty,
+    required String major,
+    required int semester,
+    File? profileImage,
+  }) async {
+    try {
+      final userModel = await remoteDataSource.updateProfile(
+        fullName: fullName,
+        phoneNumber: phoneNumber,
+        university: university,
+        faculty: faculty,
+        major: major,
+        semester: semester,
+        profileImage: profileImage,
+      );
+
+      // Convert UserModel to User entity
+      return User(
+        id: userModel.id,
+        email: userModel.email,
+        fullName: userModel.fullName,
+        university: userModel.university,
+        faculty: userModel.faculty,
+        major: userModel.major,
+        semester: userModel.semester,
+        phoneNumber: userModel.phoneNumber,
+        profilePictureUrl: userModel.profilePictureUrl,
+        isEmailVerified: userModel.isEmailVerified,
+        createdAt: userModel.createdAt,
+      );
+    } catch (e) {
+      if (e is Exception) {
+        rethrow;
+      }
+      throw Exception('Update profile failed: ${e.toString()}');
     }
   }
 }

@@ -1,7 +1,7 @@
 // lib/core/routes/route_names.dart
 class RouteNames {
   // Auth Routes
-  static const String login = '/';
+  static const String login = '/login';
   static const String register = '/register';
   static const String forgotPassword = '/forgot-password';
   static const String verifyOtp = '/verify-otp';

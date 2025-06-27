@@ -1,6 +1,6 @@
-
 // lib/features/auth/presentation/bloc/auth_event.dart
 import 'package:equatable/equatable.dart';
+import 'dart:io';
 
 abstract class AuthEvent extends Equatable {
   const AuthEvent();
@@ -125,4 +125,53 @@ class AuthRequestOtpEvent extends AuthEvent {
 
   @override
   List<Object> get props => [email, type];
+}
+
+// NEW EVENTS FOR SETTINGS
+class AuthGetUserEvent extends AuthEvent {
+  const AuthGetUserEvent();
+}
+
+class AuthChangePasswordEvent extends AuthEvent {
+  final String currentPassword;
+  final String newPassword;
+
+  const AuthChangePasswordEvent({
+    required this.currentPassword,
+    required this.newPassword,
+  });
+
+  @override
+  List<Object> get props => [currentPassword, newPassword];
+}
+
+class AuthUpdateProfileEvent extends AuthEvent {
+  final String fullName;
+  final String? phoneNumber;
+  final String university;
+  final String faculty;
+  final String major;
+  final int semester;
+  final File? profileImage;
+
+  const AuthUpdateProfileEvent({
+    required this.fullName,
+    this.phoneNumber,
+    required this.university,
+    required this.faculty,
+    required this.major,
+    required this.semester,
+    this.profileImage,
+  });
+
+  @override
+  List<Object?> get props => [
+        fullName,
+        phoneNumber,
+        university,
+        faculty,
+        major,
+        semester,
+        profileImage,
+      ];
 }

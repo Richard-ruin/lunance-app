@@ -48,8 +48,15 @@ dependencies:
   # Permissions
   permission_handler: ^11.0.1
 
+  
+
   # Form Validation
   form_validator: ^2.1.1
+
+  curved_navigation_bar: ^1.0.3
+  
+
+
 
 dev_dependencies:
   flutter_test:

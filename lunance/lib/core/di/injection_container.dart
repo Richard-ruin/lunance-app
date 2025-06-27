@@ -1,3 +1,4 @@
+
 // lib/core/di/injection_container.dart
 import 'package:get_it/get_it.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -17,6 +18,14 @@ import '../../features/auth/domain/usecases/register_usecase.dart';
 import '../../features/auth/domain/usecases/forgot_password_usecase.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 
+// Settings
+import '../../features/settings/data/datasources/settings_remote_datasource.dart';
+import '../../features/settings/data/repositories/settings_repository_impl.dart';
+import '../../features/settings/domain/repositories/settings_repository.dart';
+import '../../features/settings/domain/usecases/get_user_settings_usecase.dart';
+import '../../features/settings/domain/usecases/update_settings_usecase.dart';
+import '../../features/settings/presentation/bloc/settings_bloc.dart';
+
 final sl = GetIt.instance;
 
 Future<void> init() async {
@@ -25,6 +34,7 @@ Future<void> init() async {
   
   // Initialize features
   await _initAuth();
+  await _initSettings();
   
   // Add other features here when implemented
   // await _initTransactions();
@@ -89,17 +99,41 @@ Future<void> _initAuth() async {
   );
 }
 
-// Add other feature initialization methods here
-/*
-Future<void> _initTransactions() async {
-  // Implementation for transaction feature
-}
+Future<void> _initSettings() async {
+  // Data Sources
+  sl.registerLazySingleton<SettingsRemoteDataSource>(
+    () => SettingsRemoteDataSourceImpl(sl<DioClient>()),
+  );
 
-Future<void> _initCategories() async {
-  // Implementation for category feature
-}
+  // Repositories
+  sl.registerLazySingleton<SettingsRepository>(
+    () => SettingsRepositoryImpl(sl<SettingsRemoteDataSource>()),
+  );
 
-Future<void> _initDashboard() async {
-  // Implementation for dashboard feature
+  // Use Cases
+  sl.registerLazySingleton<GetUserSettingsUseCase>(
+    () => GetUserSettingsUseCase(sl<SettingsRepository>()),
+  );
+  
+  sl.registerLazySingleton<UpdateNotificationSettingsUseCase>(
+    () => UpdateNotificationSettingsUseCase(sl<SettingsRepository>()),
+  );
+  
+  sl.registerLazySingleton<UpdateDisplaySettingsUseCase>(
+    () => UpdateDisplaySettingsUseCase(sl<SettingsRepository>()),
+  );
+  
+  sl.registerLazySingleton<UpdatePrivacySettingsUseCase>(
+    () => UpdatePrivacySettingsUseCase(sl<SettingsRepository>()),
+  );
+
+  // BLoC
+  sl.registerFactory<SettingsBloc>(
+    () => SettingsBloc(
+      getUserSettingsUseCase: sl<GetUserSettingsUseCase>(),
+      updateNotificationSettingsUseCase: sl<UpdateNotificationSettingsUseCase>(),
+      updateDisplaySettingsUseCase: sl<UpdateDisplaySettingsUseCase>(),
+      updatePrivacySettingsUseCase: sl<UpdatePrivacySettingsUseCase>(),
+    ),
+  );
 }
-*/

@@ -1,3 +1,4 @@
+
 // lib/features/auth/presentation/bloc/auth_bloc.dart
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/usecases/login_usecase.dart';
@@ -27,6 +28,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthVerifyOtpEvent>(_onVerifyOtp);
     on<AuthResetPasswordEvent>(_onResetPassword);
     on<AuthRequestOtpEvent>(_onRequestOtp);
+    
+    // NEW HANDLERS FOR SETTINGS
+    on<AuthGetUserEvent>(_onGetUser);
+    on<AuthChangePasswordEvent>(_onChangePassword);
+    on<AuthUpdateProfileEvent>(_onUpdateProfile);
   }
 
   Future<void> _onCheckStatus(
@@ -224,6 +230,74 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           .replaceAll('Exception: ', '')
           .trim();
       emit(AuthError('Gagal mengirim kode OTP: $errorMessage'));
+    }
+  }
+
+  // NEW HANDLERS FOR SETTINGS
+  Future<void> _onGetUser(
+    AuthGetUserEvent event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(const AuthLoading());
+    
+    try {
+      final user = await authRepository.getCurrentUser();
+      if (user != null) {
+        emit(AuthAuthenticated(user));
+      } else {
+        emit(const AuthError('Gagal memuat data pengguna'));
+      }
+    } catch (e) {
+      emit(AuthError('Gagal memuat data pengguna: ${e.toString()}'));
+    }
+  }
+
+  Future<void> _onChangePassword(
+    AuthChangePasswordEvent event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(const AuthLoading());
+    
+    try {
+      await authRepository.changePassword(
+        currentPassword: event.currentPassword,
+        newPassword: event.newPassword,
+      );
+      emit(const AuthChangePasswordSuccess());
+    } catch (e) {
+      String errorMessage = e.toString()
+          .replaceAll('Exception: ', '')
+          .replaceAll('Change password failed: ', '')
+          .trim();
+      emit(AuthError('Gagal mengubah password: $errorMessage'));
+    }
+  }
+
+  Future<void> _onUpdateProfile(
+    AuthUpdateProfileEvent event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(const AuthLoading());
+    
+    try {
+      final user = await authRepository.updateProfile(
+        fullName: event.fullName,
+        phoneNumber: event.phoneNumber,
+        university: event.university,
+        faculty: event.faculty,
+        major: event.major,
+        semester: event.semester,
+        profileImage: event.profileImage,
+      );
+      
+      emit(const AuthUpdateProfileSuccess('Profil berhasil diperbarui'));
+      emit(AuthAuthenticated(user));
+    } catch (e) {
+      String errorMessage = e.toString()
+          .replaceAll('Exception: ', '')
+          .replaceAll('Update profile failed: ', '')
+          .trim();
+      emit(AuthError('Gagal memperbarui profil: $errorMessage'));
     }
   }
 }

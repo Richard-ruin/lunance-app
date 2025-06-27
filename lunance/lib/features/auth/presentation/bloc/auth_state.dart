@@ -1,3 +1,4 @@
+
 // lib/features/auth/presentation/bloc/auth_state.dart
 import 'package:equatable/equatable.dart';
 import '../../domain/entities/user.dart';
@@ -82,6 +83,20 @@ class AuthOtpVerified extends AuthState {
   final String message;
 
   const AuthOtpVerified(this.message);
+
+  @override
+  List<Object> get props => [message];
+}
+
+// NEW STATES FOR SETTINGS
+class AuthChangePasswordSuccess extends AuthState {
+  const AuthChangePasswordSuccess();
+}
+
+class AuthUpdateProfileSuccess extends AuthState {
+  final String message;
+
+  const AuthUpdateProfileSuccess(this.message);
 
   @override
   List<Object> get props => [message];

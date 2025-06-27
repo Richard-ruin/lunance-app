@@ -1,6 +1,9 @@
+
 // lib/features/auth/data/datasources/auth_remote_datasource.dart
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import '../../../../core/constants/api_endpoints.dart';
 import '../../../../core/storage/local_storage.dart';
 import '../models/user_model.dart';
@@ -26,6 +29,19 @@ abstract class AuthRemoteDataSource {
   Future<void> requestOtp({
     required String email,
     required String type,
+  });
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  });
+  Future<UserModel> updateProfile({
+    required String fullName,
+    String? phoneNumber,
+    required String university,
+    required String faculty,
+    required String major,
+    required int semester,
+    File? profileImage,
   });
 }
 
@@ -109,7 +125,6 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
             } catch (userError) {
               print('❌ Failed to parse user data: $userError');
               // Don't fail login just because user data parsing failed
-              // We'll fetch it separately
             }
           } else {
             print('\n👤 NO USER DATA IN LOGIN RESPONSE');
@@ -130,7 +145,6 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
             } catch (fetchError) {
               print('⚠️ Failed to fetch user data: $fetchError');
               // Continue with login even if user fetch fails
-              // User data can be fetched later
             }
           }
           
@@ -207,78 +221,6 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     }
   }
 
-  @override
-  Future<UserModel?> getCurrentUser() async {
-    final token = localStorage.getString('access_token');
-    final userData = localStorage.getString('user_data');
-    
-    print('\n🔍 GET CURRENT USER');
-    print('═══════════════════════════════════════');
-    print('🔑 Token present: ${token != null}');
-    print('📋 Stored user data: ${userData != null}');
-
-    if (token == null) {
-      print('❌ No access token found');
-      return null;
-    }
-
-    try {
-      // First try to fetch fresh data from server
-      final response = await client.get(
-        Uri.parse(ApiEndpoints.me),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      );
-
-      print('📡 API call to /me: Status ${response.statusCode}');
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body) as Map<String, dynamic>;
-        print('✅ Fresh user data received from server');
-        
-        final user = UserModel.fromJson(data);
-        
-        // Update stored user data
-        await localStorage.saveString('user_data', json.encode(data));
-        print('💾 Updated stored user data');
-        
-        return user;
-      } else {
-        print('⚠️ Server request failed, trying stored data...');
-        // Token might be invalid, use stored data if available
-        if (userData != null) {
-          try {
-            final storedData = json.decode(userData) as Map<String, dynamic>;
-            print('✅ Using stored user data');
-            return UserModel.fromJson(storedData);
-          } catch (e) {
-            print('❌ Error parsing stored user data: $e');
-            return null;
-          }
-        }
-      }
-    } catch (e) {
-      print('💥 Network error: $e');
-      // Network error, use stored data if available
-      if (userData != null) {
-        try {
-          final storedData = json.decode(userData) as Map<String, dynamic>;
-          print('✅ Using stored user data (fallback)');
-          return UserModel.fromJson(storedData);
-        } catch (parseError) {
-          print('❌ Error parsing stored user data: $parseError');
-          return null;
-        }
-      }
-    }
-    
-    print('❌ No user data available');
-    return null;
-  }
-
-  // Sisanya tetap sama...
   @override
   Future<void> register(RegisterRequestModel request) async {
     try {
@@ -424,6 +366,77 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   }
 
   @override
+  Future<UserModel?> getCurrentUser() async {
+    final token = localStorage.getString('access_token');
+    final userData = localStorage.getString('user_data');
+    
+    print('\n🔍 GET CURRENT USER');
+    print('═══════════════════════════════════════');
+    print('🔑 Token present: ${token != null}');
+    print('📋 Stored user data: ${userData != null}');
+
+    if (token == null) {
+      print('❌ No access token found');
+      return null;
+    }
+
+    try {
+      // First try to fetch fresh data from server
+      final response = await client.get(
+        Uri.parse(ApiEndpoints.me),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      print('📡 API call to /me: Status ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body) as Map<String, dynamic>;
+        print('✅ Fresh user data received from server');
+        
+        final user = UserModel.fromJson(data);
+        
+        // Update stored user data
+        await localStorage.saveString('user_data', json.encode(data));
+        print('💾 Updated stored user data');
+        
+        return user;
+      } else {
+        print('⚠️ Server request failed, trying stored data...');
+        // Token might be invalid, use stored data if available
+        if (userData != null) {
+          try {
+            final storedData = json.decode(userData) as Map<String, dynamic>;
+            print('✅ Using stored user data');
+            return UserModel.fromJson(storedData);
+          } catch (e) {
+            print('❌ Error parsing stored user data: $e');
+            return null;
+          }
+        }
+      }
+    } catch (e) {
+      print('💥 Network error: $e');
+      // Network error, use stored data if available
+      if (userData != null) {
+        try {
+          final storedData = json.decode(userData) as Map<String, dynamic>;
+          print('✅ Using stored user data (fallback)');
+          return UserModel.fromJson(storedData);
+        } catch (parseError) {
+          print('❌ Error parsing stored user data: $parseError');
+          return null;
+        }
+      }
+    }
+    
+    print('❌ No user data available');
+    return null;
+  }
+
+  @override
   Future<void> requestOtp({
     required String email,
     required String type,
@@ -452,6 +465,133 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         rethrow;
       }
       throw Exception('Network error: ${e.toString()}');
+    }
+  }
+
+  @override
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final token = localStorage.getString('access_token');
+    if (token == null) throw Exception('Token tidak ditemukan');
+
+    try {
+      final response = await client.post(
+        Uri.parse(ApiEndpoints.changePassword),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({
+          'current_password': currentPassword,
+          'new_password': newPassword,
+        }),
+      );
+
+      if (response.statusCode != 200) {
+        final errorData = json.decode(response.body) as Map<String, dynamic>?;
+        final errorMessage = errorData?['detail']?.toString() ?? 
+                            'Gagal mengubah password';
+        throw Exception(errorMessage);
+      }
+    } catch (e) {
+      if (e is Exception) {
+        rethrow;
+      }
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
+
+  @override
+  Future<UserModel> updateProfile({
+    required String fullName,
+    String? phoneNumber,
+    required String university,
+    required String faculty,
+    required String major,
+    required int semester,
+    File? profileImage,
+  }) async {
+    final token = localStorage.getString('access_token');
+    if (token == null) throw Exception('Token tidak ditemukan');
+
+    try {
+      // First, upload profile image if provided
+      String? profileImageUrl;
+      if (profileImage != null) {
+        profileImageUrl = await _uploadProfileImage(profileImage, token);
+      }
+
+      // Then update profile data
+      final profileData = {
+        'full_name': fullName,
+        if (phoneNumber != null && phoneNumber.isNotEmpty) 'phone_number': phoneNumber,
+        'university': university,
+        'faculty': faculty,
+        'major': major,
+        'semester': semester,
+        if (profileImageUrl != null) 'profile_picture_url': profileImageUrl,
+      };
+
+      final response = await client.put(
+        Uri.parse(ApiEndpoints.updateProfile),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode(profileData),
+      );
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body) as Map<String, dynamic>;
+        final userModel = UserModel.fromJson(responseData);
+        
+        // Update stored user data
+        await localStorage.saveString('user_data', json.encode(responseData));
+        
+        return userModel;
+      } else {
+        final errorData = json.decode(response.body) as Map<String, dynamic>?;
+        final errorMessage = errorData?['detail']?.toString() ?? 
+                            'Gagal memperbarui profil';
+        throw Exception(errorMessage);
+      }
+    } catch (e) {
+      if (e is Exception) {
+        rethrow;
+      }
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
+
+  Future<String> _uploadProfileImage(File image, String token) async {
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse(ApiEndpoints.uploadProfilePicture),
+      );
+
+      request.headers['Authorization'] = 'Bearer $token';
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'file',
+          image.path,
+          contentType: MediaType('image', 'jpeg'),
+        ),
+      );
+
+      final streamedResponse = await client.send(request);
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body) as Map<String, dynamic>;
+        return responseData['profile_picture_url'];
+      } else {
+        throw Exception('Gagal mengupload foto profil');
+      }
+    } catch (e) {
+      throw Exception('Upload error: ${e.toString()}');
     }
   }
 }

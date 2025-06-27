@@ -1,5 +1,207 @@
+
 // lib/shared/utils/validators.dart
 class Validators {
+  // Basic validation methods for forms
+  static String? required(String? value, String fieldName) {
+    if (value == null || value.isEmpty) {
+      return '$fieldName harus diisi';
+    }
+    return null;
+  }
+
+  static String? email(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Email harus diisi';
+    }
+    
+    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
+    if (!emailRegex.hasMatch(value)) {
+      return 'Format email tidak valid';
+    }
+    
+    return null;
+  }
+
+  static String? password(String? value, {int minLength = 8}) {
+    if (value == null || value.isEmpty) {
+      return 'Password harus diisi';
+    }
+    
+    if (value.length < minLength) {
+      return 'Password minimal $minLength karakter';
+    }
+    
+    return null;
+  }
+
+  static String? confirmPassword(String? value, String? originalPassword) {
+    if (value == null || value.isEmpty) {
+      return 'Konfirmasi password harus diisi';
+    }
+    
+    if (value != originalPassword) {
+      return 'Password tidak cocok';
+    }
+    
+    return null;
+  }
+
+  static String? phone(String? value) {
+    if (value == null || value.isEmpty) {
+      return null; // Optional field
+    }
+    
+    final phoneRegex = RegExp(r'^(\+62|62|0)[0-9]{9,12}$');
+    if (!phoneRegex.hasMatch(value)) {
+      return 'Format nomor telepon tidak valid';
+    }
+    
+    return null;
+  }
+
+  static String? name(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Nama harus diisi';
+    }
+    
+    if (value.length < 2) {
+      return 'Nama minimal 2 karakter';
+    }
+    
+    final nameRegex = RegExp(r"^[a-zA-Z\s\.']+$");
+    if (!nameRegex.hasMatch(value)) {
+      return 'Nama hanya boleh mengandung huruf, spasi, titik, dan apostrof';
+    }
+    
+    return null;
+  }
+
+  static String? studentId(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'NIM harus diisi';
+    }
+    
+    if (value.length < 8 || value.length > 15) {
+      return 'NIM harus 8-15 karakter';
+    }
+    
+    final nimRegex = RegExp(r'^[A-Za-z0-9]+$');
+    if (!nimRegex.hasMatch(value)) {
+      return 'NIM hanya boleh mengandung huruf dan angka';
+    }
+    
+    return null;
+  }
+
+  static String? university(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Universitas harus diisi';
+    }
+    
+    if (value.length < 3) {
+      return 'Nama universitas minimal 3 karakter';
+    }
+    
+    return null;
+  }
+
+  static String? faculty(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Fakultas harus diisi';
+    }
+    
+    if (value.length < 3) {
+      return 'Nama fakultas minimal 3 karakter';
+    }
+    
+    return null;
+  }
+
+  static String? major(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Jurusan harus diisi';
+    }
+    
+    if (value.length < 3) {
+      return 'Nama jurusan minimal 3 karakter';
+    }
+    
+    return null;
+  }
+
+  static String? semester(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Semester harus diisi';
+    }
+    
+    final semesterInt = int.tryParse(value);
+    if (semesterInt == null) {
+      return 'Semester harus berupa angka';
+    }
+    
+    if (semesterInt < 1 || semesterInt > 14) {
+      return 'Semester harus antara 1-14';
+    }
+    
+    return null;
+  }
+
+  static String? graduationYear(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Tahun lulus harus diisi';
+    }
+    
+    final year = int.tryParse(value);
+    if (year == null) {
+      return 'Tahun lulus harus berupa angka';
+    }
+    
+    final currentYear = DateTime.now().year;
+    if (year < currentYear || year > currentYear + 8) {
+      return 'Tahun lulus tidak valid';
+    }
+    
+    return null;
+  }
+
+  static String? otp(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Kode OTP harus diisi';
+    }
+    
+    if (value.length != 6) {
+      return 'Kode OTP harus 6 digit';
+    }
+    
+    final otpRegex = RegExp(r'^[0-9]{6}$');
+    if (!otpRegex.hasMatch(value)) {
+      return 'Kode OTP hanya boleh berupa angka';
+    }
+    
+    return null;
+  }
+
+  static String? amount(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Jumlah harus diisi';
+    }
+    
+    final amount = double.tryParse(value.replaceAll(',', ''));
+    if (amount == null) {
+      return 'Jumlah harus berupa angka';
+    }
+    
+    if (amount <= 0) {
+      return 'Jumlah harus lebih dari 0';
+    }
+    
+    if (amount > 999999999999) {
+      return 'Jumlah terlalu besar';
+    }
+    
+    return null;
+  }
+
   // Email validation specifically for Indonesian academic emails
   static bool isValidStudentEmail(String email) {
     if (email.isEmpty) return false;
@@ -97,158 +299,5 @@ class Validators {
     } catch (e) {
       return false;
     }
-  }
-
-  // University name validation
-  static bool isValidUniversityName(String university) {
-    if (university.isEmpty || university.length < 3) return false;
-    
-    // Allow Indonesian university names
-    final universityRegExp = RegExp(r"^[a-zA-Z\s\.'()-]+$");
-    return universityRegExp.hasMatch(university);
-  }
-
-  // Semester validation
-  static bool isValidSemester(int semester) {
-    return semester >= 1 && semester <= 14; // Max 14 semesters
-  }
-
-  // Graduation year validation
-  static bool isValidGraduationYear(int year) {
-    final currentYear = DateTime.now().year;
-    return year >= currentYear && year <= currentYear + 8;
-  }
-}
-
-// lib/shared/extensions/string_extensions.dart
-extension StringExtensions on String {
-  // Capitalize first letter of each word
-  String toTitleCase() {
-    if (isEmpty) return this;
-    
-    return split(' ')
-        .map((word) => word.isEmpty 
-            ? word 
-            : word[0].toUpperCase() + word.substring(1).toLowerCase())
-        .join(' ');
-  }
-
-  // Remove extra spaces
-  String removeExtraSpaces() {
-    return replaceAll(RegExp(r'\s+'), ' ').trim();
-  }
-
-  // Mask email for privacy (show first 3 chars and domain)
-  String maskEmail() {
-    if (!contains('@')) return this;
-    
-    final parts = split('@');
-    if (parts[0].length <= 3) return this;
-    
-    final maskedLocal = parts[0].substring(0, 3) + '*' * (parts[0].length - 3);
-    return '$maskedLocal@${parts[1]}';
-  }
-
-  // Mask phone number for privacy
-  String maskPhone() {
-    if (length <= 4) return this;
-    
-    final start = substring(0, 3);
-    final end = substring(length - 2);
-    final middle = '*' * (length - 5);
-    
-    return start + middle + end;
-  }
-
-  // Format Indonesian currency
-  String toIDRCurrency() {
-    final value = double.tryParse(replaceAll(',', '')) ?? 0;
-    return 'Rp ${value.toStringAsFixed(0).replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (Match m) => '${m[1]}.',
-    )}';
-  }
-
-  // Check if string is numeric
-  bool get isNumeric {
-    return double.tryParse(this) != null;
-  }
-
-  // Check if string is valid student email
-  bool get isValidStudentEmail {
-    return Validators.isValidStudentEmail(this);
-  }
-
-  // Check if string is valid Indonesian phone
-  bool get isValidIndonesianPhone {
-    return Validators.isValidIndonesianPhone(this);
-  }
-}
-
-// lib/shared/extensions/datetime_extensions.dart
-extension DateTimeExtensions on DateTime {
-  // Format for Indonesian locale
-  String toIndonesianDate() {
-    final months = [
-      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-    ];
-    
-    return '$day ${months[month - 1]} $year';
-  }
-
-  // Format for Indonesian short date
-  String toIndonesianShortDate() {
-    return '$day/${month.toString().padLeft(2, '0')}/$year';
-  }
-
-  // Time ago in Indonesian
-  String timeAgoInIndonesian() {
-    final now = DateTime.now();
-    final difference = now.difference(this);
-    
-    if (difference.inDays > 365) {
-      final years = (difference.inDays / 365).floor();
-      return '$years tahun yang lalu';
-    } else if (difference.inDays > 30) {
-      final months = (difference.inDays / 30).floor();
-      return '$months bulan yang lalu';
-    } else if (difference.inDays > 0) {
-      return '${difference.inDays} hari yang lalu';
-    } else if (difference.inHours > 0) {
-      return '${difference.inHours} jam yang lalu';
-    } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes} menit yang lalu';
-    } else {
-      return 'Baru saja';
-    }
-  }
-
-  // Check if date is today
-  bool get isToday {
-    final now = DateTime.now();
-    return year == now.year && month == now.month && day == now.day;
-  }
-
-  // Check if date is yesterday
-  bool get isYesterday {
-    final yesterday = DateTime.now().subtract(const Duration(days: 1));
-    return year == yesterday.year && month == yesterday.month && day == yesterday.day;
-  }
-
-  // Get semester name based on month
-  String getSemesterName() {
-    // Assume odd semesters start in August-September
-    // Even semesters start in February-March
-    if (month >= 8 || month <= 1) {
-      return 'Ganjil ${year + (month >= 8 ? 1 : 0)}/${year + (month >= 8 ? 2 : 1)}';
-    } else {
-      return 'Genap $year/${year + 1}';
-    }
-  }
-
-  // Check if it's academic year end (around June-July)
-  bool get isAcademicYearEnd {
-    return month >= 6 && month <= 7;
   }
 }

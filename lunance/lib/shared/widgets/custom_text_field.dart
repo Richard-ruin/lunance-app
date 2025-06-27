@@ -1,109 +1,139 @@
-// lib/features/auth/presentation/widgets/auth_text_field.dart
+// lib/shared/widgets/custom_text_field.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../../../core/theme/lunance_colors.dart';
 
-class AuthTextField extends StatelessWidget {
-  final TextEditingController controller;
-  final String labelText;
-  final String? hintText;
-  final IconData? prefixIcon;
-  final Widget? suffixIcon;
-  final TextInputType? keyboardType;
+class CustomTextField extends StatefulWidget {
+  final String? label;
+  final String? hint;
+  final String? helperText;
+  final String? errorText;
+  final TextEditingController? controller;
+  final TextInputType keyboardType;
+  final TextInputAction textInputAction;
   final bool obscureText;
+  final bool enabled;
   final bool readOnly;
-  final String? Function(String?)? validator;
-  final VoidCallback? onTap;
-  final List<TextInputFormatter>? inputFormatters;
   final int? maxLines;
-  final TextCapitalization textCapitalization;
+  final int? maxLength;
+  final Widget? prefixIcon;
+  final Widget? suffixIcon;
+  final VoidCallback? onTap;
+  final ValueChanged<String>? onChanged;
+  final ValueChanged<String>? onSubmitted;
+  final FormFieldValidator<String>? validator;
+  final List<TextInputFormatter>? inputFormatters;
+  final FocusNode? focusNode;
 
-  const AuthTextField({
+  const CustomTextField({
     super.key,
-    required this.controller,
-    required this.labelText,
-    this.hintText,
+    this.label,
+    this.hint,
+    this.helperText,
+    this.errorText,
+    this.controller,
+    this.keyboardType = TextInputType.text,
+    this.textInputAction = TextInputAction.next,
+    this.obscureText = false,
+    this.enabled = true,
+    this.readOnly = false,
+    this.maxLines = 1,
+    this.maxLength,
     this.prefixIcon,
     this.suffixIcon,
-    this.keyboardType,
-    this.obscureText = false,
-    this.readOnly = false,
-    this.validator,
     this.onTap,
+    this.onChanged,
+    this.onSubmitted,
+    this.validator,
     this.inputFormatters,
-    this.maxLines = 1,
-    this.textCapitalization = TextCapitalization.none,
+    this.focusNode,
   });
 
   @override
+  State<CustomTextField> createState() => _CustomTextFieldState();
+}
+
+class _CustomTextFieldState extends State<CustomTextField> {
+  late bool _obscureText;
+
+  @override
+  void initState() {
+    super.initState();
+    _obscureText = widget.obscureText;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          labelText,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: LunanceColors.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          keyboardType: keyboardType,
-          obscureText: obscureText,
-          readOnly: readOnly,
-          validator: validator,
-          onTap: onTap,
-          inputFormatters: inputFormatters,
-          maxLines: maxLines,
-          textCapitalization: textCapitalization,
-          decoration: InputDecoration(
-            hintText: hintText,
-            hintStyle: const TextStyle(
-              color: LunanceColors.textHint,
-              fontSize: 14,
+        if (widget.label != null) ...[
+          Text(
+            widget.label!,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w500,
+              color: colorScheme.onSurface,
             ),
-            prefixIcon: prefixIcon != null
-                ? Icon(prefixIcon, color: LunanceColors.textSecondary)
-                : null,
-            suffixIcon: suffixIcon,
+          ),
+          const SizedBox(height: 8),
+        ],
+        TextFormField(
+          controller: widget.controller,
+          keyboardType: widget.keyboardType,
+          textInputAction: widget.textInputAction,
+          obscureText: _obscureText,
+          enabled: widget.enabled,
+          readOnly: widget.readOnly,
+          maxLines: widget.maxLines,
+          maxLength: widget.maxLength,
+          onTap: widget.onTap,
+          onChanged: widget.onChanged,
+          onFieldSubmitted: widget.onSubmitted,
+          validator: widget.validator,
+          inputFormatters: widget.inputFormatters,
+          focusNode: widget.focusNode,
+          decoration: InputDecoration(
+            hintText: widget.hint,
+            helperText: widget.helperText,
+            errorText: widget.errorText,
+            prefixIcon: widget.prefixIcon,
+            suffixIcon: widget.obscureText 
+                ? IconButton(
+                    icon: Icon(_obscureText ? Icons.visibility : Icons.visibility_off),
+                    onPressed: () => setState(() => _obscureText = !_obscureText),
+                  )
+                : widget.suffixIcon,
             filled: true,
-            fillColor: LunanceColors.surfaceVariant,
+            fillColor: widget.enabled 
+                ? colorScheme.surface 
+                : colorScheme.surface.withOpacity(0.5),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: colorScheme.outline),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: colorScheme.outline.withOpacity(0.5)),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: LunanceColors.primary,
-                width: 2,
-              ),
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: colorScheme.primary, width: 2),
             ),
             errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: LunanceColors.error,
-                width: 2,
-              ),
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: colorScheme.error, width: 2),
             ),
             focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: LunanceColors.error,
-                width: 2,
-              ),
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: colorScheme.error, width: 2),
             ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 16,
+            disabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: colorScheme.outline.withOpacity(0.3)),
             ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           ),
         ),
       ],

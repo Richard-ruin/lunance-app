@@ -1,60 +1,115 @@
 // lib/features/settings/domain/entities/user_settings.dart
-class UserSettings {
-  final String userId;
-  final String name;
-  final String email;
-  final String profilePicture;
-  final String currency;
-  final String language;
-  final bool darkMode;
-  final bool notifications;
-  final bool biometricAuth;
-  final bool autoBackup;
-  final String defaultCategory;
-  final double monthlyBudget;
+import 'package:equatable/equatable.dart';
+
+class UserSettings extends Equatable {
+  final NotificationSettings notifications;
+  final DisplaySettings display;
+  final PrivacySettings privacy;
 
   const UserSettings({
-    required this.userId,
-    required this.name,
-    required this.email,
-    this.profilePicture = '',
-    this.currency = 'IDR',
-    this.language = 'id',
-    this.darkMode = false,
-    this.notifications = true,
-    this.biometricAuth = false,
-    this.autoBackup = true,
-    this.defaultCategory = 'Lainnya',
-    this.monthlyBudget = 0.0,
+    required this.notifications,
+    required this.display,
+    required this.privacy,
   });
 
   UserSettings copyWith({
-    String? userId,
-    String? name,
-    String? email,
-    String? profilePicture,
-    String? currency,
-    String? language,
-    bool? darkMode,
-    bool? notifications,
-    bool? biometricAuth,
-    bool? autoBackup,
-    String? defaultCategory,
-    double? monthlyBudget,
+    NotificationSettings? notifications,
+    DisplaySettings? display,
+    PrivacySettings? privacy,
   }) {
     return UserSettings(
-      userId: userId ?? this.userId,
-      name: name ?? this.name,
-      email: email ?? this.email,
-      profilePicture: profilePicture ?? this.profilePicture,
-      currency: currency ?? this.currency,
-      language: language ?? this.language,
-      darkMode: darkMode ?? this.darkMode,
       notifications: notifications ?? this.notifications,
-      biometricAuth: biometricAuth ?? this.biometricAuth,
-      autoBackup: autoBackup ?? this.autoBackup,
-      defaultCategory: defaultCategory ?? this.defaultCategory,
-      monthlyBudget: monthlyBudget ?? this.monthlyBudget,
+      display: display ?? this.display,
+      privacy: privacy ?? this.privacy,
     );
   }
+
+  @override
+  List<Object> get props => [notifications, display, privacy];
+}
+
+class NotificationSettings extends Equatable {
+  final bool budgetAlerts;
+  final bool savingsReminders;
+  final bool expenseSharingUpdates;
+  final bool achievementNotifications;
+
+  const NotificationSettings({
+    required this.budgetAlerts,
+    required this.savingsReminders,
+    required this.expenseSharingUpdates,
+    required this.achievementNotifications,
+  });
+
+  NotificationSettings copyWith({
+    bool? budgetAlerts,
+    bool? savingsReminders,
+    bool? expenseSharingUpdates,
+    bool? achievementNotifications,
+  }) {
+    return NotificationSettings(
+      budgetAlerts: budgetAlerts ?? this.budgetAlerts,
+      savingsReminders: savingsReminders ?? this.savingsReminders,
+      expenseSharingUpdates: expenseSharingUpdates ?? this.expenseSharingUpdates,
+      achievementNotifications: achievementNotifications ?? this.achievementNotifications,
+    );
+  }
+
+  @override
+  List<Object> get props => [
+        budgetAlerts,
+        savingsReminders,
+        expenseSharingUpdates,
+        achievementNotifications,
+      ];
+}
+
+class DisplaySettings extends Equatable {
+  final String currency;
+  final String theme;
+  final String language;
+
+  const DisplaySettings({
+    required this.currency,
+    required this.theme,
+    required this.language,
+  });
+
+  DisplaySettings copyWith({
+    String? currency,
+    String? theme,
+    String? language,
+  }) {
+    return DisplaySettings(
+      currency: currency ?? this.currency,
+      theme: theme ?? this.theme,
+      language: language ?? this.language,
+    );
+  }
+
+  @override
+  List<Object> get props => [currency, theme, language];
+}
+
+class PrivacySettings extends Equatable {
+  final bool showInLeaderboard;
+  final bool allowExpenseSharing;
+
+  const PrivacySettings({
+    required this.showInLeaderboard,
+    required this.allowExpenseSharing,
+  });
+
+  PrivacySettings copyWith({
+    bool? showInLeaderboard,
+    bool? allowExpenseSharing,
+  }) {
+    return PrivacySettings(
+      showInLeaderboard: showInLeaderboard ?? this.showInLeaderboard,
+      allowExpenseSharing: allowExpenseSharing ?? this.allowExpenseSharing,
+    );
+  }
+
+  @override
+  List<Object> get props => [showInLeaderboard, allowExpenseSharing];
 }

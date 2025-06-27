@@ -1,6 +1,7 @@
 
 // lib/features/auth/domain/repositories/auth_repository.dart
 import '../entities/user.dart';
+import 'dart:io';
 
 abstract class AuthRepository {
   Future<User> login({
@@ -46,5 +47,21 @@ abstract class AuthRepository {
   Future<void> requestOtp({
     required String email,
     required String type,
+  });
+
+  // NEW METHODS FOR SETTINGS
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  });
+
+  Future<User> updateProfile({
+    required String fullName,
+    String? phoneNumber,
+    required String university,
+    required String faculty,
+    required String major,
+    required int semester,
+    File? profileImage,
   });
 }

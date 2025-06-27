@@ -9,6 +9,7 @@ class User extends Equatable {
   final String faculty;
   final String major;
   final int semester;
+  final String? profilePicture;
   final String? phoneNumber;
   final String? profilePictureUrl;
   final bool isEmailVerified;
@@ -22,6 +23,7 @@ class User extends Equatable {
     required this.faculty,
     required this.major,
     required this.semester,
+    this.profilePicture,
     this.phoneNumber,
     this.profilePictureUrl,
     this.isEmailVerified = false,
