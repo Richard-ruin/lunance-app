@@ -3,112 +3,115 @@ import '../../domain/entities/financial_summary.dart';
 
 class FinancialSummaryModel extends FinancialSummary {
   const FinancialSummaryModel({
-    required super.totalIncome,
-    required super.totalExpense,
-    required super.balance,
-    required super.monthlyIncome,
-    required super.monthlyExpense,
-    required super.savingsGoal,
-    required super.currentSavings,
-    required super.topCategories,
-    required super.recentTransactions,
+    required super.period,
+    required super.dateRange,
+    required super.summary,
+    super.lastTransaction,
   });
 
   factory FinancialSummaryModel.fromJson(Map<String, dynamic> json) {
     return FinancialSummaryModel(
-      totalIncome: (json['totalIncome'] as num).toDouble(),
-      totalExpense: (json['totalExpense'] as num).toDouble(),
-      balance: (json['balance'] as num).toDouble(),
-      monthlyIncome: (json['monthlyIncome'] as num).toDouble(),
-      monthlyExpense: (json['monthlyExpense'] as num).toDouble(),
-      savingsGoal: (json['savingsGoal'] as num).toDouble(),
-      currentSavings: (json['currentSavings'] as num).toDouble(),
-      topCategories: (json['topCategories'] as List)
-          .map((e) => CategorySummaryModel.fromJson(e))
-          .toList(),
-      recentTransactions: (json['recentTransactions'] as List)
-          .map((e) => RecentTransactionModel.fromJson(e))
-          .toList(),
+      period: json['period'] ?? 'monthly',
+      dateRange: DateRangeModel.fromJson(json['date_range'] ?? {}),
+      summary: SummaryDataModel.fromJson(json['summary'] ?? {}),
+      lastTransaction: json['last_transaction'] != null
+          ? LastTransactionModel.fromJson(json['last_transaction'])
+          : null,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'totalIncome': totalIncome,
-      'totalExpense': totalExpense,
-      'balance': balance,
-      'monthlyIncome': monthlyIncome,
-      'monthlyExpense': monthlyExpense,
-      'savingsGoal': savingsGoal,
-      'currentSavings': currentSavings,
-      'topCategories': topCategories.map((e) => (e as CategorySummaryModel).toJson()).toList(),
-      'recentTransactions': recentTransactions.map((e) => (e as RecentTransactionModel).toJson()).toList(),
+      'period': period,
+      'date_range': (dateRange as DateRangeModel).toJson(),
+      'summary': (summary as SummaryDataModel).toJson(),
+      'last_transaction': lastTransaction != null
+          ? (lastTransaction as LastTransactionModel).toJson()
+          : null,
     };
   }
 }
 
-class CategorySummaryModel extends CategorySummary {
-  const CategorySummaryModel({
-    required super.name,
-    required super.icon,
-    required super.amount,
-    required super.percentage,
-    required super.color,
+class DateRangeModel extends DateRange {
+  const DateRangeModel({
+    required super.start,
+    required super.end,
   });
 
-  factory CategorySummaryModel.fromJson(Map<String, dynamic> json) {
-    return CategorySummaryModel(
-      name: json['name'] as String,
-      icon: json['icon'] as String,
-      amount: (json['amount'] as num).toDouble(),
-      percentage: (json['percentage'] as num).toDouble(),
-      color: json['color'] as String,
+  factory DateRangeModel.fromJson(Map<String, dynamic> json) {
+    return DateRangeModel(
+      start: DateTime.parse(json['start'] ?? DateTime.now().toIso8601String()),
+      end: DateTime.parse(json['end'] ?? DateTime.now().toIso8601String()),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'name': name,
-      'icon': icon,
-      'amount': amount,
-      'percentage': percentage,
-      'color': color,
+      'start': start.toIso8601String(),
+      'end': end.toIso8601String(),
     };
   }
 }
 
-class RecentTransactionModel extends RecentTransaction {
-  const RecentTransactionModel({
-    required super.id,
-    required super.title,
-    required super.category,
-    required super.amount,
-    required super.isIncome,
-    required super.date,
-    super.description,
+class SummaryDataModel extends SummaryData {
+  const SummaryDataModel({
+    required super.totalIncome,
+    required super.totalExpense,
+    required super.netBalance,
+    required super.transactionCount,
+    required super.dailyAverage,
+    required super.expenseVsPreviousPeriod,
   });
 
-  factory RecentTransactionModel.fromJson(Map<String, dynamic> json) {
-    return RecentTransactionModel(
-      id: json['id'] as String,
-      title: json['title'] as String,
-      category: json['category'] as String,
-      amount: (json['amount'] as num).toDouble(),
-      isIncome: json['isIncome'] as bool,
-      date: DateTime.parse(json['date'] as String),
-      description: json['description'] as String?,
+  factory SummaryDataModel.fromJson(Map<String, dynamic> json) {
+    return SummaryDataModel(
+      totalIncome: (json['total_income'] ?? 0).toDouble(),
+      totalExpense: (json['total_expense'] ?? 0).toDouble(),
+      netBalance: (json['net_balance'] ?? 0).toDouble(),
+      transactionCount: json['transaction_count'] ?? 0,
+      dailyAverage: (json['daily_average'] ?? 0).toDouble(),
+      expenseVsPreviousPeriod: (json['expense_vs_previous_period'] ?? 0).toDouble(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'total_income': totalIncome,
+      'total_expense': totalExpense,
+      'net_balance': netBalance,
+      'transaction_count': transactionCount,
+      'daily_average': dailyAverage,
+      'expense_vs_previous_period': expenseVsPreviousPeriod,
+    };
+  }
+}
+
+class LastTransactionModel extends LastTransaction {
+  const LastTransactionModel({
+    super.id,
+    super.type,
+    super.amount,
+    super.title,
+    super.date,
+  });
+
+  factory LastTransactionModel.fromJson(Map<String, dynamic> json) {
+    return LastTransactionModel(
+      id: json['id'],
+      type: json['type'],
+      amount: json['amount']?.toDouble(),
+      title: json['title'],
+      date: json['date'] != null ? DateTime.parse(json['date']) : null,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'title': title,
-      'category': category,
+      'type': type,
       'amount': amount,
-      'isIncome': isIncome,
-      'date': date.toIso8601String(),
-      'description': description,
+      'title': title,
+      'date': date?.toIso8601String(),
     };
   }
 }

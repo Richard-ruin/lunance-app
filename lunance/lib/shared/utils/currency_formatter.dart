@@ -37,30 +37,3 @@ class CurrencyFormatter {
   }
 }
 
-// lib/shared/utils/date_formatter.dart
-class DateFormatter {
-  static String formatTransactionDate(DateTime date) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yesterday = today.subtract(const Duration(days: 1));
-    final dateOnly = DateTime(date.year, date.month, date.day);
-
-    if (dateOnly == today) {
-      return 'Hari ini, ${DateFormat('HH:mm').format(date)}';
-    } else if (dateOnly == yesterday) {
-      return 'Kemarin, ${DateFormat('HH:mm').format(date)}';
-    } else if (date.year == now.year) {
-      return DateFormat('d MMMM, HH:mm', 'id_ID').format(date);
-    } else {
-      return DateFormat('d MMMM yyyy, HH:mm', 'id_ID').format(date);
-    }
-  }
-
-  static String formatMonthYear(DateTime date) {
-    return DateFormat('MMMM yyyy', 'id_ID').format(date);
-  }
-
-  static String formatDateOnly(DateTime date) {
-    return DateFormat('d MMMM yyyy', 'id_ID').format(date);
-  }
-}

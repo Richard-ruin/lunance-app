@@ -1,60 +1,79 @@
 // lib/features/dashboard/domain/entities/financial_summary.dart
-class FinancialSummary {
-  final double totalIncome;
-  final double totalExpense;
-  final double balance;
-  final double monthlyIncome;
-  final double monthlyExpense;
-  final double savingsGoal;
-  final double currentSavings;
-  final List<CategorySummary> topCategories;
-  final List<RecentTransaction> recentTransactions;
+import 'package:equatable/equatable.dart';
+
+class FinancialSummary extends Equatable {
+  final String period;
+  final DateRange dateRange;
+  final SummaryData summary;
+  final LastTransaction? lastTransaction;
 
   const FinancialSummary({
+    required this.period,
+    required this.dateRange,
+    required this.summary,
+    this.lastTransaction,
+  });
+
+  @override
+  List<Object?> get props => [period, dateRange, summary, lastTransaction];
+}
+
+class DateRange extends Equatable {
+  final DateTime start;
+  final DateTime end;
+
+  const DateRange({
+    required this.start,
+    required this.end,
+  });
+
+  @override
+  List<Object> get props => [start, end];
+}
+
+class SummaryData extends Equatable {
+  final double totalIncome;
+  final double totalExpense;
+  final double netBalance;
+  final int transactionCount;
+  final double dailyAverage;
+  final double expenseVsPreviousPeriod;
+
+  const SummaryData({
     required this.totalIncome,
     required this.totalExpense,
-    required this.balance,
-    required this.monthlyIncome,
-    required this.monthlyExpense,
-    required this.savingsGoal,
-    required this.currentSavings,
-    required this.topCategories,
-    required this.recentTransactions,
+    required this.netBalance,
+    required this.transactionCount,
+    required this.dailyAverage,
+    required this.expenseVsPreviousPeriod,
   });
+
+  @override
+  List<Object> get props => [
+    totalIncome,
+    totalExpense,
+    netBalance,
+    transactionCount,
+    dailyAverage,
+    expenseVsPreviousPeriod,
+  ];
 }
 
-class CategorySummary {
-  final String name;
-  final String icon;
-  final double amount;
-  final double percentage;
-  final String color;
+class LastTransaction extends Equatable {
+  final String? id;
+  final String? type;
+  final double? amount;
+  final String? title;
+  final DateTime? date;
 
-  const CategorySummary({
-    required this.name,
-    required this.icon,
-    required this.amount,
-    required this.percentage,
-    required this.color,
+  const LastTransaction({
+    this.id,
+    this.type,
+    this.amount,
+    this.title,
+    this.date,
   });
-}
 
-class RecentTransaction {
-  final String id;
-  final String title;
-  final String category;
-  final double amount;
-  final bool isIncome;
-  final DateTime date;
-  final String? description;
-
-  const RecentTransaction({
-    required this.id,
-    required this.title,
-    required this.category,
-    required this.amount,
-    required this.isIncome,
-    required this.date,
-    this.description,
-  });
+  @override
+  List<Object?> get props => [id, type, amount, title, date];
 }

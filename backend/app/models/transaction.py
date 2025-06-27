@@ -1,3 +1,4 @@
+# app/models/transaction.py
 from datetime import datetime
 from typing import List, Optional, Dict, Any, Annotated
 from pydantic import BaseModel, Field, ConfigDict, field_validator, BeforeValidator
@@ -47,7 +48,7 @@ class ReceiptPhoto(BaseModel):
 
 class TransactionMetadata(BaseModel):
     is_shared_expense: bool = False
-    shared_with: List[PyObjectId] = []
+    shared_with: List[str] = []  # Changed from List[PyObjectId] to List[str]
     my_share: Optional[float] = None
     
     # ML features
@@ -109,35 +110,6 @@ class Transaction(BaseModel):
     # Budget tracking
     budget_impact: Optional[BudgetImpact] = None
 
-# Student Categories Model
-class CategoryTypicalAmount(BaseModel):
-    min: float
-    max: float
-    avg: float
-
-class Category(BaseModel):
-    model_config = ConfigDict(
-        populate_by_name=True,
-        arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str}
-    )
-    
-    id: Optional[PyObjectId] = Field(default_factory=lambda: ObjectId(), alias="_id")
-    name: str
-    parent_id: Optional[PyObjectId] = None
-    type: TransactionType
-    icon: str
-    color: str
-    is_system: bool = True
-    
-    # Student-specific
-    student_specific: bool = True
-    typical_amount_range: Optional[CategoryTypicalAmount] = None
-    
-    # For auto-categorization
-    keywords: List[str] = []
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
 # Request/Response Models
 class TransactionCreate(BaseModel):
     type: TransactionType
@@ -182,22 +154,7 @@ class TransactionResponse(BaseModel):
     metadata: TransactionMetadata
     budget_impact: Optional[BudgetImpact]
 
-class CategoryResponse(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-    
-    id: str = Field(alias="_id")
-    name: str
-    parent_id: Optional[str]
-    type: TransactionType
-    icon: str
-    color: str
-    is_system: bool
-    student_specific: bool
-    typical_amount_range: Optional[CategoryTypicalAmount]
-    keywords: List[str]
-    created_at: datetime
-
-# Analytics Models
+# Analytics Models (simplified for now)
 class TransactionSummary(BaseModel):
     total_income: float
     total_expense: float

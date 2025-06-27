@@ -1,6 +1,6 @@
-
 // lib/core/theme/lunance_colors.dart
 import 'package:flutter/material.dart';
+
 class LunanceColors {
   // Primary Colors - Based on Indonesian university theme
   static const Color primary = Color(0xFF2196F3); // Blue
@@ -28,4 +28,14 @@ class LunanceColors {
   static const Color income = Color(0xFF4CAF50);
   static const Color expense = Color(0xFFF44336);
   static const Color savings = Color(0xFF2196F3);
+  
+  // Light variants for cards and backgrounds
+  static const Color incomeLight = Color(0xFFE8F5E8);
+  static const Color expenseLight = Color(0xFFFFEBEE);
+  static const Color savingsLight = Color(0xFFE3F2FD);
+  
+  // Additional UI colors
+  static const Color divider = Color(0xFFE0E0E0);
+  static const Color disabled = Color(0xFFBDBDBD);
+  static const Color placeholder = Color(0xFFF5F5F5);
 }

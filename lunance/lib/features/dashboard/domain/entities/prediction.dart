@@ -1,40 +1,97 @@
+
 // lib/features/dashboard/domain/entities/prediction.dart
-class Prediction {
-  final String message;
-  final PredictionType type;
-  final double confidence;
-  final Map<String, dynamic> data;
+import 'package:equatable/equatable.dart';
+
+class Prediction extends Equatable {
+  final String predictionType;
+  final bool cached;
   final DateTime generatedAt;
+  final ForecastSummary forecastSummary;
+  final List<Insight> insights;
+  final ModelInfo? modelInfo;
 
   const Prediction({
-    required this.message,
-    required this.type,
-    required this.confidence,
-    required this.data,
+    required this.predictionType,
+    required this.cached,
     required this.generatedAt,
+    required this.forecastSummary,
+    required this.insights,
+    this.modelInfo,
   });
+
+  @override
+  List<Object?> get props => [
+    predictionType,
+    cached,
+    generatedAt,
+    forecastSummary,
+    insights,
+    modelInfo,
+  ];
 }
 
-enum PredictionType {
-  saving,
-  spending,
-  budget,
-  warning,
-  achievement,
+class ForecastSummary extends Equatable {
+  final PeriodForecast nextWeek;
+  final PeriodForecast nextMonth;
+
+  const ForecastSummary({
+    required this.nextWeek,
+    required this.nextMonth,
+  });
+
+  @override
+  List<Object> get props => [nextWeek, nextMonth];
 }
 
-class MonthlyPrediction {
-  final String month;
-  final double predictedIncome;
-  final double predictedExpense;
-  final double predictedSavings;
-  final List<String> recommendations;
+class PeriodForecast extends Equatable {
+  final double predictedTotal;
+  final String confidence;
+  final double? lowerBound;
+  final double? upperBound;
 
-  const MonthlyPrediction({
-    required this.month,
-    required this.predictedIncome,
-    required this.predictedExpense,
-    required this.predictedSavings,
-    required this.recommendations,
+  const PeriodForecast({
+    required this.predictedTotal,
+    required this.confidence,
+    this.lowerBound,
+    this.upperBound,
   });
+
+  @override
+  List<Object?> get props => [predictedTotal, confidence, lowerBound, upperBound];
+}
+
+class Insight extends Equatable {
+  final String type;
+  final String message;
+  final String importance;
+  final String? suggestedAction;
+
+  const Insight({
+    required this.type,
+    required this.message,
+    required this.importance,
+    this.suggestedAction,
+  });
+
+  bool get isHighPriority => importance == 'high';
+  bool get isMediumPriority => importance == 'medium';
+  bool get isLowPriority => importance == 'low';
+
+  @override
+  List<Object?> get props => [type, message, importance, suggestedAction];
+}
+
+class ModelInfo extends Equatable {
+  final String method;
+  final int dataPoints;
+  final double dailyAverage;
+
+  const ModelInfo({
+    required this.method,
+    required this.dataPoints,
+    required this.dailyAverage,
+  });
+
+  @override
+  List<Object> get props => [method, dataPoints, dailyAverage];
 }

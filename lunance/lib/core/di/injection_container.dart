@@ -1,5 +1,4 @@
-
-// lib/core/di/injection_container.dart
+// lib/core/di/injection_container.dart (Updated untuk dashboard)
 import 'package:get_it/get_it.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:http/http.dart' as http;
@@ -18,6 +17,18 @@ import '../../features/auth/domain/usecases/register_usecase.dart';
 import '../../features/auth/domain/usecases/forgot_password_usecase.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 
+// Dashboard
+import '../../features/dashboard/data/datasources/dashboard_remote_datasource.dart';
+import '../../features/dashboard/data/repositories/dashboard_repository_impl.dart';
+import '../../features/dashboard/domain/repositories/dashboard_repository.dart';
+import '../../features/dashboard/domain/usecases/get_financial_summary_usecase.dart';
+import '../../features/dashboard/domain/usecases/get_quick_stats_usecase.dart';
+import '../../features/dashboard/domain/usecases/get_category_breakdown_usecase.dart';
+import '../../features/dashboard/domain/usecases/get_recent_transactions_usecase.dart';
+import '../../features/dashboard/domain/usecases/get_predictions_usecase.dart';
+import '../../features/dashboard/domain/usecases/get_financial_insights_usecase.dart';
+import '../../features/dashboard/presentation/bloc/dashboard_bloc.dart';
+
 // Settings
 import '../../features/settings/data/datasources/settings_remote_datasource.dart';
 import '../../features/settings/data/repositories/settings_repository_impl.dart';
@@ -34,12 +45,13 @@ Future<void> init() async {
   
   // Initialize features
   await _initAuth();
+  await _initDashboard();
   await _initSettings();
   
   // Add other features here when implemented
   // await _initTransactions();
   // await _initCategories();
-  // await _initDashboard();
+  // await _initChatbot();
 }
 
 Future<void> _initCore() async {
@@ -95,6 +107,58 @@ Future<void> _initAuth() async {
       registerUseCase: sl<RegisterUseCase>(),
       forgotPasswordUseCase: sl<ForgotPasswordUseCase>(),
       authRepository: sl<AuthRepository>(),
+    ),
+  );
+}
+
+Future<void> _initDashboard() async {
+  // Data Sources
+  sl.registerLazySingleton<DashboardRemoteDataSource>(
+    () => DashboardRemoteDataSourceImpl(sl<DioClient>()),
+  );
+
+  // Repositories
+  sl.registerLazySingleton<DashboardRepository>(
+    () => DashboardRepositoryImpl(
+      remoteDataSource: sl<DashboardRemoteDataSource>(),
+      networkInfo: sl<NetworkInfo>(),
+    ),
+  );
+
+  // Use Cases
+  sl.registerLazySingleton<GetFinancialSummaryUseCase>(
+    () => GetFinancialSummaryUseCase(sl<DashboardRepository>()),
+  );
+  
+  sl.registerLazySingleton<GetQuickStatsUseCase>(
+    () => GetQuickStatsUseCase(sl<DashboardRepository>()),
+  );
+  
+  sl.registerLazySingleton<GetCategoryBreakdownUseCase>(
+    () => GetCategoryBreakdownUseCase(sl<DashboardRepository>()),
+  );
+  
+  sl.registerLazySingleton<GetRecentTransactionsUseCase>(
+    () => GetRecentTransactionsUseCase(sl<DashboardRepository>()),
+  );
+  
+  sl.registerLazySingleton<GetPredictionsUseCase>(
+    () => GetPredictionsUseCase(sl<DashboardRepository>()),
+  );
+  
+  sl.registerLazySingleton<GetFinancialInsightsUseCase>(
+    () => GetFinancialInsightsUseCase(sl<DashboardRepository>()),
+  );
+
+  // BLoC
+  sl.registerFactory<DashboardBloc>(
+    () => DashboardBloc(
+      getFinancialSummaryUseCase: sl<GetFinancialSummaryUseCase>(),
+      getQuickStatsUseCase: sl<GetQuickStatsUseCase>(),
+      getCategoryBreakdownUseCase: sl<GetCategoryBreakdownUseCase>(),
+      getRecentTransactionsUseCase: sl<GetRecentTransactionsUseCase>(),
+      getPredictionsUseCase: sl<GetPredictionsUseCase>(),
+      getFinancialInsightsUseCase: sl<GetFinancialInsightsUseCase>(),
     ),
   );
 }

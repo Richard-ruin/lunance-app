@@ -42,15 +42,22 @@ class ApiEndpoints {
   static const String categories = '$baseUrl$apiVersion/categories';
   static const String addCategory = '$baseUrl$apiVersion/categories';
   
-  // Analytics endpoints
-  static const String analytics = '$baseUrl$apiVersion/analytics';
-  static const String financialSummary = '$baseUrl$apiVersion/analytics/summary';
-  static const String predictions = '$baseUrl$apiVersion/analytics/predictions';
-  static const String insights = '$baseUrl$apiVersion/analytics/insights';
+  
   
   // Dashboard endpoints
   static const String dashboard = '$baseUrl$apiVersion/dashboard';
   static const String dashboardSummary = '$baseUrl$apiVersion/dashboard/summary';
+
+  // Dashboard endpoints
+  static const String dashboardBase = '$baseUrl/dashboard';
+  static const String financialSummary = '$dashboardBase/financial-summary';
+  static const String quickStats = '$dashboardBase/quick-stats';
+  static const String categoryBreakdown = '$dashboardBase/category-breakdown';
+  static const String recentTransactions = '$dashboardBase/recent-transactions';
+  static const String predictions = '$dashboardBase/predictions';
+  static const String insights = '$dashboardBase/insights';
+  static const String academicContext = '$dashboardBase/academic-context';
+  static const String spendingTrends = '$dashboardBase/spending-trends';
   
   // Chatbot endpoints
   static const String chatbot = '$baseUrl$apiVersion/chat';

@@ -1,5 +1,4 @@
-
-// lib/shared/widgets/main_layout.dart (Updated untuk go_router)
+// lib/shared/widgets/main_layout.dart (Updated dengan floatingActionButton support)
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -15,6 +14,7 @@ class MainLayout extends StatelessWidget {
   final bool? centerTitle;
   final Widget? leading;
   final PreferredSizeWidget? customAppBar;
+  final Widget? floatingActionButton; // Added this
 
   const MainLayout({
     super.key,
@@ -26,6 +26,7 @@ class MainLayout extends StatelessWidget {
     this.centerTitle,
     this.leading,
     this.customAppBar,
+    this.floatingActionButton, // Added this
   });
 
   @override
@@ -36,6 +37,7 @@ class MainLayout extends StatelessWidget {
         appBar: _buildAppBar(context),
         body: body,
         bottomNavigationBar: _buildBottomNavigation(context),
+        floatingActionButton: floatingActionButton, // Added this
       ),
     );
   }
@@ -148,6 +150,20 @@ class MainLayout extends StatelessWidget {
                     'Pemasukan',
                     Icons.trending_up,
                     Colors.green,
+                    () {
+                      Navigator.pop(context);
+                      // Navigate to add income page
+                      context.go('/add-income');
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildTransactionButton(
+                    context,
+                    'Pengeluaran',
+                    Icons.trending_down,
+                    Colors.red,
                     () {
                       Navigator.pop(context);
                       // Navigate to add expense page

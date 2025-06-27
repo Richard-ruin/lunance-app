@@ -9,6 +9,7 @@ from app.config.database import connect_to_mongo, close_mongo_connection
 from app.config.settings import settings
 from app.api.v1.auth.routes import router as auth_router
 from app.api.v1.students.routes import router as students_router
+from app.api.v1.dashboard.routes import router as dashboard_router
 
 # Configure logging
 logging.basicConfig(
@@ -62,6 +63,7 @@ app.mount(
 # Include routers
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(students_router, prefix="/api/v1/students")
+app.include_router(dashboard_router, prefix="/api/v1/dashboard")
 
 @app.get("/")
 async def root():
