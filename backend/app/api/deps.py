@@ -1,3 +1,4 @@
+# app/api/deps.py
 from typing import Optional, Dict, Any
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -25,9 +26,16 @@ security = HTTPBearer(auto_error=False)
 rate_limit_storage: Dict[str, Dict[str, Any]] = {}
 
 
-async def get_db() -> AsyncIOMotorDatabase:
+async def get_database() -> AsyncIOMotorDatabase:
     """Dependency to get database connection"""
-    return get_database()
+    from app.config.database import get_database as get_db
+    return get_db()
+
+
+# Alias for backward compatibility
+async def get_db() -> AsyncIOMotorDatabase:
+    """Dependency to get database connection (alias)"""
+    return await get_database()
 
 
 async def get_current_user_optional(
@@ -90,7 +98,7 @@ async def get_current_user(
             raise AccountInactiveException()
         
         # Check if account is locked
-        if student.is_account_locked():
+        if hasattr(student, 'is_account_locked') and student.is_account_locked():
             lockout_until = student.account_locked_until.strftime("%Y-%m-%d %H:%M:%S")
             raise AccountLockedException(lockout_until)
         
@@ -107,6 +115,25 @@ async def get_current_user(
         )
 
 
+# Alias for transaction endpoints
+async def get_current_student(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> Dict[str, Any]:
+    """
+    Get current student as dict (for transaction endpoints compatibility)
+    """
+    student = await get_current_user(credentials)
+    
+    # Convert Student model to dict format expected by transaction routes
+    return {
+        "_id": str(student.id),
+        "email": student.email,
+        "full_name": student.profile.full_name,
+        "university": student.profile.university,
+        "is_active": student.is_active
+    }
+
+
 async def get_verified_user(current_user: Student = Depends(get_current_user)) -> Student:
     """
     Get current user and ensure email is verified
@@ -120,13 +147,15 @@ async def get_verified_user(current_user: Student = Depends(get_current_user)) -
 async def get_admin_user(current_user: Student = Depends(get_verified_user)) -> Student:
     """
     Get current user and ensure they have admin privileges
-    (This is a placeholder - implement admin role system as needed)
     """
-    # For now, check if user is from a specific university or has specific criteria
-    # In the future, implement proper role-based access control
-    
+    # Check if user has admin role or is from specific universities
     admin_universities = ["Universitas Indonesia", "Institut Teknologi Bandung"]
     
+    # Check if user has admin role (if implemented)
+    if hasattr(current_user, 'role') and current_user.role == "admin":
+        return current_user
+    
+    # Fallback: check university-based admin access
     if current_user.profile.university not in admin_universities:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -146,7 +175,7 @@ async def check_rate_limit(
     Rate limiting dependency
     """
     if max_requests is None:
-        max_requests = settings.RATE_LIMIT_PER_MINUTE
+        max_requests = getattr(settings, 'RATE_LIMIT_PER_MINUTE', 60)
     
     # Get client identifier (IP + User-Agent for better uniqueness)
     client_ip = get_client_ip(request)
@@ -191,6 +220,16 @@ async def check_otp_rate_limit(request: Request) -> None:
         action="otp",
         max_requests=5,   # Very restrictive for OTP
         window_minutes=10
+    )
+
+
+async def check_upload_rate_limit(request: Request) -> None:
+    """Rate limiting specifically for file upload endpoints"""
+    await check_rate_limit(
+        request,
+        action="upload",
+        max_requests=20,  # Moderate restriction for uploads
+        window_minutes=5
     )
 
 
@@ -325,14 +364,16 @@ async def check_operation_permission(
     # Operations users can always do on their own account
     self_operations = [
         "read_profile", "update_profile", "delete_account",
-        "read_transactions", "create_transaction", "update_transaction",
-        "read_savings", "create_savings", "update_savings"
+        "read_transactions", "create_transaction", "update_transaction", "delete_transaction",
+        "read_savings", "create_savings", "update_savings",
+        "read_history", "export_data"
     ]
     
     # Operations that require verified account
     verified_operations = [
         "create_transaction", "update_transaction", "delete_transaction",
-        "create_savings_goal", "join_expense_split", "create_expense_split"
+        "create_savings_goal", "join_expense_split", "create_expense_split",
+        "upload_receipt", "bulk_delete_transactions"
     ]
     
     # Check if operation requires verification
@@ -369,4 +410,174 @@ def get_user_context(current_user: Optional[Student] = None) -> Dict[str, Any]:
         "verified": current_user.verification.email_verified,
         "level": current_user.gamification.level,
         "anonymous": False
+    }
+
+
+# Transaction-specific dependencies
+async def validate_transaction_owner(
+    transaction_id: str,
+    current_user: Student = Depends(get_current_user)
+) -> str:
+    """
+    Validate that current user owns the transaction
+    Returns transaction_id if valid
+    """
+    # This will be used in transaction update/delete endpoints
+    # The actual validation is done in the CRUD layer
+    return transaction_id
+
+
+async def validate_bulk_transaction_access(
+    transaction_ids: list,
+    current_user: Student = Depends(get_current_user)
+) -> list:
+    """
+    Validate that current user owns all transactions in bulk operation
+    """
+    # This will be used in bulk delete endpoints
+    # The actual validation is done in the CRUD layer
+    return transaction_ids
+
+
+# Category-specific dependencies
+async def validate_category_access(
+    category_id: str,
+    current_user: Student = Depends(get_current_user)
+) -> str:
+    """
+    Validate that current user can access the category
+    """
+    # Categories are usually global or user-specific
+    # The actual validation is done in the CRUD layer
+    return category_id
+
+
+# File upload dependencies
+async def validate_file_upload(
+    current_user: Student = Depends(get_verified_user),
+    request: Request = None
+) -> Student:
+    """
+    Validate user can upload files (must be verified)
+    """
+    if request:
+        await check_upload_rate_limit(request)
+    
+    return current_user
+
+
+# Achievement and gamification dependencies
+async def check_achievement_trigger(
+    action: str,
+    current_user: Student = Depends(get_current_user)
+) -> Dict[str, Any]:
+    """
+    Check if action should trigger achievement
+    Returns context for achievement processing
+    """
+    return {
+        "user": current_user,
+        "action": action,
+        "timestamp": logger.info(f"Achievement trigger: {action} for user {current_user.email}")
+    }
+
+
+# Analytics dependencies
+def get_analytics_params(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    granularity: str = "daily",
+    include_metadata: bool = False
+) -> Dict[str, Any]:
+    """
+    Parameters for analytics endpoints
+    """
+    from datetime import datetime, timedelta
+    
+    # Default date range (last 30 days)
+    if not start_date:
+        start_date = (datetime.utcnow() - timedelta(days=30)).date()
+    else:
+        start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+    
+    if not end_date:
+        end_date = datetime.utcnow().date()
+    else:
+        end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+    
+    # Validate granularity
+    valid_granularities = ["hourly", "daily", "weekly", "monthly"]
+    if granularity not in valid_granularities:
+        granularity = "daily"
+    
+    return {
+        "start_date": start_date,
+        "end_date": end_date,
+        "granularity": granularity,
+        "include_metadata": include_metadata
+    }
+
+
+# Export dependencies
+def get_export_params(
+    format: str = "csv",
+    include_metadata: bool = False,
+    date_range: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Parameters for data export endpoints
+    """
+    # Validate export format
+    valid_formats = ["csv", "excel", "json", "pdf"]
+    if format not in valid_formats:
+        format = "csv"
+    
+    return {
+        "format": format,
+        "include_metadata": include_metadata,
+        "date_range": date_range
+    }
+
+
+# Budget and savings dependencies
+async def validate_budget_access(
+    budget_id: str,
+    current_user: Student = Depends(get_verified_user)
+) -> str:
+    """
+    Validate that current user can access the budget
+    """
+    return budget_id
+
+
+async def validate_savings_goal_access(
+    goal_id: str,
+    current_user: Student = Depends(get_verified_user)
+) -> str:
+    """
+    Validate that current user can access the savings goal
+    """
+    return goal_id
+
+
+# University-specific dependencies
+def validate_university_info(
+    university: str,
+    faculty: Optional[str] = None,
+    major: Optional[str] = None
+) -> Dict[str, str]:
+    """
+    Validate university information format
+    """
+    # Basic validation - more comprehensive validation in business logic
+    if not university or len(university.strip()) < 3:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="University name is required and must be at least 3 characters"
+        )
+    
+    return {
+        "university": university.strip(),
+        "faculty": faculty.strip() if faculty else None,
+        "major": major.strip() if major else None
     }

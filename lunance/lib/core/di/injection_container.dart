@@ -1,4 +1,4 @@
-// lib/core/di/injection_container.dart (Updated untuk dashboard)
+// lib/core/di/injection_container.dart (Updated untuk categories)
 import 'package:get_it/get_it.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:http/http.dart' as http;
@@ -29,6 +29,20 @@ import '../../features/dashboard/domain/usecases/get_predictions_usecase.dart';
 import '../../features/dashboard/domain/usecases/get_financial_insights_usecase.dart';
 import '../../features/dashboard/presentation/bloc/dashboard_bloc.dart';
 
+// Categories
+import '../../features/categories/data/datasources/category_remote_datasource.dart';
+import '../../features/categories/data/repositories/category_repository_impl.dart';
+import '../../features/categories/domain/repositories/category_repository.dart';
+import '../../features/categories/domain/usecases/get_categories_usecase.dart';
+import '../../features/categories/domain/usecases/get_categories_with_stats_usecase.dart';
+import '../../features/categories/domain/usecases/get_popular_categories_usecase.dart';
+import '../../features/categories/domain/usecases/search_categories_usecase.dart';
+import '../../features/categories/domain/usecases/create_category_usecase.dart';
+import '../../features/categories/domain/usecases/update_category_usecase.dart';
+import '../../features/categories/domain/usecases/delete_category_usecase.dart';
+import '../../features/categories/domain/usecases/get_category_by_id_usecase.dart';
+import '../../features/categories/presentation/bloc/category_bloc.dart';
+
 // Settings
 import '../../features/settings/data/datasources/settings_remote_datasource.dart';
 import '../../features/settings/data/repositories/settings_repository_impl.dart';
@@ -46,11 +60,11 @@ Future<void> init() async {
   // Initialize features
   await _initAuth();
   await _initDashboard();
+  await _initCategories();
   await _initSettings();
   
   // Add other features here when implemented
   // await _initTransactions();
-  // await _initCategories();
   // await _initChatbot();
 }
 
@@ -159,6 +173,67 @@ Future<void> _initDashboard() async {
       getRecentTransactionsUseCase: sl<GetRecentTransactionsUseCase>(),
       getPredictionsUseCase: sl<GetPredictionsUseCase>(),
       getFinancialInsightsUseCase: sl<GetFinancialInsightsUseCase>(),
+    ),
+  );
+}
+
+Future<void> _initCategories() async {
+  // Data Sources
+  sl.registerLazySingleton<CategoryRemoteDataSource>(
+    () => CategoryRemoteDataSourceImpl(sl<DioClient>()),
+  );
+
+  // Repositories
+  sl.registerLazySingleton<CategoryRepository>(
+    () => CategoryRepositoryImpl(
+      remoteDataSource: sl<CategoryRemoteDataSource>(),
+      networkInfo: sl<NetworkInfo>(),
+    ),
+  );
+
+  // Use Cases
+  sl.registerLazySingleton<GetCategoriesUseCase>(
+    () => GetCategoriesUseCase(sl<CategoryRepository>()),
+  );
+  
+  sl.registerLazySingleton<GetCategoriesWithStatsUseCase>(
+    () => GetCategoriesWithStatsUseCase(sl<CategoryRepository>()),
+  );
+  
+  sl.registerLazySingleton<GetPopularCategoriesUseCase>(
+    () => GetPopularCategoriesUseCase(sl<CategoryRepository>()),
+  );
+  
+  sl.registerLazySingleton<SearchCategoriesUseCase>(
+    () => SearchCategoriesUseCase(sl<CategoryRepository>()),
+  );
+  
+  sl.registerLazySingleton<CreateCategoryUseCase>(
+    () => CreateCategoryUseCase(sl<CategoryRepository>()),
+  );
+  
+  sl.registerLazySingleton<UpdateCategoryUseCase>(
+    () => UpdateCategoryUseCase(sl<CategoryRepository>()),
+  );
+  
+  sl.registerLazySingleton<DeleteCategoryUseCase>(
+    () => DeleteCategoryUseCase(sl<CategoryRepository>()),
+  );
+  
+  sl.registerLazySingleton<GetCategoryByIdUseCase>(
+    () => GetCategoryByIdUseCase(sl<CategoryRepository>()),
+  );
+
+  // BLoC
+  sl.registerFactory<CategoryBloc>(
+    () => CategoryBloc(
+      getCategoriesUseCase: sl<GetCategoriesUseCase>(),
+      getCategoriesWithStatsUseCase: sl<GetCategoriesWithStatsUseCase>(),
+      getPopularCategoriesUseCase: sl<GetPopularCategoriesUseCase>(),
+      searchCategoriesUseCase: sl<SearchCategoriesUseCase>(),
+      createCategoryUseCase: sl<CreateCategoryUseCase>(),
+      updateCategoryUseCase: sl<UpdateCategoryUseCase>(),
+      deleteCategoryUseCase: sl<DeleteCategoryUseCase>(),
     ),
   );
 }

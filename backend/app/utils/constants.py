@@ -1,3 +1,4 @@
+# app/utils/constants.py
 """
 Constants for the Lunance Finance Tracker application
 """
@@ -303,6 +304,45 @@ ACHIEVEMENT_CATEGORIES = {
     }
 }
 
+# Indonesian Universities (sample data)
+INDONESIAN_UNIVERSITIES = [
+    {
+        "name": "Universitas Indonesia",
+        "short_name": "UI",
+        "city": "Depok",
+        "province": "Jawa Barat",
+        "type": "Negeri"
+    },
+    {
+        "name": "Institut Teknologi Bandung",
+        "short_name": "ITB",
+        "city": "Bandung",
+        "province": "Jawa Barat",
+        "type": "Negeri"
+    },
+    {
+        "name": "Universitas Gadjah Mada",
+        "short_name": "UGM",
+        "city": "Yogyakarta",
+        "province": "DI Yogyakarta",
+        "type": "Negeri"
+    },
+    {
+        "name": "Institut Teknologi Sepuluh Nopember",
+        "short_name": "ITS",
+        "city": "Surabaya",
+        "province": "Jawa Timur",
+        "type": "Negeri"
+    },
+    {
+        "name": "Universitas Padjadjaran",
+        "short_name": "UNPAD",
+        "city": "Bandung",
+        "province": "Jawa Barat",
+        "type": "Negeri"
+    }
+]
+
 # Indonesian Regions and Major Cities
 INDONESIAN_REGIONS = {
     "jawa": [
@@ -480,4 +520,83 @@ TIMEOUTS = {
     "cache_short": 5 * 60,      # 5 minutes
     "cache_medium": 30 * 60,    # 30 minutes
     "cache_long": 24 * 60 * 60  # 24 hours
+}
+
+# Achievement definitions
+ACHIEVEMENTS = [
+    {
+        "id": "first_transaction",
+        "title": "Transaksi Pertama",
+        "description": "Mencatat transaksi pertama kali",
+        "icon": "🎉",
+        "points": 10,
+        "type": "milestone"
+    },
+    {
+        "id": "week_tracker",
+        "title": "Pencatat Setia",
+        "description": "Mencatat transaksi setiap hari selama seminggu",
+        "icon": "📝",
+        "points": 50,
+        "type": "consistency"
+    },
+    {
+        "id": "budget_master",
+        "title": "Master Budget",
+        "description": "Tidak melebihi budget selama sebulan",
+        "icon": "💪",
+        "points": 100,
+        "type": "budget"
+    },
+    {
+        "id": "saver_starter",
+        "title": "Penabung Pemula",
+        "description": "Berhasil menabung untuk pertama kali",
+        "icon": "🐷",
+        "points": 25,
+        "type": "savings"
+    },
+    {
+        "id": "category_explorer",
+        "title": "Penjelajah Kategori",
+        "description": "Menggunakan semua kategori default",
+        "icon": "🗂️",
+        "points": 75,
+        "type": "exploration"
+    }
+]
+
+# Budget thresholds for warnings
+BUDGET_THRESHOLDS = {
+    "WARNING": 0.80,  # 80% of budget used
+    "CRITICAL": 0.95,  # 95% of budget used
+    "OVER_BUDGET": 1.0  # 100% of budget used
+}
+
+# File upload constraints
+FILE_UPLOAD = {
+    "RECEIPT_MAX_SIZE": 5 * 1024 * 1024,  # 5MB
+    "ALLOWED_RECEIPT_TYPES": ["image/jpeg", "image/png", "image/jpg"],
+    "PROFILE_PICTURE_MAX_SIZE": 2 * 1024 * 1024,  # 2MB
+    "ALLOWED_PROFILE_TYPES": ["image/jpeg", "image/png", "image/jpg"]
+}
+
+# Gamification settings
+GAMIFICATION = {
+    "POINTS_PER_TRANSACTION": 5,
+    "POINTS_PER_WEEK_UNDER_BUDGET": 50,
+    "POINTS_PER_MONTH_UNDER_BUDGET": 200,
+    "POINTS_PER_SAVINGS_GOAL_REACHED": 100
+}
+
+# Default app settings for students
+DEFAULT_APP_SETTINGS = {
+    "currency": "IDR",
+    "language": "id",
+    "timezone": "Asia/Jakarta",
+    "budget_warning_threshold": 80,  # Percentage
+    "auto_categorization": True,
+    "notification_enabled": True,
+    "weekly_report": True,
+    "monthly_report": True
 }

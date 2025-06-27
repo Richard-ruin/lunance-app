@@ -1,6 +1,7 @@
+# app/models/category.py (Fixed version)
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from bson import ObjectId
 from app.models.base import PyObjectId
 
@@ -70,3 +71,18 @@ class CategoryWithStats(Category):
     total_amount: float = 0.0
     avg_amount: float = 0.0
     last_used: Optional[datetime] = None
+    
+    @field_validator('total_amount', 'avg_amount', mode='before')
+    @classmethod
+    def validate_amounts(cls, v):
+        # Handle None values from MongoDB aggregation
+        if v is None:
+            return 0.0
+        return float(v)
+    
+    @field_validator('transaction_count', mode='before')
+    @classmethod
+    def validate_count(cls, v):
+        if v is None:
+            return 0
+        return int(v)

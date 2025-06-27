@@ -1,14 +1,20 @@
+# app/utils/student_helpers.py
 import os
 import uuid
+import re
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from PIL import Image
 import aiofiles
 from fastapi import UploadFile
+from pathlib import Path
 
-from app.models.student import Student
-from app.config.settings import settings
-from app.core.exceptions import FileUploadException
+from app.utils.constants import (
+    INDONESIAN_E_WALLETS, INDONESIAN_BANKS, EXPENSE_CATEGORIES, 
+    INCOME_CATEGORIES, EXPERIENCE_POINTS, LEVEL_THRESHOLDS,
+    DEFAULT_BUDGET_ALLOCATION, ACHIEVEMENTS, PREDICTION_RULES,
+    FILE_UPLOAD, NOTIFICATION_TEMPLATES
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -43,7 +49,7 @@ INDONESIAN_UNIVERSITIES = {
     }
 }
 
-# Student expense categories
+# Student expense categories (from your original constants)
 STUDENT_EXPENSE_CATEGORIES = {
     "academic": {
         "name": "Akademik",
@@ -83,7 +89,7 @@ STUDENT_EXPENSE_CATEGORIES = {
     }
 }
 
-# Achievement definitions
+# Achievement definitions (from your original file)
 STUDENT_ACHIEVEMENTS = {
     "first_login": {
         "name": "Welcome to Lunance!",
@@ -135,6 +141,215 @@ STUDENT_ACHIEVEMENTS = {
     }
 }
 
+def generate_filename(original_filename: str, prefix: str = "") -> str:
+    """Generate a unique filename for uploads"""
+    file_extension = Path(original_filename).suffix
+    unique_id = str(uuid.uuid4())
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    
+    if prefix:
+        return f"{prefix}_{timestamp}_{unique_id}{file_extension}"
+    return f"{timestamp}_{unique_id}{file_extension}"
+
+def validate_indonesian_phone(phone: str) -> bool:
+    """Validate Indonesian phone number format"""
+    # Remove all non-digit characters
+    digits_only = re.sub(r'\D', '', phone)
+    
+    # Check if it starts with common Indonesian prefixes
+    valid_prefixes = ['08', '628', '+628']
+    
+    for prefix in valid_prefixes:
+        if phone.startswith(prefix):
+            return len(digits_only) >= 10 and len(digits_only) <= 15
+    
+    return False
+
+def format_currency(amount: float, currency: str = "IDR") -> str:
+    """Format currency for Indonesian Rupiah"""
+    if currency == "IDR":
+        # Format with thousand separators using dots (Indonesian style)
+        formatted = f"{amount:,.0f}".replace(",", ".")
+        return f"Rp {formatted}"
+    return f"{currency} {amount:,.2f}"
+
+def format_indonesian_currency(amount: float) -> str:
+    """Format amount in Indonesian Rupiah"""
+    try:
+        # Convert to integer if it's a whole number
+        if amount == int(amount):
+            amount = int(amount)
+        
+        # Format with thousand separators
+        formatted = f"Rp {amount:,.0f}" if isinstance(amount, int) else f"Rp {amount:,.2f}"
+        return formatted.replace(",", ".")  # Use dots as thousand separators (Indonesian style)
+        
+    except Exception:
+        return f"Rp {amount}"
+
+def get_academic_semester_info(date: datetime) -> dict:
+    """Get academic semester information based on date"""
+    year = date.year
+    month = date.month
+    
+    # Indonesian academic calendar (rough estimation)
+    if month >= 8:  # August - December (Odd semester)
+        semester = "ganjil"
+        semester_start = datetime(year, 8, 1)
+        academic_year = f"{year}/{year + 1}"
+    elif month <= 1:  # January (still odd semester)
+        semester = "ganjil"
+        semester_start = datetime(year - 1, 8, 1)
+        academic_year = f"{year - 1}/{year}"
+    elif month >= 2 and month <= 6:  # February - June (Even semester)
+        semester = "genap"
+        semester_start = datetime(year, 2, 1)
+        academic_year = f"{year - 1}/{year}"
+    else:  # July (break period)
+        semester = "libur"
+        semester_start = datetime(year, 7, 1)
+        academic_year = f"{year}/{year + 1}"
+    
+    # Calculate week in semester
+    week_in_semester = max(1, min(16, ((date - semester_start).days // 7) + 1))
+    
+    return {
+        "semester": semester,
+        "academic_year": academic_year,
+        "week_in_semester": week_in_semester,
+        "is_exam_period": week_in_semester >= 14 and semester != "libur"
+    }
+
+def categorize_student_expense(title: str, amount: float, location_type: Optional[str] = None) -> dict:
+    """Auto-categorize student expenses based on title and context"""
+    title_lower = title.lower()
+    
+    # Food keywords from EXPENSE_CATEGORIES
+    food_keywords = EXPENSE_CATEGORIES["food"]["subcategories"]
+    transport_keywords = EXPENSE_CATEGORIES["transportation"]["subcategories"] 
+    education_keywords = EXPENSE_CATEGORIES["academic"]["subcategories"]
+    entertainment_keywords = EXPENSE_CATEGORIES["entertainment"]["subcategories"]
+    
+    confidence = 0.7  # Default confidence
+    is_unusual = False
+    academic_related = False
+    
+    # Check for food
+    if any(keyword in title_lower for keyword in food_keywords) or location_type == "restaurant":
+        category_suggestion = "food"
+        if amount > 50000:  # More than 50k for food might be unusual for students
+            is_unusual = True
+            confidence = 0.8
+    
+    # Check for transport
+    elif any(keyword in title_lower for keyword in transport_keywords) or location_type == "transport":
+        category_suggestion = "transportation"
+        if amount > 100000:  # More than 100k for transport
+            is_unusual = True
+    
+    # Check for education
+    elif any(keyword in title_lower for keyword in education_keywords):
+        category_suggestion = "academic"
+        academic_related = True
+        confidence = 0.9
+    
+    # Check for entertainment
+    elif any(keyword in title_lower for keyword in entertainment_keywords):
+        category_suggestion = "entertainment"
+        if amount > 200000:  # More than 200k for entertainment
+            is_unusual = True
+    
+    else:
+        category_suggestion = "other"
+        confidence = 0.3
+        if amount > 500000:  # Large amount without clear category
+            is_unusual = True
+    
+    return {
+        "suggested_category": category_suggestion,
+        "confidence": confidence,
+        "is_unusual": is_unusual,
+        "academic_related": academic_related
+    }
+
+def get_budget_recommendations(monthly_income: float, current_expenses: float) -> dict:
+    """Generate budget recommendations for students"""
+    
+    # Use the budget allocation from constants
+    budget_amounts = {}
+    for category, percentage in DEFAULT_BUDGET_ALLOCATION.items():
+        budget_amounts[category] = monthly_income * (percentage / 100)
+    
+    # Calculate remaining budget
+    total_recommended_expense = monthly_income * 0.80  # 80% for expenses, 20% for savings
+    remaining_budget = total_recommended_expense - current_expenses
+    
+    # Generate advice
+    advice = []
+    if remaining_budget < 0:
+        advice.append("Anda sudah melebihi budget yang direkomendasikan bulan ini!")
+        advice.append("Coba kurangi pengeluaran untuk hiburan dan makanan di luar.")
+    elif remaining_budget < monthly_income * 0.10:
+        advice.append("Budget Anda hampir habis. Hati-hati dengan pengeluaran selanjutnya.")
+    else:
+        advice.append("Budget Anda masih aman. Pertahankan pola pengeluaran ini.")
+    
+    return {
+        "recommended_allocations": budget_amounts,
+        "remaining_budget": remaining_budget,
+        "budget_status": "over" if remaining_budget < 0 else "warning" if remaining_budget < monthly_income * 0.10 else "safe",
+        "advice": advice
+    }
+
+def generate_savings_challenge(current_balance: float, monthly_income: float) -> dict:
+    """Generate personalized savings challenges for students"""
+    
+    # Calculate appropriate challenge amount (5-10% of monthly income)
+    min_challenge = monthly_income * 0.05
+    max_challenge = monthly_income * 0.10
+    
+    challenges = [
+        {
+            "title": "Hemat Jajan Sehari",
+            "description": "Coba tidak jajan selama 1 hari dan masukkan uang jajan ke tabungan",
+            "target_amount": 25000,
+            "duration_days": 1,
+            "difficulty": "mudah"
+        },
+        {
+            "title": "Minggu Hemat Transport",
+            "description": "Gunakan transportasi umum atau jalan kaki selama seminggu",
+            "target_amount": 50000,
+            "duration_days": 7,
+            "difficulty": "sedang"
+        },
+        {
+            "title": "Challenge 50rb Sebulan",
+            "description": "Tabung 50 ribu dalam sebulan dengan mengurangi pengeluaran tidak penting",
+            "target_amount": 50000,
+            "duration_days": 30,
+            "difficulty": "sedang"
+        },
+        {
+            "title": "Tabungan Semester",
+            "description": "Kumpulkan tabungan untuk keperluan semester depan",
+            "target_amount": min(max_challenge * 4, 200000),
+            "duration_days": 120,
+            "difficulty": "sulit"
+        }
+    ]
+    
+    # Filter challenges based on income level
+    affordable_challenges = [
+        challenge for challenge in challenges 
+        if challenge["target_amount"] <= max_challenge * (challenge["duration_days"] / 30)
+    ]
+    
+    return {
+        "available_challenges": affordable_challenges,
+        "recommended_monthly_savings": min_challenge,
+        "current_savings_rate": (current_balance / monthly_income) if monthly_income > 0 else 0
+    }
 
 async def validate_university_info(university: str, faculty: str = None, major: str = None) -> bool:
     """Validate university, faculty, and major combination"""
@@ -154,21 +369,28 @@ async def validate_university_info(university: str, faculty: str = None, major: 
         logger.error(f"University validation error: {str(e)}")
         return False
 
-
 async def process_profile_picture(file: UploadFile, user_id: str) -> str:
     """Process and save profile picture"""
     try:
         # Create upload directory if it doesn't exist
-        upload_dir = os.path.join(settings.UPLOAD_DIR, "profile_pictures")
-        os.makedirs(upload_dir, exist_ok=True)
+        upload_dir = Path("static/uploads/profile_pictures")
+        upload_dir.mkdir(parents=True, exist_ok=True)
         
         # Generate unique filename
-        file_extension = os.path.splitext(file.filename)[1].lower()
+        file_extension = Path(file.filename).suffix.lower()
         if file_extension not in ['.jpg', '.jpeg', '.png']:
-            raise FileUploadException("Unsupported file format. Use JPG, JPEG, or PNG.")
+            raise ValueError("Unsupported file format. Use JPG, JPEG, or PNG.")
         
         filename = f"{user_id}_{uuid.uuid4().hex}{file_extension}"
-        file_path = os.path.join(upload_dir, filename)
+        file_path = upload_dir / filename
+        
+        # Check file size
+        file.file.seek(0, 2)  # Seek to end
+        file_size = file.file.tell()
+        file.file.seek(0)  # Reset to beginning
+        
+        if file_size > FILE_UPLOAD["PROFILE_PICTURE_MAX_SIZE"]:
+            raise ValueError("File size too large. Maximum 2MB allowed.")
         
         # Save original file
         async with aiofiles.open(file_path, 'wb') as f:
@@ -176,15 +398,14 @@ async def process_profile_picture(file: UploadFile, user_id: str) -> str:
             await f.write(content)
         
         # Process image (resize, optimize)
-        await optimize_profile_picture(file_path)
+        await optimize_profile_picture(str(file_path))
         
         # Return URL path
-        return f"/static/uploads/profile_pictures/{filename}"
+        return f"/static/profile_pictures/{filename}"
         
     except Exception as e:
         logger.error(f"Profile picture processing error: {str(e)}")
-        raise FileUploadException(f"Failed to process profile picture: {str(e)}")
-
+        raise ValueError(f"Failed to process profile picture: {str(e)}")
 
 async def optimize_profile_picture(file_path: str) -> None:
     """Optimize profile picture (resize and compress)"""
@@ -204,26 +425,20 @@ async def optimize_profile_picture(file_path: str) -> None:
         logger.error(f"Image optimization error: {str(e)}")
         # If optimization fails, keep the original file
 
-
 def calculate_user_level(experience_points: int) -> int:
     """Calculate user level based on experience points"""
-    # Level progression: Level 1 = 0-99 points, Level 2 = 100-299, Level 3 = 300-599, etc.
-    if experience_points < 100:
-        return 1
-    elif experience_points < 300:
-        return 2
-    elif experience_points < 600:
-        return 3
-    elif experience_points < 1000:
-        return 4
-    elif experience_points < 1500:
-        return 5
-    else:
-        # Advanced levels: every 500 points = 1 level
-        return 6 + ((experience_points - 1500) // 500)
+    for level, threshold in enumerate(LEVEL_THRESHOLDS, 1):
+        if experience_points < threshold:
+            return level - 1 if level > 1 else 1
+    
+    # For levels beyond the threshold list
+    if experience_points >= LEVEL_THRESHOLDS[-1]:
+        additional_levels = (experience_points - LEVEL_THRESHOLDS[-1]) // 500
+        return len(LEVEL_THRESHOLDS) + additional_levels
+    
+    return len(LEVEL_THRESHOLDS)
 
-
-async def update_user_achievements(student: Student, achievement_trigger: str) -> List[str]:
+async def update_user_achievements(student: "Student", achievement_trigger: str) -> List[str]:
     """Update user achievements and return newly earned achievements"""
     try:
         newly_earned = []
@@ -269,16 +484,13 @@ async def update_user_achievements(student: Student, achievement_trigger: str) -
         logger.error(f"Achievement update error: {str(e)}")
         return []
 
-
 def get_student_expense_categories() -> Dict[str, Any]:
     """Get expense categories suitable for students"""
     return STUDENT_EXPENSE_CATEGORIES
 
-
 def get_achievement_definitions() -> Dict[str, Any]:
     """Get all achievement definitions"""
     return STUDENT_ACHIEVEMENTS
-
 
 def validate_academic_calendar_event(event_type: str, start_date: datetime, end_date: datetime) -> bool:
     """Validate academic calendar event"""
@@ -296,7 +508,6 @@ def validate_academic_calendar_event(event_type: str, start_date: datetime, end_
     # Additional validation logic can be added here
     return True
 
-
 def calculate_semester_progress(semester_start: datetime, semester_end: datetime) -> float:
     """Calculate semester progress percentage"""
     try:
@@ -313,7 +524,6 @@ def calculate_semester_progress(semester_start: datetime, semester_end: datetime
             
     except Exception:
         return 0.0
-
 
 def get_student_financial_tips(profile_data: Dict[str, Any]) -> List[str]:
     """Get personalized financial tips based on student profile"""
@@ -348,22 +558,6 @@ def get_student_financial_tips(profile_data: Dict[str, Any]) -> List[str]:
         tips.append("Look into monthly transport passes for better rates")
     
     return tips
-
-
-def format_indonesian_currency(amount: float) -> str:
-    """Format amount in Indonesian Rupiah"""
-    try:
-        # Convert to integer if it's a whole number
-        if amount == int(amount):
-            amount = int(amount)
-        
-        # Format with thousand separators
-        formatted = f"Rp {amount:,.0f}" if isinstance(amount, int) else f"Rp {amount:,.2f}"
-        return formatted.replace(",", ".")  # Use dots as thousand separators (Indonesian style)
-        
-    except Exception:
-        return f"Rp {amount}"
-
 
 def get_spending_insights(transactions: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Generate spending insights from transaction data"""
@@ -407,7 +601,6 @@ def get_spending_insights(transactions: List[Dict[str, Any]]) -> Dict[str, Any]:
     
     return insights
 
-
 def generate_budget_recommendations(
     monthly_allowance: float, 
     spending_history: List[Dict[str, Any]]
@@ -449,3 +642,81 @@ def generate_budget_recommendations(
                     )
     
     return recommendations
+
+def get_notification_message(template_key: str, **kwargs) -> str:
+    """Get formatted notification message from template"""
+    template = NOTIFICATION_TEMPLATES.get(template_key, "")
+    try:
+        return template.format(**kwargs)
+    except KeyError:
+        return template
+
+def get_expense_category_by_slug(slug: str) -> Optional[Dict[str, Any]]:
+    """Get expense category information by slug"""
+    return EXPENSE_CATEGORIES.get(slug)
+
+def get_income_category_by_slug(slug: str) -> Optional[Dict[str, Any]]:
+    """Get income category information by slug"""
+    return INCOME_CATEGORIES.get(slug)
+
+def predict_category_budget_impact(category: str, current_week: int, semester: str) -> Dict[str, Any]:
+    """Predict budget impact based on academic calendar"""
+    impact = {
+        "multiplier": 1.0,
+        "reason": "Normal period",
+        "recommendations": []
+    }
+    
+    # Check prediction rules
+    for rule_key, rule in PREDICTION_RULES.items():
+        if category in rule.get("categories", []):
+            # Simple logic for demonstration
+            if rule_key == "academic_start" and current_week <= 2:
+                impact["multiplier"] = rule["multiplier"]
+                impact["reason"] = rule["description"]
+                impact["recommendations"].append("Consider setting aside extra budget for academic expenses")
+            elif rule_key == "exam_period" and current_week >= 14:
+                impact["multiplier"] = rule["multiplier"]
+                impact["reason"] = rule["description"]
+                impact["recommendations"].append("Expect higher food and health expenses during exam period")
+    
+    return [{"title": "impactHemat Jajan Sehari",
+            "description": "Coba tidak jajan selama 1 hari dan masukkan uang jajan ke tabungan",
+            "target_amount": 25000,
+            "duration_days": 1,
+            "difficulty": "mudah"
+        },
+        {
+            "title": "Minggu Hemat Transport",
+            "description": "Gunakan transportasi umum atau jalan kaki selama seminggu",
+            "target_amount": 50000,
+            "duration_days": 7,
+            "difficulty": "sedang"
+        },
+        {
+            "title": "Challenge 50rb Sebulan",
+            "description": "Tabung 50 ribu dalam sebulan dengan mengurangi pengeluaran tidak penting",
+            "target_amount": 50000,
+            "duration_days": 30,
+            "difficulty": "sedang"
+        },
+        {
+            "title": "Tabungan Semester",
+            "description": "Kumpulkan tabungan untuk keperluan semester depan",
+            "target_amount": min(max_challenge * 4, 200000),
+            "duration_days": 120,
+            "difficulty": "sulit"
+        }
+    ]
+    
+    # Filter challenges based on income level
+    affordable_challenges = [
+        challenge for challenge in challenges 
+        if challenge["target_amount"] <= max_challenge * (challenge["duration_days"] / 30)
+    ]
+    
+    return {
+        "available_challenges": affordable_challenges,
+        "recommended_monthly_savings": min_challenge,
+        "current_savings_rate": (current_balance / monthly_income) if monthly_income > 0 else 0
+    }

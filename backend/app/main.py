@@ -10,6 +10,9 @@ from app.config.settings import settings
 from app.api.v1.auth.routes import router as auth_router
 from app.api.v1.students.routes import router as students_router
 from app.api.v1.dashboard.routes import router as dashboard_router
+from app.api.v1.categories.routes import router as categories_router
+from app.api.v1.transactions.routes import router as transactions_router
+from app.api.v1.history.routes import router as history_router
 
 # Configure logging
 logging.basicConfig(
@@ -64,6 +67,9 @@ app.mount(
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(students_router, prefix="/api/v1/students")
 app.include_router(dashboard_router, prefix="/api/v1/dashboard")
+app.include_router(categories_router, prefix="/api/v1")
+app.include_router(transactions_router, prefix="/api/v1/transactions")
+app.include_router(history_router, prefix="/api/v1/history")
 
 @app.get("/")
 async def root():

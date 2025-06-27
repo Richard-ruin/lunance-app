@@ -1,38 +1,70 @@
 // lib/features/history/domain/entities/filter.dart
-import 'filter_type.dart';
+import 'package:equatable/equatable.dart';
 
-class Filter {
-  final FilterType type;
-  final String? value;
+class Filter extends Equatable {
+  final String? type;
+  final String? categoryId;
+  final String? paymentMethod;
   final DateTime? startDate;
   final DateTime? endDate;
-  final List<String>? categories;
-  final List<String>? statuses;
+  final double? minAmount;
+  final double? maxAmount;
+  final String? search;
 
   const Filter({
-    required this.type,
-    this.value,
+    this.type,
+    this.categoryId,
+    this.paymentMethod,
     this.startDate,
     this.endDate,
-    this.categories,
-    this.statuses,
+    this.minAmount,
+    this.maxAmount,
+    this.search,
   });
 
   Filter copyWith({
-    FilterType? type,
-    String? value,
+    String? type,
+    String? categoryId,
+    String? paymentMethod,
     DateTime? startDate,
     DateTime? endDate,
-    List<String>? categories,
-    List<String>? statuses,
+    double? minAmount,
+    double? maxAmount,
+    String? search,
   }) {
     return Filter(
       type: type ?? this.type,
-      value: value ?? this.value,
+      categoryId: categoryId ?? this.categoryId,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
       startDate: startDate ?? this.startDate,
       endDate: endDate ?? this.endDate,
-      categories: categories ?? this.categories,
-      statuses: statuses ?? this.statuses,
+      minAmount: minAmount ?? this.minAmount,
+      maxAmount: maxAmount ?? this.maxAmount,
+      search: search ?? this.search,
     );
   }
+
+  bool get isEmpty {
+    return type == null &&
+        categoryId == null &&
+        paymentMethod == null &&
+        startDate == null &&
+        endDate == null &&
+        minAmount == null &&
+        maxAmount == null &&
+        (search == null || search!.isEmpty);
+  }
+
+  @override
+  List<Object?> get props => [
+        type,
+        categoryId,
+        paymentMethod,
+        startDate,
+        endDate,
+        minAmount,
+        maxAmount,
+        search,
+      ];
 }
+

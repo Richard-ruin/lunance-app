@@ -1,4 +1,4 @@
-// lib/app.dart
+// lib/app.dart (Updated dengan CategoryBloc)
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -8,6 +8,7 @@ import 'core/di/injection_container.dart' as di;
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/auth/presentation/bloc/auth_event.dart';
 import 'features/dashboard/presentation/bloc/dashboard_bloc.dart';
+import 'features/categories/presentation/bloc/category_bloc.dart';
 import 'features/settings/presentation/bloc/settings_bloc.dart';
 
 class LunanceApp extends StatelessWidget {
@@ -22,6 +23,9 @@ class LunanceApp extends StatelessWidget {
         ),
         BlocProvider(
           create: (_) => di.sl<DashboardBloc>(),
+        ),
+        BlocProvider(
+          create: (_) => di.sl<CategoryBloc>(),
         ),
         BlocProvider(
           create: (_) => di.sl<SettingsBloc>(),

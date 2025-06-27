@@ -1,21 +1,9 @@
 # app/models/transaction.py
 from datetime import datetime
 from typing import List, Optional, Dict, Any, Annotated
-from pydantic import BaseModel, Field, ConfigDict, field_validator, BeforeValidator
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from bson import ObjectId
 from enum import Enum
-
-# Custom ObjectId validator for Pydantic v2
-def validate_object_id(v: Any) -> ObjectId:
-    if isinstance(v, ObjectId):
-        return v
-    if isinstance(v, str):
-        if ObjectId.is_valid(v):
-            return ObjectId(v)
-    raise ValueError("Invalid ObjectId")
-
-# Type alias for ObjectId with validation
-PyObjectId = Annotated[ObjectId, BeforeValidator(validate_object_id)]
 
 class TransactionType(str, Enum):
     INCOME = "income"
@@ -48,7 +36,7 @@ class ReceiptPhoto(BaseModel):
 
 class TransactionMetadata(BaseModel):
     is_shared_expense: bool = False
-    shared_with: List[str] = []  # Changed from List[PyObjectId] to List[str]
+    shared_with: List[str] = []
     my_share: Optional[float] = None
     
     # ML features
@@ -70,24 +58,25 @@ class Transaction(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
         arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str}
+        json_encoders={ObjectId: str},
+        str_strip_whitespace=True
     )
     
-    id: Optional[PyObjectId] = Field(default_factory=lambda: ObjectId(), alias="_id")
-    student_id: PyObjectId
+    id: Optional[str] = Field(default=None, alias="_id")
+    student_id: str
     
     # Basic Info
     type: TransactionType
-    amount: float
+    amount: float = Field(..., gt=0, description="Amount must be greater than 0")
     currency: str = "IDR"
     
     # Categorization
-    category_id: PyObjectId
+    category_id: str
     subcategory: Optional[str] = None
     
     # Description
-    title: str
-    notes: Optional[str] = None
+    title: str = Field(..., min_length=1, max_length=200)
+    notes: Optional[str] = Field(None, max_length=500)
     
     # Dates
     transaction_date: datetime = Field(default_factory=datetime.utcnow)
@@ -96,7 +85,7 @@ class Transaction(BaseModel):
     
     # Payment method
     payment_method: PaymentMethod
-    account_name: str = Field(..., description="GoPay, DANA, Cash, BCA")
+    account_name: str = Field(..., description="GoPay, DANA, Cash, BCA", max_length=100)
     
     # Location (optional)
     location: Optional[Location] = None
@@ -110,30 +99,77 @@ class Transaction(BaseModel):
     # Budget tracking
     budget_impact: Optional[BudgetImpact] = None
 
-# Request/Response Models
+    @field_validator('amount')
+    @classmethod
+    def validate_amount(cls, v):
+        if v <= 0:
+            raise ValueError('Amount must be greater than 0')
+        return round(v, 2)
+    
+    @field_validator('student_id', 'category_id')
+    @classmethod
+    def validate_object_id_string(cls, v):
+        if not ObjectId.is_valid(v):
+            raise ValueError('Invalid ObjectId format')
+        return v
+
+# Request Models
 class TransactionCreate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    
     type: TransactionType
-    amount: float
+    amount: float = Field(..., gt=0)
     category_id: str
-    title: str
-    notes: Optional[str] = None
+    title: str = Field(..., min_length=1, max_length=200)
+    notes: Optional[str] = Field(None, max_length=500)
     payment_method: PaymentMethod
-    account_name: str
+    account_name: str = Field(..., max_length=100)
     transaction_date: Optional[datetime] = None
     location: Optional[Location] = None
     subcategory: Optional[str] = None
+
+    @field_validator('amount')
+    @classmethod
+    def validate_amount(cls, v):
+        if v <= 0:
+            raise ValueError('Amount must be greater than 0')
+        return round(v, 2)
+    
+    @field_validator('category_id')
+    @classmethod
+    def validate_category_id(cls, v):
+        if not ObjectId.is_valid(v):
+            raise ValueError('Invalid category ID format')
+        return v
 
 class TransactionUpdate(BaseModel):
-    amount: Optional[float] = None
+    model_config = ConfigDict(str_strip_whitespace=True)
+    
+    amount: Optional[float] = Field(None, gt=0)
     category_id: Optional[str] = None
-    title: Optional[str] = None
-    notes: Optional[str] = None
+    title: Optional[str] = Field(None, min_length=1, max_length=200)
+    notes: Optional[str] = Field(None, max_length=500)
     payment_method: Optional[PaymentMethod] = None
-    account_name: Optional[str] = None
+    account_name: Optional[str] = Field(None, max_length=100)
     transaction_date: Optional[datetime] = None
     location: Optional[Location] = None
     subcategory: Optional[str] = None
 
+    @field_validator('amount')
+    @classmethod
+    def validate_amount(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError('Amount must be greater than 0')
+        return round(v, 2) if v is not None else v
+    
+    @field_validator('category_id')
+    @classmethod
+    def validate_category_id(cls, v):
+        if v is not None and not ObjectId.is_valid(v):
+            raise ValueError('Invalid category ID format')
+        return v
+
+# Response Models
 class TransactionResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     
@@ -154,7 +190,33 @@ class TransactionResponse(BaseModel):
     metadata: TransactionMetadata
     budget_impact: Optional[BudgetImpact]
 
-# Analytics Models (simplified for now)
+# Filter and Query Models
+class TransactionFilter(BaseModel):
+    type: Optional[TransactionType] = None
+    category_id: Optional[str] = None
+    payment_method: Optional[PaymentMethod] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    min_amount: Optional[float] = Field(None, ge=0)
+    max_amount: Optional[float] = Field(None, ge=0)
+    search: Optional[str] = Field(None, max_length=100)
+
+class TransactionSort(str, Enum):
+    DATE_DESC = "date_desc"
+    DATE_ASC = "date_asc"
+    AMOUNT_DESC = "amount_desc"
+    AMOUNT_ASC = "amount_asc"
+    TITLE_ASC = "title_asc"
+    TITLE_DESC = "title_desc"
+
+class TransactionListResponse(BaseModel):
+    transactions: List[TransactionResponse]
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+
+# Analytics Models
 class TransactionSummary(BaseModel):
     total_income: float
     total_expense: float
@@ -163,15 +225,17 @@ class TransactionSummary(BaseModel):
     daily_average: float
 
 class CategoryBreakdown(BaseModel):
-    category: str
+    category_id: str
+    category_name: str
     amount: float
     percentage: float
     transaction_count: int
     vs_previous_period: Optional[float] = None
 
-class WeeklyTransactionSummary(BaseModel):
-    week_start: datetime
-    week_end: datetime
+class PeriodSummary(BaseModel):
+    period: str
+    start_date: datetime
+    end_date: datetime
     summary: TransactionSummary
     category_breakdown: List[CategoryBreakdown]
 
@@ -180,13 +244,49 @@ class MonthlyTransactionSummary(BaseModel):
     year: int
     summary: TransactionSummary
     category_breakdown: List[CategoryBreakdown]
-    weekly_breakdown: List[WeeklyTransactionSummary]
+    weekly_breakdown: List[PeriodSummary]
+
+# Receipt upload model
+class ReceiptUploadResponse(BaseModel):
+    filename: str
+    url: str
+    uploaded_at: datetime
+
+# Bulk operations
+class BulkDeleteRequest(BaseModel):
+    transaction_ids: List[str] = Field(..., min_length=1)
+    
+    @field_validator('transaction_ids')
+    @classmethod
+    def validate_transaction_ids(cls, v):
+        for id_str in v:
+            if not ObjectId.is_valid(id_str):
+                raise ValueError(f'Invalid transaction ID format: {id_str}')
+        return v
+
+class BulkDeleteResponse(BaseModel):
+    deleted_count: int
+    failed_ids: List[str] = []
+
+# Export models
+class ExportFormat(str, Enum):
+    CSV = "csv"
+    EXCEL = "excel"
+    PDF = "pdf"
+
+class ExportRequest(BaseModel):
+    format: ExportFormat
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    categories: Optional[List[str]] = None
+    include_metadata: bool = False
 
 # Example usage and schema
 TRANSACTION_EXAMPLE = {
     "type": "expense",
     "amount": 25000,
     "currency": "IDR",
+    "category_id": "507f1f77bcf86cd799439011",
     "title": "Makan Siang",
     "payment_method": "cash",
     "account_name": "Cash",
