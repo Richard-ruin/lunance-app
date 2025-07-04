@@ -1,227 +1,177 @@
-import os
-from typing import List, Optional
-from pydantic import  EmailStr, validator, Field
-from pydantic_settings import BaseSettings
+"""
+Application Settings Configuration
+Menggunakan pydantic-settings untuk environment configuration
+"""
 
+from typing import List, Optional
+from pydantic import Field, validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables"""
+    """Application settings dengan validasi lengkap"""
     
-    # Application Settings
-    DEBUG: bool = Field(default=False, env="DEBUG")
-    APP_NAME: str = Field(default="Lunance Finance Tracker", env="APP_NAME")
-    APP_VERSION: str = Field(default="1.0.0", env="APP_VERSION")
-    API_V1_STR: str = "/api/v1"
+    # Application Configuration
+    app_name: str = Field(default="Lunance Backend API", description="Nama aplikasi")
+    app_version: str = Field(default="1.0.0", description="Versi aplikasi")
+    debug: bool = Field(default=False, description="Mode debug")
+    api_v1_prefix: str = Field(default="/api/v1", description="API v1 prefix")
     
-    # Database Settings
-    MONGODB_URL: str = Field(..., env="MONGODB_URL")
-    DATABASE_NAME: str = Field(..., env="DATABASE_NAME")
+    # Server Configuration
+    host: str = Field(default="0.0.0.0", description="Host server")
+    port: int = Field(default=8000, description="Port server")
     
-    # Security Settings
-    SECRET_KEY: str = Field(..., env="SECRET_KEY")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30, env="ACCESS_TOKEN_EXPIRE_MINUTES")
-    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7, env="REFRESH_TOKEN_EXPIRE_DAYS")
-    ALGORITHM: str = "HS256"
+    # MongoDB Configuration
+    mongodb_url: str = Field(..., description="MongoDB connection URL")
+    database_name: str = Field(default="lunance_db", description="Nama database")
     
-    # Password Security
-    PASSWORD_MIN_LENGTH: int = 8
-    PASSWORD_REQUIRE_UPPERCASE: bool = True
-    PASSWORD_REQUIRE_LOWERCASE: bool = True
-    PASSWORD_REQUIRE_NUMBERS: bool = True
-    PASSWORD_REQUIRE_SPECIAL_CHARS: bool = False
+    # Security Configuration
+    secret_key: str = Field(..., description="Secret key untuk JWT")
+    algorithm: str = Field(default="HS256", description="Algorithm untuk JWT")
+    access_token_expire_minutes: int = Field(
+        default=30, 
+        description="Durasi token dalam menit"
+    )
     
-    # Account Security
-    MAX_LOGIN_ATTEMPTS: int = Field(default=5, env="MAX_LOGIN_ATTEMPTS")
-    ACCOUNT_LOCKOUT_DURATION: int = Field(default=30, env="ACCOUNT_LOCKOUT_DURATION")  # minutes
+    # Rate Limiting
+    rate_limit_per_minute: int = Field(
+        default=60, 
+        description="Rate limit per menit"
+    )
     
-    # OTP Settings
-    OTP_EXPIRE_MINUTES: int = Field(default=10, env="OTP_EXPIRE_MINUTES")
-    OTP_MAX_ATTEMPTS: int = Field(default=3, env="OTP_MAX_ATTEMPTS")
-    OTP_LENGTH: int = 6
+    # Email Configuration
+    smtp_server: Optional[str] = Field(default=None, description="SMTP server")
+    smtp_port: Optional[int] = Field(default=587, description="SMTP port")
+    smtp_username: Optional[str] = Field(default=None, description="SMTP username")
+    smtp_password: Optional[str] = Field(default=None, description="SMTP password")
     
-    # Email/SMTP Configuration
-    SMTP_SERVER: str = Field(..., env="SMTP_SERVER")
-    SMTP_PORT: int = Field(..., env="SMTP_PORT")
-    SMTP_USERNAME: str = Field(..., env="SMTP_USERNAME")
-    SMTP_PASSWORD: str = Field(..., env="SMTP_PASSWORD")
-    EMAIL_FROM: EmailStr = Field(..., env="EMAIL_FROM")
-    EMAIL_FROM_NAME: str = Field(default="Lunance Finance", env="EMAIL_FROM_NAME")
+    # AI Model Configuration
+    ai_model_name: str = Field(
+        default="indolem/indobert-base-uncased",
+        description="Nama model AI"
+    )
+    ai_model_cache_dir: str = Field(
+        default="./models",
+        description="Directory cache model AI"
+    )
     
-    # Email Templates
-    EMAIL_TEMPLATES_DIR: str = "app/templates/email"
-    EMAIL_RESET_TOKEN_EXPIRE_HOURS: int = 48
+    # File Upload Configuration
+    max_file_size: int = Field(
+        default=5242880,  # 5MB
+        description="Maksimum ukuran file upload"
+    )
+    upload_dir: str = Field(
+        default="./uploads",
+        description="Directory untuk file upload"
+    )
     
-    # File Upload Settings
-    UPLOAD_DIR: str = "static/uploads"
-    MAX_FILE_SIZE: int = 5 * 1024 * 1024  # 5MB
-    ALLOWED_FILE_EXTENSIONS: List[str] = [".jpg", ".jpeg", ".png", ".pdf"]
+    # Logging Configuration
+    log_level: str = Field(default="INFO", description="Level logging")
+    log_file: str = Field(default="./logs/app.log", description="File log")
     
-    # API Rate Limiting
-    RATE_LIMIT_PER_MINUTE: int = 60
-    RATE_LIMIT_BURST: int = 10
+    # CORS Configuration
+    allowed_origins: List[str] = Field(
+        default=["http://localhost:3000", "http://localhost:8080"],
+        description="Origins yang diizinkan"
+    )
+    allowed_methods: List[str] = Field(
+        default=["GET", "POST", "PUT", "DELETE", "PATCH"],
+        description="HTTP methods yang diizinkan"
+    )
+    allowed_headers: List[str] = Field(
+        default=["*"],
+        description="Headers yang diizinkan"
+    )
     
-    # CORS Settings
-    BACKEND_CORS_ORIGINS: List[str] = [
-        "http://localhost:3000",
-        "http://localhost:8080",
-        "http://localhost:8000",
-        "https://lunance.app",
-        "https://app.lunance.com"
-    ]
+    # University Domain Validation
+    valid_university_domains: List[str] = Field(
+        default=["ac.id"],
+        description="Domain universitas yang valid"
+    )
     
-    # Student-specific Settings
-    SUPPORTED_UNIVERSITIES: List[str] = [
-        "Universitas Indonesia",
-        "Institut Teknologi Bandung",
-        "Universitas Gadjah Mada",
-        "Institut Teknologi Sepuluh Nopember",
-        "Universitas Padjadjaran",
-        "Universitas Diponegoro",
-        "Universitas Airlangga",
-        "Universitas Brawijaya",
-        "Universitas Hasanuddin",
-        "Universitas Andalas"
-    ]
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore"
+    )
     
-    # Currency Settings
-    DEFAULT_CURRENCY: str = "IDR"
-    SUPPORTED_CURRENCIES: List[str] = ["IDR", "USD"]
+    @validator("mongodb_url")
+    def validate_mongodb_url(cls, v):
+        """Validasi format MongoDB URL"""
+        if not v.startswith("mongodb://") and not v.startswith("mongodb+srv://"):
+            raise ValueError("MongoDB URL harus dimulai dengan mongodb:// atau mongodb+srv://")
+        return v
     
-    # Gamification Settings
-    POINTS_PER_TRANSACTION: int = 1
-    POINTS_PER_SAVINGS_GOAL: int = 10
-    POINTS_PER_DAILY_LOGIN: int = 5
-    POINTS_PER_WEEKLY_STREAK: int = 25
-    
-    # Achievement Settings
-    ACHIEVEMENTS_FILE: str = "data/achievements.json"
-    ACADEMIC_CALENDAR_FILE: str = "data/academic_calendar.json"
-    PREDICTION_RULES_FILE: str = "data/prediction_rules.json"
-    
-    # Chat/AI Settings
-    CHAT_SESSION_TIMEOUT_MINUTES: int = 30
-    MAX_CHAT_HISTORY: int = 100
-    
-    # Analytics Settings
-    ANALYTICS_RETENTION_DAYS: int = 365
-    PREDICTION_DAYS_AHEAD: int = 30
-    
-    # Development Settings
-    RELOAD: bool = Field(default=False, env="RELOAD")
-    LOG_LEVEL: str = Field(default="INFO", env="LOG_LEVEL")
-    
-    # External API Settings (for future integrations)
-    BANK_API_KEY: Optional[str] = Field(default=None, env="BANK_API_KEY")
-    NOTIFICATION_SERVICE_URL: Optional[str] = Field(default=None, env="NOTIFICATION_SERVICE_URL")
-    
-    @validator("BACKEND_CORS_ORIGINS", pre=True)
-    def assemble_cors_origins(cls, v):
-        if isinstance(v, str) and not v.startswith("["):
-            return [i.strip() for i in v.split(",")]
-        elif isinstance(v, (list, str)):
-            return v
-        raise ValueError(v)
-    
-    @validator("SECRET_KEY")
+    @validator("secret_key")
     def validate_secret_key(cls, v):
+        """Validasi secret key minimal 32 karakter"""
         if len(v) < 32:
-            raise ValueError("SECRET_KEY must be at least 32 characters long")
+            raise ValueError("Secret key harus minimal 32 karakter")
         return v
     
-    @validator("SMTP_PORT")
-    def validate_smtp_port(cls, v):
-        if v not in [25, 465, 587]:
-            raise ValueError("SMTP_PORT must be 25, 465, or 587")
+    @validator("port")
+    def validate_port(cls, v):
+        """Validasi port range"""
+        if not 1 <= v <= 65535:
+            raise ValueError("Port harus antara 1-65535")
         return v
     
-    @validator("PASSWORD_MIN_LENGTH")
-    def validate_password_min_length(cls, v):
-        if v < 6:
-            raise ValueError("PASSWORD_MIN_LENGTH must be at least 6")
+    @validator("access_token_expire_minutes")
+    def validate_token_expire(cls, v):
+        """Validasi durasi token"""
+        if v <= 0:
+            raise ValueError("Durasi token harus lebih dari 0")
         return v
     
-    @validator("OTP_LENGTH")
-    def validate_otp_length(cls, v):
-        if v not in [4, 6, 8]:
-            raise ValueError("OTP_LENGTH must be 4, 6, or 8")
+    @validator("rate_limit_per_minute")
+    def validate_rate_limit(cls, v):
+        """Validasi rate limit"""
+        if v <= 0:
+            raise ValueError("Rate limit harus lebih dari 0")
         return v
     
-    @property
-    def database_url_sync(self) -> str:
-        """Get synchronous MongoDB URL for migrations or CLI tools"""
-        return self.MONGODB_URL.replace("mongodb://", "mongodb://").replace("mongodb+srv://", "mongodb+srv://")
+    @validator("max_file_size")
+    def validate_file_size(cls, v):
+        """Validasi maksimum file size"""
+        if v <= 0:
+            raise ValueError("Maksimum file size harus lebih dari 0")
+        return v
     
-    @property
-    def smtp_config(self) -> dict:
-        """Get SMTP configuration as dict"""
-        return {
-            "hostname": self.SMTP_SERVER,
-            "port": self.SMTP_PORT,
-            "username": self.SMTP_USERNAME,
-            "password": self.SMTP_PASSWORD,
-            "use_tls": self.SMTP_PORT in [587, 25],
-            "start_tls": self.SMTP_PORT == 587,
-        }
-    
-    @property
-    def password_policy(self) -> dict:
-        """Get password policy as dict"""
-        return {
-            "min_length": self.PASSWORD_MIN_LENGTH,
-            "require_uppercase": self.PASSWORD_REQUIRE_UPPERCASE,
-            "require_lowercase": self.PASSWORD_REQUIRE_LOWERCASE,
-            "require_numbers": self.PASSWORD_REQUIRE_NUMBERS,
-            "require_special_chars": self.PASSWORD_REQUIRE_SPECIAL_CHARS,
-        }
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    @validator("log_level")
+    def validate_log_level(cls, v):
+        """Validasi log level"""
+        valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+        if v.upper() not in valid_levels:
+            raise ValueError(f"Log level harus salah satu dari: {valid_levels}")
+        return v.upper()
 
-# Create global settings instance
+
+# Instance global settings
 settings = Settings()
 
-# Environment-specific configurations
-def get_logging_config():
-    """Get logging configuration based on environment"""
+
+# Utility functions
+def get_database_url() -> str:
+    """Get full database URL dengan database name"""
+    return f"{settings.mongodb_url}/{settings.database_name}"
+
+
+def is_development() -> bool:
+    """Check apakah dalam mode development"""
+    return settings.debug
+
+
+def is_production() -> bool:
+    """Check apakah dalam mode production"""
+    return not settings.debug
+
+
+def get_cors_config() -> dict:
+    """Get CORS configuration dictionary"""
     return {
-        "version": 1,
-        "disable_existing_loggers": False,
-        "formatters": {
-            "default": {
-                "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-            },
-            "detailed": {
-                "format": "%(asctime)s - %(name)s - %(levelname)s - %(module)s - %(funcName)s - %(message)s",
-            },
-        },
-        "handlers": {
-            "default": {
-                "formatter": "default",
-                "class": "logging.StreamHandler",
-                "stream": "ext://sys.stdout",
-            },
-            "file": {
-                "formatter": "detailed",
-                "class": "logging.FileHandler",
-                "filename": "lunance.log",
-            },
-        },
-        "root": {
-            "level": settings.LOG_LEVEL,
-            "handlers": ["default"] if settings.DEBUG else ["default", "file"],
-        },
-        "loggers": {
-            "uvicorn": {
-                "level": "INFO",
-                "handlers": ["default"],
-                "propagate": False,
-            },
-            "motor": {
-                "level": "WARNING",
-                "handlers": ["default"],
-                "propagate": False,
-            },
-        },
+        "allow_origins": settings.allowed_origins,
+        "allow_methods": settings.allowed_methods,
+        "allow_headers": settings.allowed_headers,
+        "allow_credentials": True,
     }

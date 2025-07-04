@@ -1,297 +1,386 @@
-# app/models/transaction.py
-from datetime import datetime
-from typing import List, Optional, Dict, Any, Annotated
-from pydantic import BaseModel, Field, ConfigDict, field_validator
-from bson import ObjectId
+"""
+Transaction Model
+Model untuk pencatatan transaksi keuangan (income & expense)
+"""
+
+from datetime import datetime, date
+from typing import Optional
 from enum import Enum
+from decimal import Decimal
+from pydantic import Field, field_validator, model_validator
+from beanie import Indexed
 
-class TransactionType(str, Enum):
-    INCOME = "income"
-    EXPENSE = "expense"
+from .base import BaseDocument, SoftDeleteMixin, AuditMixin
+from .category import CategoryType
 
-class PaymentMethod(str, Enum):
-    CASH = "cash"
-    E_WALLET = "e_wallet"
-    BANK_TRANSFER = "bank_transfer"
-    CREDIT = "credit"
 
-class LocationType(str, Enum):
-    CAMPUS = "campus"
-    KOS = "kos"
-    MALL = "mall"
-    RESTAURANT = "restaurant"
-    TRANSPORT = "transport"
-    OTHER = "other"
+class TransactionStatus(str, Enum):
+    """Status transaksi"""
+    COMPLETED = "completed"
+    PENDING = "pending"
+    CANCELLED = "cancelled"
 
-class Location(BaseModel):
-    name: str = Field(..., description="Kantin Fakultas, Warung Pak Udin")
-    type: LocationType
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
 
-class ReceiptPhoto(BaseModel):
-    filename: str
-    url: str
-    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
-
-class TransactionMetadata(BaseModel):
-    is_shared_expense: bool = False
-    shared_with: List[str] = []
-    my_share: Optional[float] = None
+class Transaction(BaseDocument, SoftDeleteMixin, AuditMixin):
+    """
+    Model Transaksi keuangan
     
-    # ML features
-    auto_categorized: bool = False
-    confidence: float = 0.0
-    is_unusual: bool = False
+    Fields:
+    - user_id: Reference ke User
+    - category_id: Reference ke Category
+    - type: Tipe transaksi (income/expense)
+    - amount: Jumlah nominal
+    - description: Deskripsi transaksi
+    - date: Tanggal transaksi
+    - status: Status transaksi
+    - location: Lokasi transaksi (opsional)
+    - notes: Catatan tambahan
+    - receipt_url: URL struk/bukti transaksi
+    """
     
-    # Context
-    semester_week: Optional[int] = Field(None, description="week in semester (1-16)")
-    is_exam_period: bool = False
-    academic_related: bool = False
-
-class BudgetImpact(BaseModel):
-    weekly_budget_remaining: Optional[float] = None
-    monthly_budget_remaining: Optional[float] = None
-    category_budget_used: Optional[float] = None
-
-class Transaction(BaseModel):
-    model_config = ConfigDict(
-        populate_by_name=True,
-        arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str},
-        str_strip_whitespace=True
-    )
+    # References
+    user_id: Indexed(str) = Field(..., description="ID User")
+    category_id: Indexed(str) = Field(..., description="ID Kategori")
     
-    id: Optional[str] = Field(default=None, alias="_id")
-    student_id: str
+    # Transaction Details
+    type: CategoryType = Field(..., description="Tipe transaksi")
+    amount: float = Field(..., gt=0, description="Jumlah nominal")
+    description: str = Field(..., min_length=1, max_length=500, description="Deskripsi transaksi")
     
-    # Basic Info
-    type: TransactionType
-    amount: float = Field(..., gt=0, description="Amount must be greater than 0")
-    currency: str = "IDR"
+    # Date & Time
+    date: Indexed(date) = Field(..., description="Tanggal transaksi")
+    time: Optional[str] = Field(default=None, description="Waktu transaksi (HH:MM)")
     
-    # Categorization
-    category_id: str
-    subcategory: Optional[str] = None
+    # Status & Metadata
+    status: TransactionStatus = Field(default=TransactionStatus.COMPLETED, description="Status transaksi")
+    location: Optional[str] = Field(default=None, max_length=200, description="Lokasi transaksi")
+    notes: Optional[str] = Field(default=None, max_length=1000, description="Catatan tambahan")
     
-    # Description
-    title: str = Field(..., min_length=1, max_length=200)
-    notes: Optional[str] = Field(None, max_length=500)
+    # Attachments
+    receipt_url: Optional[str] = Field(default=None, description="URL struk/bukti transaksi")
+    receipt_filename: Optional[str] = Field(default=None, description="Nama file struk")
     
-    # Dates
-    transaction_date: datetime = Field(default_factory=datetime.utcnow)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    # Tags untuk kategorisasi lebih detail
+    tags: Optional[list[str]] = Field(default=[], description="Tags transaksi")
     
-    # Payment method
-    payment_method: PaymentMethod
-    account_name: str = Field(..., description="GoPay, DANA, Cash, BCA", max_length=100)
+    # Financial tracking
+    balance_before: Optional[float] = Field(default=None, description="Saldo sebelum transaksi")
+    balance_after: Optional[float] = Field(default=None, description="Saldo setelah transaksi")
     
-    # Location (optional)
-    location: Optional[Location] = None
+    class Settings:
+        name = "transactions"
+        indexes = [
+            "user_id",
+            "category_id",
+            "type",
+            "date",
+            "status",
+            "amount",
+            [("user_id", 1), ("date", -1)],  # User transactions by date desc
+            [("user_id", 1), ("type", 1)],   # User transactions by type
+            [("user_id", 1), ("category_id", 1)],  # User transactions by category
+            [("date", -1), ("type", 1)],     # All transactions by date and type
+        ]
     
-    # Receipt photo
-    receipt_photo: Optional[ReceiptPhoto] = None
-    
-    # Student-specific metadata
-    metadata: TransactionMetadata = Field(default_factory=TransactionMetadata)
-    
-    # Budget tracking
-    budget_impact: Optional[BudgetImpact] = None
-
-    @field_validator('amount')
+    @field_validator("amount")
     @classmethod
     def validate_amount(cls, v):
+        """Validasi nominal transaksi"""
         if v <= 0:
-            raise ValueError('Amount must be greater than 0')
+            raise ValueError("Nominal transaksi harus lebih dari 0")
+        
+        # Limit maksimum untuk mencegah input yang tidak realistis
+        if v > 1_000_000_000:  # 1 Milyar
+            raise ValueError("Nominal transaksi terlalu besar")
+        
+        # Round ke 2 decimal places
         return round(v, 2)
     
-    @field_validator('student_id', 'category_id')
+    @field_validator("description")
     @classmethod
-    def validate_object_id_string(cls, v):
-        if not ObjectId.is_valid(v):
-            raise ValueError('Invalid ObjectId format')
+    def validate_description(cls, v):
+        """Validasi deskripsi transaksi"""
+        if not v or not v.strip():
+            raise ValueError("Deskripsi transaksi tidak boleh kosong")
+        
+        # Clean up description
+        v = " ".join(v.strip().split())
+        
         return v
-
-# Request Models
-class TransactionCreate(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True)
     
-    type: TransactionType
-    amount: float = Field(..., gt=0)
-    category_id: str
-    title: str = Field(..., min_length=1, max_length=200)
-    notes: Optional[str] = Field(None, max_length=500)
-    payment_method: PaymentMethod
-    account_name: str = Field(..., max_length=100)
-    transaction_date: Optional[datetime] = None
-    location: Optional[Location] = None
-    subcategory: Optional[str] = None
-
-    @field_validator('amount')
+    @field_validator("date")
     @classmethod
-    def validate_amount(cls, v):
-        if v <= 0:
-            raise ValueError('Amount must be greater than 0')
-        return round(v, 2)
-    
-    @field_validator('category_id')
-    @classmethod
-    def validate_category_id(cls, v):
-        if not ObjectId.is_valid(v):
-            raise ValueError('Invalid category ID format')
+    def validate_date(cls, v):
+        """Validasi tanggal transaksi"""
+        if not v:
+            raise ValueError("Tanggal transaksi tidak boleh kosong")
+        
+        # Tanggal tidak boleh di masa depan
+        if v > date.today():
+            raise ValueError("Tanggal transaksi tidak boleh di masa depan")
+        
+        # Tanggal tidak boleh terlalu lama (misalnya 10 tahun)
+        min_date = date.today().replace(year=date.today().year - 10)
+        if v < min_date:
+            raise ValueError("Tanggal transaksi terlalu lama")
+        
         return v
-
-class TransactionUpdate(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True)
     
-    amount: Optional[float] = Field(None, gt=0)
-    category_id: Optional[str] = None
-    title: Optional[str] = Field(None, min_length=1, max_length=200)
-    notes: Optional[str] = Field(None, max_length=500)
-    payment_method: Optional[PaymentMethod] = None
-    account_name: Optional[str] = Field(None, max_length=100)
-    transaction_date: Optional[datetime] = None
-    location: Optional[Location] = None
-    subcategory: Optional[str] = None
-
-    @field_validator('amount')
+    @field_validator("time")
     @classmethod
-    def validate_amount(cls, v):
-        if v is not None and v <= 0:
-            raise ValueError('Amount must be greater than 0')
-        return round(v, 2) if v is not None else v
+    def validate_time(cls, v):
+        """Validasi format waktu"""
+        if not v:
+            return v
+        
+        try:
+            # Validate HH:MM format
+            time_parts = v.split(":")
+            if len(time_parts) != 2:
+                raise ValueError("Format waktu harus HH:MM")
+            
+            hour, minute = int(time_parts[0]), int(time_parts[1])
+            
+            if not (0 <= hour <= 23):
+                raise ValueError("Jam harus antara 00-23")
+            
+            if not (0 <= minute <= 59):
+                raise ValueError("Menit harus antara 00-59")
+            
+            # Return formatted time
+            return f"{hour:02d}:{minute:02d}"
+            
+        except (ValueError, TypeError) as e:
+            if "invalid literal" in str(e):
+                raise ValueError("Format waktu tidak valid (gunakan HH:MM)")
+            raise e
     
-    @field_validator('category_id')
+    @field_validator("tags")
     @classmethod
-    def validate_category_id(cls, v):
-        if v is not None and not ObjectId.is_valid(v):
-            raise ValueError('Invalid category ID format')
+    def validate_tags(cls, v):
+        """Validasi tags"""
+        if not v:
+            return []
+        
+        # Clean up tags
+        cleaned_tags = []
+        for tag in v:
+            if isinstance(tag, str) and tag.strip():
+                cleaned_tag = tag.strip().lower()
+                if cleaned_tag not in cleaned_tags:  # Remove duplicates
+                    cleaned_tags.append(cleaned_tag)
+        
+        # Limit jumlah tags
+        if len(cleaned_tags) > 10:
+            raise ValueError("Maksimal 10 tags per transaksi")
+        
+        return cleaned_tags
+    
+    @field_validator("location")
+    @classmethod
+    def validate_location(cls, v):
+        """Validasi lokasi"""
+        if not v:
+            return v
+        
+        v = v.strip()
+        if not v:
+            return None
+        
         return v
-
-# Response Models
-class TransactionResponse(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
     
-    id: str = Field(alias="_id")
-    type: TransactionType
-    amount: float
-    currency: str
-    category_id: str
-    subcategory: Optional[str]
-    title: str
-    notes: Optional[str]
-    transaction_date: datetime
-    created_at: datetime
-    payment_method: PaymentMethod
-    account_name: str
-    location: Optional[Location]
-    receipt_photo: Optional[ReceiptPhoto]
-    metadata: TransactionMetadata
-    budget_impact: Optional[BudgetImpact]
-
-# Filter and Query Models
-class TransactionFilter(BaseModel):
-    type: Optional[TransactionType] = None
-    category_id: Optional[str] = None
-    payment_method: Optional[PaymentMethod] = None
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
-    min_amount: Optional[float] = Field(None, ge=0)
-    max_amount: Optional[float] = Field(None, ge=0)
-    search: Optional[str] = Field(None, max_length=100)
-
-class TransactionSort(str, Enum):
-    DATE_DESC = "date_desc"
-    DATE_ASC = "date_asc"
-    AMOUNT_DESC = "amount_desc"
-    AMOUNT_ASC = "amount_asc"
-    TITLE_ASC = "title_asc"
-    TITLE_DESC = "title_desc"
-
-class TransactionListResponse(BaseModel):
-    transactions: List[TransactionResponse]
-    total: int
-    page: int
-    limit: int
-    total_pages: int
-
-# Analytics Models
-class TransactionSummary(BaseModel):
-    total_income: float
-    total_expense: float
-    net_balance: float
-    transaction_count: int
-    daily_average: float
-
-class CategoryBreakdown(BaseModel):
-    category_id: str
-    category_name: str
-    amount: float
-    percentage: float
-    transaction_count: int
-    vs_previous_period: Optional[float] = None
-
-class PeriodSummary(BaseModel):
-    period: str
-    start_date: datetime
-    end_date: datetime
-    summary: TransactionSummary
-    category_breakdown: List[CategoryBreakdown]
-
-class MonthlyTransactionSummary(BaseModel):
-    month: int
-    year: int
-    summary: TransactionSummary
-    category_breakdown: List[CategoryBreakdown]
-    weekly_breakdown: List[PeriodSummary]
-
-# Receipt upload model
-class ReceiptUploadResponse(BaseModel):
-    filename: str
-    url: str
-    uploaded_at: datetime
-
-# Bulk operations
-class BulkDeleteRequest(BaseModel):
-    transaction_ids: List[str] = Field(..., min_length=1)
+    @model_validator(mode="after")
+    def validate_transaction_consistency(self):
+        """Validasi konsistensi data transaksi"""
+        # Pastikan type dan amount konsisten
+        if self.type and self.amount:
+            if self.type == CategoryType.EXPENSE and self.amount < 0:
+                raise ValueError("Nominal expense tidak boleh negatif")
+            
+            if self.type == CategoryType.INCOME and self.amount < 0:
+                raise ValueError("Nominal income tidak boleh negatif")
+        
+        return self
     
-    @field_validator('transaction_ids')
+    def is_income(self) -> bool:
+        """Check apakah transaksi adalah income"""
+        return self.type == CategoryType.INCOME
+    
+    def is_expense(self) -> bool:
+        """Check apakah transaksi adalah expense"""
+        return self.type == CategoryType.EXPENSE
+    
+    def is_completed(self) -> bool:
+        """Check apakah transaksi sudah completed"""
+        return self.status == TransactionStatus.COMPLETED
+    
+    def get_effective_amount(self) -> float:
+        """Get nominal efektif untuk perhitungan saldo (income +, expense -)"""
+        if self.is_income():
+            return self.amount
+        else:
+            return -self.amount
+    
+    def get_formatted_amount(self) -> str:
+        """Get formatted amount dengan currency"""
+        return f"Rp {self.amount:,.2f}"
+    
+    def get_date_time(self) -> datetime:
+        """Get combined datetime dari date dan time"""
+        if self.time:
+            try:
+                hour, minute = map(int, self.time.split(":"))
+                return datetime.combine(self.date, datetime.min.time().replace(hour=hour, minute=minute))
+            except:
+                pass
+        
+        return datetime.combine(self.date, datetime.min.time())
+    
+    async def complete(self):
+        """Mark transaksi sebagai completed"""
+        self.status = TransactionStatus.COMPLETED
+        await self.save_with_timestamp()
+    
+    async def cancel(self):
+        """Cancel transaksi"""
+        self.status = TransactionStatus.CANCELLED
+        await self.save_with_timestamp()
+    
+    async def add_tag(self, tag: str):
+        """Tambah tag ke transaksi"""
+        tag = tag.strip().lower()
+        if tag and tag not in self.tags:
+            if len(self.tags) >= 10:
+                raise ValueError("Maksimal 10 tags per transaksi")
+            self.tags.append(tag)
+            await self.save_with_timestamp()
+    
+    async def remove_tag(self, tag: str):
+        """Hapus tag dari transaksi"""
+        tag = tag.strip().lower()
+        if tag in self.tags:
+            self.tags.remove(tag)
+            await self.save_with_timestamp()
+    
     @classmethod
-    def validate_transaction_ids(cls, v):
-        for id_str in v:
-            if not ObjectId.is_valid(id_str):
-                raise ValueError(f'Invalid transaction ID format: {id_str}')
-        return v
-
-class BulkDeleteResponse(BaseModel):
-    deleted_count: int
-    failed_ids: List[str] = []
-
-# Export models
-class ExportFormat(str, Enum):
-    CSV = "csv"
-    EXCEL = "excel"
-    PDF = "pdf"
-
-class ExportRequest(BaseModel):
-    format: ExportFormat
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
-    categories: Optional[List[str]] = None
-    include_metadata: bool = False
-
-# Example usage and schema
-TRANSACTION_EXAMPLE = {
-    "type": "expense",
-    "amount": 25000,
-    "currency": "IDR",
-    "category_id": "507f1f77bcf86cd799439011",
-    "title": "Makan Siang",
-    "payment_method": "cash",
-    "account_name": "Cash",
-    "location": {
-        "name": "Kantin Fakultas",
-        "type": "campus"
-    }
-}
+    async def find_by_user(
+        cls, 
+        user_id: str, 
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        transaction_type: Optional[CategoryType] = None,
+        category_id: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100
+    ):
+        """Find transactions by user dengan filter"""
+        query = {
+            "user_id": user_id,
+            "is_deleted": {"$ne": True}
+        }
+        
+        # Date filter
+        if start_date or end_date:
+            date_filter = {}
+            if start_date:
+                date_filter["$gte"] = start_date
+            if end_date:
+                date_filter["$lte"] = end_date
+            query["date"] = date_filter
+        
+        # Type filter
+        if transaction_type:
+            query["type"] = transaction_type
+        
+        # Category filter
+        if category_id:
+            query["category_id"] = category_id
+        
+        return await cls.find(query).sort([("date", -1), ("created_at", -1)]).skip(skip).limit(limit).to_list()
+    
+    @classmethod
+    async def get_user_balance(cls, user_id: str) -> dict:
+        """Calculate user balance dari semua transaksi completed"""
+        pipeline = [
+            {
+                "$match": {
+                    "user_id": user_id,
+                    "status": TransactionStatus.COMPLETED,
+                    "is_deleted": {"$ne": True}
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$type",
+                    "total": {"$sum": "$amount"}
+                }
+            }
+        ]
+        
+        result = await cls.aggregate(pipeline).to_list()
+        
+        income = 0
+        expense = 0
+        
+        for item in result:
+            if item["_id"] == CategoryType.INCOME:
+                income = item["total"]
+            elif item["_id"] == CategoryType.EXPENSE:
+                expense = item["total"]
+        
+        balance = income - expense
+        
+        return {
+            "income": income,
+            "expense": expense,
+            "balance": balance
+        }
+    
+    @classmethod
+    async def get_monthly_summary(cls, user_id: str, year: int, month: int) -> dict:
+        """Get summary transaksi bulanan"""
+        start_date = date(year, month, 1)
+        
+        # Calculate last day of month
+        if month == 12:
+            end_date = date(year + 1, 1, 1) - datetime.timedelta(days=1)
+        else:
+            end_date = date(year, month + 1, 1) - datetime.timedelta(days=1)
+        
+        transactions = await cls.find_by_user(
+            user_id=user_id,
+            start_date=start_date,
+            end_date=end_date
+        )
+        
+        income = sum(t.amount for t in transactions if t.is_income() and t.is_completed())
+        expense = sum(t.amount for t in transactions if t.is_expense() and t.is_completed())
+        
+        return {
+            "year": year,
+            "month": month,
+            "income": income,
+            "expense": expense,
+            "balance": income - expense,
+            "transaction_count": len([t for t in transactions if t.is_completed()]),
+            "transactions": [t.to_dict() for t in transactions]
+        }
+    
+    @classmethod
+    async def get_category_summary(cls, user_id: str, category_id: str) -> dict:
+        """Get summary transaksi per kategori"""
+        transactions = await cls.find({
+            "user_id": user_id,
+            "category_id": category_id,
+            "status": TransactionStatus.COMPLETED,
+            "is_deleted": {"$ne": True}
+        }).to_list()
+        
+        total_amount = sum(t.amount for t in transactions)
+        
+        return {
+            "category_id": category_id,
+            "transaction_count": len(transactions),
+            "total_amount": total_amount,
+            "latest_transaction": transactions[0].to_dict() if transactions else None
+        }

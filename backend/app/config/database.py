@@ -1,180 +1,223 @@
-import asyncio
-from typing import Optional
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
-from pymongo.errors import ConnectionFailure
+"""
+Database Configuration
+MongoDB connection dengan Beanie ODM dan Motor async driver
+"""
+
 import logging
+from typing import Optional, List
+from motor.motor_asyncio import AsyncIOMotorClient
+from beanie import init_beanie
+from pymongo.errors import ServerSelectionTimeoutError, ConnectionFailure
+
 from .settings import settings
 
 logger = logging.getLogger(__name__)
 
-class Database:
-    client: Optional[AsyncIOMotorClient] = None
-    database: Optional[AsyncIOMotorDatabase] = None
 
-# Create global database instance
+class Database:
+    """Database connection manager"""
+    
+    client: Optional[AsyncIOMotorClient] = None
+    database = None
+    
+    @classmethod
+    async def connect_db(cls) -> None:
+        """
+        Inisialisasi koneksi database MongoDB
+        """
+        try:
+            # Create MongoDB client
+            cls.client = AsyncIOMotorClient(
+                settings.mongodb_url,
+                serverSelectionTimeoutMS=5000,  # 5 seconds timeout
+                maxPoolSize=50,  # Maximum connection pool size
+                minPoolSize=10,  # Minimum connection pool size
+                maxIdleTimeMS=30000,  # 30 seconds max idle time
+                retryWrites=True,
+                w="majority"  # Write concern
+            )
+            
+            # Get database
+            cls.database = cls.client[settings.database_name]
+            
+            # Test connection
+            await cls.client.server_info()
+            
+            # Import all models untuk Beanie initialization
+            from ..models.user import User
+            from ..models.university import University, Faculty, Department
+            from ..models.category import Category
+            from ..models.transaction import Transaction
+            from ..models.savings_target import SavingsTarget
+            
+            # Initialize Beanie dengan semua document models
+            await init_beanie(
+                database=cls.database,
+                document_models=[
+                    User,
+                    University,
+                    Faculty,
+                    Department,
+                    Category,
+                    Transaction,
+                    SavingsTarget
+                ]
+            )
+            
+            logger.info(f"✅ Connected to MongoDB database: {settings.database_name}")
+            
+        except (ServerSelectionTimeoutError, ConnectionFailure) as e:
+            logger.error(f"❌ Failed to connect to MongoDB: {e}")
+            raise Exception(f"Database connection failed: {e}")
+        except Exception as e:
+            logger.error(f"❌ Unexpected error during database initialization: {e}")
+            raise
+    
+    @classmethod
+    async def close_db(cls) -> None:
+        """
+        Tutup koneksi database
+        """
+        if cls.client:
+            cls.client.close()
+            logger.info("🔌 Database connection closed")
+    
+    @classmethod
+    async def ping_db(cls) -> bool:
+        """
+        Test database connection
+        """
+        try:
+            if cls.client:
+                await cls.client.admin.command('ping')
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Database ping failed: {e}")
+            return False
+    
+    @classmethod
+    async def get_db_stats(cls) -> dict:
+        """
+        Get database statistics
+        """
+        try:
+            if cls.database:
+                stats = await cls.database.command("dbStats")
+                return {
+                    "db_name": stats.get("db"),
+                    "collections": stats.get("collections"),
+                    "objects": stats.get("objects"),
+                    "dataSize": stats.get("dataSize"),
+                    "storageSize": stats.get("storageSize"),
+                    "indexes": stats.get("indexes"),
+                    "indexSize": stats.get("indexSize")
+                }
+            return {}
+        except Exception as e:
+            logger.error(f"Failed to get database stats: {e}")
+            return {}
+    
+    @classmethod
+    async def create_indexes(cls) -> None:
+        """
+        Create database indexes untuk performance optimization
+        """
+        try:
+            if not cls.database:
+                logger.warning("Database not connected, skipping index creation")
+                return
+            
+            # User indexes
+            await cls.database.users.create_index("email", unique=True)
+            await cls.database.users.create_index("university_id")
+            await cls.database.users.create_index("faculty_id")
+            await cls.database.users.create_index("department_id")
+            
+            # University indexes
+            await cls.database.universities.create_index("domain", unique=True)
+            await cls.database.universities.create_index("is_approved")
+            
+            # Faculty indexes
+            await cls.database.faculties.create_index("university_id")
+            await cls.database.faculties.create_index([("university_id", 1), ("name", 1)], unique=True)
+            
+            # Department indexes
+            await cls.database.departments.create_index("faculty_id")
+            await cls.database.departments.create_index([("faculty_id", 1), ("name", 1)], unique=True)
+            
+            # Category indexes
+            await cls.database.categories.create_index("is_global")
+            await cls.database.categories.create_index("created_by")
+            await cls.database.categories.create_index("type")
+            
+            # Transaction indexes
+            await cls.database.transactions.create_index("user_id")
+            await cls.database.transactions.create_index("category_id")
+            await cls.database.transactions.create_index("date")
+            await cls.database.transactions.create_index("type")
+            await cls.database.transactions.create_index([("user_id", 1), ("date", -1)])
+            
+            # SavingsTarget indexes
+            await cls.database.savings_targets.create_index("user_id")
+            await cls.database.savings_targets.create_index("target_date")
+            await cls.database.savings_targets.create_index("is_achieved")
+            
+            logger.info("✅ Database indexes created successfully")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to create indexes: {e}")
+            # Don't raise exception here, indexes are not critical for basic functionality
+
+
+# Database instance
 database = Database()
 
-async def connect_to_mongo():
-    """Create database connection"""
-    try:
-        logger.info("Connecting to MongoDB...")
-        database.client = AsyncIOMotorClient(
-            settings.MONGODB_URL,
-            maxPoolSize=10,
-            minPoolSize=10,
-            serverSelectionTimeoutMS=5000,
-        )
-        
-        # Test the connection
-        await database.client.admin.command('ping')
-        database.database = database.client[settings.DATABASE_NAME]
-        
-        logger.info(f"Successfully connected to MongoDB database: {settings.DATABASE_NAME}")
-        
-        # Create indexes
-        await create_indexes()
-        
-    except ConnectionFailure as e:
-        logger.error(f"Could not connect to MongoDB: {e}")
-        raise
-    except Exception as e:
-        logger.error(f"Unexpected error connecting to MongoDB: {e}")
-        raise
 
-async def close_mongo_connection():
-    """Close database connection"""
-    if database.client:
-        logger.info("Closing MongoDB connection...")
-        database.client.close()
-        logger.info("MongoDB connection closed")
-
-async def create_indexes():
-    """Create database indexes for optimal performance"""
-    try:
-        # Students collection indexes
-        students_collection = database.database.students
-        
-        # Unique email index
-        await students_collection.create_index("email", unique=True)
-        
-        # Student ID index (for university info)
-        await students_collection.create_index("profile.student_id")
-        
-        # University index for filtering
-        await students_collection.create_index("profile.university")
-        
-        # OTP verification indexes
-        await students_collection.create_index("otp_records.code")
-        await students_collection.create_index("otp_records.expires_at")
-        await students_collection.create_index("otp_records.type")
-        
-        # Password reset token index
-        await students_collection.create_index("password_reset_token")
-        
-        # Account status indexes
-        await students_collection.create_index("is_active")
-        await students_collection.create_index("verification.email_verified")
-        await students_collection.create_index("account_locked_until")
-        
-        # Timestamps
-        await students_collection.create_index("created_at")
-        await students_collection.create_index("last_login")
-        
-        # Transactions collection indexes (for future use)
-        transactions_collection = database.database.transactions
-        await transactions_collection.create_index("user_id")
-        await transactions_collection.create_index("created_at")
-        await transactions_collection.create_index("type")
-        await transactions_collection.create_index("category")
-        
-        # Expense splits collection indexes (for future use)
-        expense_splits_collection = database.database.expense_splits
-        await expense_splits_collection.create_index("creator_id")
-        await expense_splits_collection.create_index("participants.user_id")
-        await expense_splits_collection.create_index("status")
-        
-        # Savings challenges collection indexes (for future use)
-        savings_challenges_collection = database.database.savings_challenges
-        await savings_challenges_collection.create_index("user_id")
-        await savings_challenges_collection.create_index("challenge_type")
-        await savings_challenges_collection.create_index("is_active")
-        
-        # Chat sessions collection indexes (for future use)
-        chat_sessions_collection = database.database.chat_sessions
-        await chat_sessions_collection.create_index("user_id")
-        await chat_sessions_collection.create_index("created_at")
-        
-        logger.info("Database indexes created successfully")
-        
-    except Exception as e:
-        logger.error(f"Error creating indexes: {e}")
-        # Don't raise here as the app can still function without indexes
-
-def get_database() -> AsyncIOMotorDatabase:
-    """Get database instance"""
-    if database.database is None:
-        raise RuntimeError("Database not initialized. Call connect_to_mongo() first.")
+# Dependency untuk mendapatkan database session
+async def get_database():
+    """
+    FastAPI dependency untuk mendapatkan database instance
+    """
     return database.database
 
-async def get_collection(collection_name: str):
-    """Get collection by name"""
-    db = get_database()
-    return db[collection_name]
+
+# Database event handlers untuk FastAPI
+async def connect_to_mongo():
+    """Connect to MongoDB on startup"""
+    await database.connect_db()
+    await database.create_indexes()
+
+
+async def close_mongo_connection():
+    """Close MongoDB connection on shutdown"""
+    await database.close_db()
+
 
 # Health check function
-async def check_database_health() -> bool:
-    """Check if database is healthy"""
+async def check_database_health() -> dict:
+    """
+    Check database health status
+    """
     try:
-        if database.client is None:
-            return False
-        
-        # Ping the database
-        await database.client.admin.command('ping')
-        return True
+        is_connected = await database.ping_db()
+        if is_connected:
+            stats = await database.get_db_stats()
+            return {
+                "status": "healthy",
+                "connected": True,
+                "database": settings.database_name,
+                "stats": stats
+            }
+        else:
+            return {
+                "status": "unhealthy",
+                "connected": False,
+                "error": "Cannot ping database"
+            }
     except Exception as e:
-        logger.error(f"Database health check failed: {e}")
-        return False
-
-# Collection helpers
-async def get_students_collection():
-    """Get students collection"""
-    return await get_collection("students")
-
-async def get_transactions_collection():
-    """Get transactions collection"""
-    return await get_collection("transactions")
-
-async def get_expense_splits_collection():
-    """Get expense splits collection"""
-    return await get_collection("expense_splits")
-
-async def get_savings_challenges_collection():
-    """Get savings challenges collection"""
-    return await get_collection("savings_challenges")
-
-async def get_scholarships_collection():
-    """Get scholarships collection"""
-    return await get_collection("scholarships")
-
-async def get_chat_sessions_collection():
-    """Get chat sessions collection"""
-    return await get_collection("chat_sessions")
-
-# Utility functions for testing
-async def drop_database():
-    """Drop entire database - USE ONLY FOR TESTING"""
-    if database.client and settings.DEBUG:
-        await database.client.drop_database(settings.DATABASE_NAME)
-        logger.warning(f"Database {settings.DATABASE_NAME} dropped!")
-    else:
-        logger.error("Cannot drop database in production mode")
-
-async def reset_collections():
-    """Reset all collections - USE ONLY FOR TESTING"""
-    if database.database and settings.DEBUG:
-        collections = await database.database.list_collection_names()
-        for collection_name in collections:
-            await database.database[collection_name].delete_many({})
-        logger.warning("All collections reset!")
-    else:
-        logger.error("Cannot reset collections in production mode")
+        return {
+            "status": "unhealthy",
+            "connected": False,
+            "error": str(e)
+        }

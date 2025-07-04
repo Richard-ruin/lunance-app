@@ -1,384 +1,348 @@
+"""
+Custom Exceptions
+Exception classes untuk handling error dengan baik
+"""
+
 from typing import Any, Dict, Optional
 from fastapi import HTTPException, status
 
 
 class LunanceException(Exception):
-    """Base exception for Lunance application"""
+    """Base exception untuk Lunance application"""
     
     def __init__(
         self,
-        message: str,
-        status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR,
-        details: Optional[Dict[str, Any]] = None
+        message: str = "An error occurred",
+        details: Optional[Dict[str, Any]] = None,
+        error_code: Optional[str] = None
     ):
         self.message = message
-        self.status_code = status_code
         self.details = details or {}
+        self.error_code = error_code
         super().__init__(self.message)
 
 
-# Authentication & Authorization Exceptions
-class AuthenticationException(LunanceException):
-    """Raised when authentication fails"""
+class ValidationError(LunanceException):
+    """Exception untuk validation errors"""
     
-    def __init__(self, message: str = "Authentication failed", details: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            message=message,
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            details=details
-        )
-
-
-class AuthorizationException(LunanceException):
-    """Raised when user doesn't have permission"""
-    
-    def __init__(self, message: str = "Access denied", details: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            message=message,
-            status_code=status.HTTP_403_FORBIDDEN,
-            details=details
-        )
-
-
-class InvalidCredentialsException(AuthenticationException):
-    """Raised when login credentials are invalid"""
-    
-    def __init__(self, details: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            message="Invalid email or password",
-            details=details
-        )
-
-class AccountNotVerifiedException(AuthenticationException):
-    def __init__(self):
-        super().__init__(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Email belum diverifikasi. Silakan verifikasi email terlebih dahulu.",
-            headers={"X-Error-Code": "EMAIL_NOT_VERIFIED"}
-        )
-
-
-class AccountLockedException(AuthenticationException):
-    """Raised when account is locked due to failed attempts"""
-    
-    def __init__(self, lockout_until: str, details: Optional[Dict[str, Any]] = None):
-        message = f"Account locked due to too many failed attempts. Try again after {lockout_until}"
-        super().__init__(
-            message=message,
-            details=details
-        )
-
-
-class TokenExpiredException(AuthenticationException):
-    """Raised when JWT token has expired"""
-    
-    def __init__(self, details: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            message="Token has expired",
-            details=details
-        )
-
-
-class InvalidTokenException(AuthenticationException):
-    """Raised when JWT token is invalid"""
-    
-    def __init__(self, details: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            message="Invalid token",
-            details=details
-        )
-
-
-# User & Account Exceptions
-class UserNotFoundException(LunanceException):
-    """Raised when user is not found"""
-    
-    def __init__(self, identifier: str = "", details: Optional[Dict[str, Any]] = None):
-        message = f"User not found"
-        if identifier:
-            message += f": {identifier}"
-        super().__init__(
-            message=message,
-            status_code=status.HTTP_404_NOT_FOUND,
-            details=details
-        )
-
-
-class UserAlreadyExistsException(LunanceException):
-    """Raised when trying to create user that already exists"""
-    
-    def __init__(self, email: str = "", details: Optional[Dict[str, Any]] = None):
-        message = "User already exists"
-        if email:
-            message += f" with email: {email}"
-        super().__init__(
-            message=message,
-            status_code=status.HTTP_409_CONFLICT,
-            details=details
-        )
-
-
-class AccountNotVerifiedException(AuthenticationException):
-    """Raised when account email is not verified"""
-    
-    def __init__(self, details: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            message="Account email not verified. Please check your email for verification link.",
-            details=details
-        )
-
-
-class AccountInactiveException(AuthenticationException):
-    """Raised when account is inactive"""
-    
-    def __init__(self, details: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            message="Account is inactive. Please contact support.",
-            details=details
-        )
-
-
-# OTP Exceptions
-class OTPException(LunanceException):
-    """Base class for OTP-related exceptions"""
-    
-    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            message=message,
-            status_code=status.HTTP_400_BAD_REQUEST,
-            details=details
-        )
-
-
-class InvalidOTPException(OTPException):
-    """Raised when OTP code is invalid"""
-    
-    def __init__(self, attempts_remaining: int = 0, details: Optional[Dict[str, Any]] = None):
-        message = "Invalid OTP code"
-        if attempts_remaining > 0:
-            message += f". {attempts_remaining} attempts remaining"
-        else:
-            message += ". No attempts remaining"
-        super().__init__(message=message, details=details)
-
-
-class OTPExpiredException(OTPException):
-    """Raised when OTP has expired"""
-    
-    def __init__(self, details: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            message="OTP code has expired. Please request a new one.",
-            details=details
-        )
-
-
-class OTPNotSentException(OTPException):
-    """Raised when OTP could not be sent"""
-    
-    def __init__(self, reason: str = "", details: Optional[Dict[str, Any]] = None):
-        message = "Could not send OTP"
-        if reason:
-            message += f": {reason}"
-        super().__init__(message=message, details=details)
-
-
-class TooManyOTPAttemptsException(OTPException):
-    """Raised when too many OTP attempts have been made"""
-    
-    def __init__(self, details: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            message="Too many OTP attempts. Please request a new OTP code.",
-            details=details
-        )
-
-
-# Validation Exceptions
-class ValidationException(LunanceException):
-    """Raised when input validation fails"""
-    
-    def __init__(self, message: str, field: str = "", details: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        message: str = "Validation failed",
+        field: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None
+    ):
+        super().__init__(message, details, "VALIDATION_ERROR")
         self.field = field
-        super().__init__(
-            message=message,
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            details=details
-        )
 
 
-class WeakPasswordException(ValidationException):
-    """Raised when password doesn't meet security requirements"""
+class NotFoundError(LunanceException):
+    """Exception untuk resource not found"""
     
-    def __init__(self, errors: list, details: Optional[Dict[str, Any]] = None):
-        message = "Password does not meet security requirements: " + "; ".join(errors)
-        super().__init__(
-            message=message,
-            field="password",
-            details=details
-        )
+    def __init__(
+        self,
+        resource: str = "Resource",
+        resource_id: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None
+    ):
+        message = f"{resource} not found"
+        if resource_id:
+            message += f" with ID: {resource_id}"
+        
+        super().__init__(message, details, "NOT_FOUND")
+        self.resource = resource
+        self.resource_id = resource_id
 
 
-class InvalidEmailFormatException(ValidationException):
-    """Raised when email format is invalid"""
+class PermissionError(LunanceException):
+    """Exception untuk permission denied"""
     
-    def __init__(self, email: str = "", details: Optional[Dict[str, Any]] = None):
-        message = "Invalid email format"
-        if email:
-            message += f": {email}"
-        super().__init__(
-            message=message,
-            field="email",
-            details=details
-        )
+    def __init__(
+        self,
+        message: str = "Permission denied",
+        required_permission: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None
+    ):
+        super().__init__(message, details, "PERMISSION_DENIED")
+        self.required_permission = required_permission
 
 
-class InvalidStudentEmailException(ValidationException):
-    """Raised when email is not from academic institution"""
+class AuthenticationError(LunanceException):
+    """Exception untuk authentication errors"""
     
-    def __init__(self, details: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            message="Email must be from an academic institution (.ac.id, .edu, etc.)",
-            field="email",
-            details=details
-        )
+    def __init__(
+        self,
+        message: str = "Authentication failed",
+        details: Optional[Dict[str, Any]] = None
+    ):
+        super().__init__(message, details, "AUTHENTICATION_ERROR")
 
 
-# Database Exceptions
-class DatabaseException(LunanceException):
-    """Raised when database operation fails"""
+class BusinessLogicError(LunanceException):
+    """Exception untuk business logic violations"""
     
-    def __init__(self, message: str = "Database operation failed", details: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            message=message,
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            details=details
-        )
+    def __init__(
+        self,
+        message: str = "Business logic violation",
+        rule: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None
+    ):
+        super().__init__(message, details, "BUSINESS_LOGIC_ERROR")
+        self.rule = rule
 
 
-class DuplicateRecordException(DatabaseException):
-    """Raised when trying to create duplicate record"""
+class DatabaseError(LunanceException):
+    """Exception untuk database errors"""
     
-    def __init__(self, field: str = "", value: str = "", details: Optional[Dict[str, Any]] = None):
-        message = "Record already exists"
-        if field and value:
-            message += f" with {field}: {value}"
-        super().__init__(
-            message=message,
-            details=details
-        )
+    def __init__(
+        self,
+        message: str = "Database error occurred",
+        operation: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None
+    ):
+        super().__init__(message, details, "DATABASE_ERROR")
+        self.operation = operation
 
 
-# Business Logic Exceptions
-class InsufficientBalanceException(LunanceException):
-    """Raised when user has insufficient balance for operation"""
+class ExternalServiceError(LunanceException):
+    """Exception untuk external service errors"""
     
-    def __init__(self, available: float = 0, required: float = 0, details: Optional[Dict[str, Any]] = None):
-        message = f"Insufficient balance. Available: {available}, Required: {required}"
-        super().__init__(
-            message=message,
-            status_code=status.HTTP_400_BAD_REQUEST,
-            details=details
-        )
+    def __init__(
+        self,
+        service: str,
+        message: str = "External service error",
+        status_code: Optional[int] = None,
+        details: Optional[Dict[str, Any]] = None
+    ):
+        super().__init__(message, details, "EXTERNAL_SERVICE_ERROR")
+        self.service = service
+        self.status_code = status_code
 
 
-class InvalidTransactionException(LunanceException):
-    """Raised when transaction data is invalid"""
+class RateLimitError(LunanceException):
+    """Exception untuk rate limiting"""
     
-    def __init__(self, reason: str = "", details: Optional[Dict[str, Any]] = None):
-        message = "Invalid transaction"
-        if reason:
-            message += f": {reason}"
-        super().__init__(
-            message=message,
-            status_code=status.HTTP_400_BAD_REQUEST,
-            details=details
-        )
+    def __init__(
+        self,
+        message: str = "Rate limit exceeded",
+        retry_after: Optional[int] = None,
+        details: Optional[Dict[str, Any]] = None
+    ):
+        super().__init__(message, details, "RATE_LIMIT_EXCEEDED")
+        self.retry_after = retry_after
 
 
-# Rate Limiting Exceptions
-class RateLimitExceededException(LunanceException):
-    """Raised when rate limit is exceeded"""
+class FileUploadError(LunanceException):
+    """Exception untuk file upload errors"""
     
-    def __init__(self, retry_after: int = 60, details: Optional[Dict[str, Any]] = None):
-        message = f"Rate limit exceeded. Try again in {retry_after} seconds"
-        super().__init__(
-            message=message,
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            details=details
-        )
+    def __init__(
+        self,
+        message: str = "File upload failed",
+        filename: Optional[str] = None,
+        file_size: Optional[int] = None,
+        details: Optional[Dict[str, Any]] = None
+    ):
+        super().__init__(message, details, "FILE_UPLOAD_ERROR")
+        self.filename = filename
+        self.file_size = file_size
 
 
-# File Upload Exceptions
-class FileUploadException(LunanceException):
-    """Raised when file upload fails"""
+# HTTP Exception Mappers
+def map_exception_to_http(exc: LunanceException) -> HTTPException:
+    """
+    Map custom exceptions ke HTTP exceptions
     
-    def __init__(self, reason: str = "", details: Optional[Dict[str, Any]] = None):
-        message = "File upload failed"
-        if reason:
-            message += f": {reason}"
-        super().__init__(
-            message=message,
-            status_code=status.HTTP_400_BAD_REQUEST,
-            details=details
-        )
-
-
-class FileSizeExceededException(FileUploadException):
-    """Raised when uploaded file is too large"""
+    Args:
+        exc: Custom exception
+        
+    Returns:
+        HTTPException dengan status code dan detail yang sesuai
+    """
+    status_code_map = {
+        ValidationError: status.HTTP_422_UNPROCESSABLE_ENTITY,
+        NotFoundError: status.HTTP_404_NOT_FOUND,
+        PermissionError: status.HTTP_403_FORBIDDEN,
+        AuthenticationError: status.HTTP_401_UNAUTHORIZED,
+        BusinessLogicError: status.HTTP_400_BAD_REQUEST,
+        DatabaseError: status.HTTP_500_INTERNAL_SERVER_ERROR,
+        ExternalServiceError: status.HTTP_503_SERVICE_UNAVAILABLE,
+        RateLimitError: status.HTTP_429_TOO_MANY_REQUESTS,
+        FileUploadError: status.HTTP_400_BAD_REQUEST,
+    }
     
-    def __init__(self, max_size: int, details: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            reason=f"File size exceeds maximum allowed size of {max_size} bytes",
-            details=details
-        )
-
-
-class UnsupportedFileTypeException(FileUploadException):
-    """Raised when uploaded file type is not supported"""
+    status_code = status_code_map.get(type(exc), status.HTTP_500_INTERNAL_SERVER_ERROR)
     
-    def __init__(self, file_type: str, allowed_types: list, details: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            reason=f"File type '{file_type}' not supported. Allowed types: {', '.join(allowed_types)}",
-            details=details
-        )
-
-
-# External Service Exceptions
-class EmailServiceException(LunanceException):
-    """Raised when email service fails"""
+    detail = {
+        "success": False,
+        "message": exc.message,
+        "error_code": exc.error_code,
+        "details": exc.details
+    }
     
-    def __init__(self, reason: str = "", details: Optional[Dict[str, Any]] = None):
-        message = "Email service error"
-        if reason:
-            message += f": {reason}"
-        super().__init__(
-            message=message,
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            details=details
-        )
-
-
-class BankAPIException(LunanceException):
-    """Raised when bank API integration fails"""
+    # Add specific headers untuk rate limiting
+    headers = {}
+    if isinstance(exc, RateLimitError) and exc.retry_after:
+        headers["Retry-After"] = str(exc.retry_after)
     
-    def __init__(self, reason: str = "", details: Optional[Dict[str, Any]] = None):
-        message = "Bank API error"
-        if reason:
-            message += f": {reason}"
-        super().__init__(
-            message=message,
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            details=details
-        )
-
-
-# Utility function to convert exceptions to HTTP exceptions
-def to_http_exception(exc: LunanceException) -> HTTPException:
-    """Convert LunanceException to FastAPI HTTPException"""
     return HTTPException(
-        status_code=exc.status_code,
-        detail={
-            "message": exc.message,
-            "details": exc.details,
-            "type": exc.__class__.__name__
+        status_code=status_code,
+        detail=detail,
+        headers=headers if headers else None
+    )
+
+
+# Specific Domain Exceptions
+class UserNotFoundError(NotFoundError):
+    """Exception untuk user not found"""
+    
+    def __init__(self, user_id: Optional[str] = None, email: Optional[str] = None):
+        identifier = user_id or email or "unknown"
+        super().__init__("User", identifier)
+
+
+class UniversityNotFoundError(NotFoundError):
+    """Exception untuk university not found"""
+    
+    def __init__(self, university_id: Optional[str] = None, domain: Optional[str] = None):
+        identifier = university_id or domain or "unknown"
+        super().__init__("University", identifier)
+
+
+class CategoryNotFoundError(NotFoundError):
+    """Exception untuk category not found"""
+    
+    def __init__(self, category_id: str):
+        super().__init__("Category", category_id)
+
+
+class TransactionNotFoundError(NotFoundError):
+    """Exception untuk transaction not found"""
+    
+    def __init__(self, transaction_id: str):
+        super().__init__("Transaction", transaction_id)
+
+
+class SavingsTargetNotFoundError(NotFoundError):
+    """Exception untuk savings target not found"""
+    
+    def __init__(self, target_id: str):
+        super().__init__("Savings Target", target_id)
+
+
+class EmailAlreadyExistsError(ValidationError):
+    """Exception untuk email already exists"""
+    
+    def __init__(self, email: str):
+        super().__init__(
+            message=f"Email {email} sudah terdaftar",
+            field="email",
+            details={"email": email}
+        )
+
+
+class DomainAlreadyExistsError(ValidationError):
+    """Exception untuk domain already exists"""
+    
+    def __init__(self, domain: str):
+        super().__init__(
+            message=f"Domain {domain} sudah terdaftar",
+            field="domain",
+            details={"domain": domain}
+        )
+
+
+class CategoryNameExistsError(ValidationError):
+    """Exception untuk category name already exists"""
+    
+    def __init__(self, name: str, scope: str = "personal"):
+        super().__init__(
+            message=f"Kategori {scope} '{name}' sudah ada",
+            field="name",
+            details={"name": name, "scope": scope}
+        )
+
+
+class InsufficientPermissionError(PermissionError):
+    """Exception untuk insufficient permission"""
+    
+    def __init__(self, action: str, resource: str):
+        super().__init__(
+            message=f"Tidak memiliki permission untuk {action} {resource}",
+            details={"action": action, "resource": resource}
+        )
+
+
+class UniversityNotApprovedError(BusinessLogicError):
+    """Exception untuk university not approved"""
+    
+    def __init__(self, university_name: str):
+        super().__init__(
+            message=f"Universitas {university_name} belum disetujui",
+            rule="university_approval_required",
+            details={"university_name": university_name}
+        )
+
+
+class InvalidTransactionCategoryError(BusinessLogicError):
+    """Exception untuk invalid transaction category"""
+    
+    def __init__(self, transaction_type: str, category_type: str):
+        super().__init__(
+            message=f"Kategori {category_type} tidak sesuai untuk transaksi {transaction_type}",
+            rule="transaction_category_consistency",
+            details={
+                "transaction_type": transaction_type,
+                "category_type": category_type
+            }
+        )
+
+
+class SavingsTargetCompletedError(BusinessLogicError):
+    """Exception untuk operations pada completed savings target"""
+    
+    def __init__(self, target_name: str):
+        super().__init__(
+            message=f"Target '{target_name}' sudah tercapai dan tidak bisa dimodifikasi",
+            rule="completed_target_immutable",
+            details={"target_name": target_name}
+        )
+
+
+class InsufficientSavingsError(BusinessLogicError):
+    """Exception untuk insufficient savings"""
+    
+    def __init__(self, requested: float, available: float):
+        super().__init__(
+            message=f"Saldo tidak mencukupi. Diminta: {requested}, Tersedia: {available}",
+            rule="sufficient_savings_required",
+            details={
+                "requested_amount": requested,
+                "available_amount": available
+            }
+        )
+
+
+# Utility functions untuk error handling
+def create_validation_error_from_pydantic(exc) -> ValidationError:
+    """Create ValidationError dari Pydantic validation error"""
+    errors = []
+    for error in exc.errors():
+        field = ".".join(str(loc) for loc in error["loc"])
+        message = error["msg"]
+        errors.append({"field": field, "message": message})
+    
+    return ValidationError(
+        message="Input validation failed",
+        details={"validation_errors": errors}
+    )
+
+
+def create_database_error(operation: str, original_error: Exception) -> DatabaseError:
+    """Create DatabaseError dari original database error"""
+    return DatabaseError(
+        message=f"Database {operation} failed",
+        operation=operation,
+        details={
+            "original_error": str(original_error),
+            "error_type": type(original_error).__name__
         }
     )

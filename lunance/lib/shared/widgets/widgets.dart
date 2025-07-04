@@ -1,9 +1,0 @@
-// lib/shared/widgets/widgets.dart
-export 'custom_app_bar.dart';
-export 'loading_widget.dart';
-export 'error_widget.dart';
-export 'custom_button.dart';
-export 'custom_text_field.dart';
-export 'main_layout.dart';
-export 'main_navigation.dart';
-export 'curved_navigation_bar.dart';

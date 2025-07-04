@@ -1,22 +1,20 @@
-// lib/main.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'app.dart';
-import 'core/di/injection_container.dart' as di;
+void main() {
+  runApp(const MainApp());
+}
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  
-  // Set preferred orientations
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
-  
-  // Initialize dependencies
-  await di.init();
-  
-  runApp(const LunanceApp());
+class MainApp extends StatelessWidget {
+  const MainApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: Text('Hello World!'),
+        ),
+      ),
+    );
+  }
 }
