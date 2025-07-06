@@ -1,2 +1,0 @@
-from .email_service import email_service
-from .validators import validate_academic_email, validate_phone_number, validate_password_strength
