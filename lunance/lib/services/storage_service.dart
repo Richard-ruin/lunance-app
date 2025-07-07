@@ -1,508 +1,256 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import '../config/app_config.dart';
-import '../utils/constants.dart';
+import '../models/user_model.dart';
 
 class StorageService {
-  static StorageService? _instance;
-  SharedPreferences? _prefs;
-  
-  // Hive boxes
-  Box? _userBox;
-  Box? _settingsBox;
-  Box? _cacheBox;
-  Box? _universityBox;
+  static SharedPreferences? _preferences;
 
-  StorageService._internal();
-
-  factory StorageService() {
-    _instance ??= StorageService._internal();
-    return _instance!;
+  // Initialize storage service
+  static Future<void> init() async {
+    _preferences ??= await SharedPreferences.getInstance();
   }
 
-  Future<void> init() async {
-    try {
-      // Initialize SharedPreferences
-      _prefs = await SharedPreferences.getInstance();
-      
-      // Initialize Hive boxes
-      _userBox = await Hive.openBox(AppConfig.userBox);
-      _settingsBox = await Hive.openBox(AppConfig.settingsBox);
-      _cacheBox = await Hive.openBox(AppConfig.cacheBox);
-      _universityBox = await Hive.openBox(AppConfig.universityBox);
-    } catch (e) {
-      throw StorageException('Failed to initialize storage: $e');
+  static SharedPreferences get _prefs {
+    if (_preferences == null) {
+      throw Exception('StorageService not initialized. Call StorageService.init() first.');
     }
+    return _preferences!;
   }
 
-  // ======================
-  // SharedPreferences Methods
-  // ======================
-  
-  Future<bool> setString(String key, String value) async {
-    try {
-      return await _prefs?.setString(key, value) ?? false;
-    } catch (e) {
-      throw StorageException('Failed to save string: $e');
-    }
+  // Auth Token Management
+  static Future<void> saveAuthToken(String token) async {
+    await _prefs.setString(AppConfig.authTokenKey, token);
   }
 
-  String? getString(String key, {String? defaultValue}) {
-    try {
-      return _prefs?.getString(key) ?? defaultValue;
-    } catch (e) {
-      return defaultValue;
-    }
+  static String? getAuthToken() {
+    return _prefs.getString(AppConfig.authTokenKey);
   }
 
-  Future<bool> setBool(String key, bool value) async {
-    try {
-      return await _prefs?.setBool(key, value) ?? false;
-    } catch (e) {
-      throw StorageException('Failed to save boolean: $e');
-    }
+  static Future<void> removeAuthToken() async {
+    await _prefs.remove(AppConfig.authTokenKey);
   }
 
-  bool getBool(String key, {bool defaultValue = false}) {
-    try {
-      return _prefs?.getBool(key) ?? defaultValue;
-    } catch (e) {
-      return defaultValue;
-    }
+  static bool hasAuthToken() {
+    return _prefs.containsKey(AppConfig.authTokenKey);
   }
 
-  Future<bool> setInt(String key, int value) async {
-    try {
-      return await _prefs?.setInt(key, value) ?? false;
-    } catch (e) {
-      throw StorageException('Failed to save integer: $e');
-    }
+  // User Data Management
+  static Future<void> saveUser(User user) async {
+    final userJson = json.encode(user.toJson());
+    await _prefs.setString(AppConfig.userDataKey, userJson);
   }
 
-  int getInt(String key, {int defaultValue = 0}) {
+  static User? getUser() {
+    final userJson = _prefs.getString(AppConfig.userDataKey);
+    if (userJson == null) return null;
+    
     try {
-      return _prefs?.getInt(key) ?? defaultValue;
+      final userMap = json.decode(userJson) as Map<String, dynamic>;
+      return User.fromJson(userMap);
     } catch (e) {
-      return defaultValue;
-    }
-  }
-
-  Future<bool> setDouble(String key, double value) async {
-    try {
-      return await _prefs?.setDouble(key, value) ?? false;
-    } catch (e) {
-      throw StorageException('Failed to save double: $e');
-    }
-  }
-
-  double getDouble(String key, {double defaultValue = 0.0}) {
-    try {
-      return _prefs?.getDouble(key) ?? defaultValue;
-    } catch (e) {
-      return defaultValue;
-    }
-  }
-
-  Future<bool> setStringList(String key, List<String> value) async {
-    try {
-      return await _prefs?.setStringList(key, value) ?? false;
-    } catch (e) {
-      throw StorageException('Failed to save string list: $e');
-    }
-  }
-
-  List<String> getStringList(String key, {List<String>? defaultValue}) {
-    try {
-      return _prefs?.getStringList(key) ?? defaultValue ?? [];
-    } catch (e) {
-      return defaultValue ?? [];
-    }
-  }
-
-  Future<bool> remove(String key) async {
-    try {
-      return await _prefs?.remove(key) ?? false;
-    } catch (e) {
-      throw StorageException('Failed to remove key: $e');
-    }
-  }
-
-  Future<bool> clear() async {
-    try {
-      return await _prefs?.clear() ?? false;
-    } catch (e) {
-      throw StorageException('Failed to clear storage: $e');
-    }
-  }
-
-  bool containsKey(String key) {
-    try {
-      return _prefs?.containsKey(key) ?? false;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  // ======================
-  // JSON Storage Methods
-  // ======================
-  
-  Future<bool> setJson(String key, Map<String, dynamic> value) async {
-    try {
-      final jsonString = jsonEncode(value);
-      return await setString(key, jsonString);
-    } catch (e) {
-      throw StorageException('Failed to save JSON: $e');
-    }
-  }
-
-  Map<String, dynamic>? getJson(String key) {
-    try {
-      final jsonString = getString(key);
-      if (jsonString == null) return null;
-      return jsonDecode(jsonString) as Map<String, dynamic>;
-    } catch (e) {
+      // If parsing fails, remove corrupted data
+      removeUser();
       return null;
     }
   }
 
-  // ======================
-  // Authentication Storage
-  // ======================
-  
-  Future<bool> setAccessToken(String token) async {
-    return await setString(StorageKeys.accessToken, token);
+  static Future<void> removeUser() async {
+    await _prefs.remove(AppConfig.userDataKey);
   }
 
-  String? getAccessToken() {
-    return getString(StorageKeys.accessToken);
+  static bool hasUser() {
+    return _prefs.containsKey(AppConfig.userDataKey);
   }
 
-  Future<bool> setRefreshToken(String token) async {
-    return await setString(StorageKeys.refreshToken, token);
+  // Theme Management
+  static Future<void> saveThemeMode(String themeMode) async {
+    await _prefs.setString(AppConfig.themeKey, themeMode);
   }
 
-  String? getRefreshToken() {
-    return getString(StorageKeys.refreshToken);
+  static String getThemeMode() {
+    return _prefs.getString(AppConfig.themeKey) ?? 'system';
   }
 
-  Future<bool> setUserProfile(Map<String, dynamic> user) async {
-    return await setJson(StorageKeys.userProfile, user);
+  static Future<void> removeThemeMode() async {
+    await _prefs.remove(AppConfig.themeKey);
   }
 
-  Map<String, dynamic>? getUserProfile() {
-    return getJson(StorageKeys.userProfile);
+  // Language Management
+  static Future<void> saveLanguage(String languageCode) async {
+    await _prefs.setString(AppConfig.languageKey, languageCode);
   }
 
-  Future<bool> clearAuthData() async {
+  static String getLanguage() {
+    return _prefs.getString(AppConfig.languageKey) ?? 'id';
+  }
+
+  static Future<void> removeLanguage() async {
+    await _prefs.remove(AppConfig.languageKey);
+  }
+
+  // Onboarding Management
+  static Future<void> setOnboardingShown() async {
+    await _prefs.setBool(AppConfig.onboardingKey, true);
+  }
+
+  static bool isOnboardingShown() {
+    return _prefs.getBool(AppConfig.onboardingKey) ?? false;
+  }
+
+  static Future<void> resetOnboarding() async {
+    await _prefs.remove(AppConfig.onboardingKey);
+  }
+
+  // App Settings Management
+  static Future<void> saveBoolSetting(String key, bool value) async {
+    await _prefs.setBool(key, value);
+  }
+
+  static bool getBoolSetting(String key, {bool defaultValue = false}) {
+    return _prefs.getBool(key) ?? defaultValue;
+  }
+
+  static Future<void> saveStringSetting(String key, String value) async {
+    await _prefs.setString(key, value);
+  }
+
+  static String? getStringSetting(String key, {String? defaultValue}) {
+    return _prefs.getString(key) ?? defaultValue;
+  }
+
+  static Future<void> saveIntSetting(String key, int value) async {
+    await _prefs.setInt(key, value);
+  }
+
+  static int getIntSetting(String key, {int defaultValue = 0}) {
+    return _prefs.getInt(key) ?? defaultValue;
+  }
+
+  static Future<void> saveDoubleSetting(String key, double value) async {
+    await _prefs.setDouble(key, value);
+  }
+
+  static double getDoubleSetting(String key, {double defaultValue = 0.0}) {
+    return _prefs.getDouble(key) ?? defaultValue;
+  }
+
+  // Generic List Management
+  static Future<void> saveStringList(String key, List<String> values) async {
+    await _prefs.setStringList(key, values);
+  }
+
+  static List<String> getStringList(String key) {
+    return _prefs.getStringList(key) ?? [];
+  }
+
+  static Future<void> removeStringList(String key) async {
+    await _prefs.remove(key);
+  }
+
+  // JSON Object Management
+  static Future<void> saveJsonObject(String key, Map<String, dynamic> object) async {
+    final jsonString = json.encode(object);
+    await _prefs.setString(key, jsonString);
+  }
+
+  static Map<String, dynamic>? getJsonObject(String key) {
+    final jsonString = _prefs.getString(key);
+    if (jsonString == null) return null;
+    
     try {
-      final results = await Future.wait([
-        remove(StorageKeys.accessToken),
-        remove(StorageKeys.refreshToken),
-        remove(StorageKeys.userProfile),
-      ]);
-      return results.every((result) => result);
+      return json.decode(jsonString) as Map<String, dynamic>;
     } catch (e) {
-      throw StorageException('Failed to clear auth data: $e');
+      // If parsing fails, remove corrupted data
+      _prefs.remove(key);
+      return null;
     }
   }
 
-  bool get isLoggedIn {
-    final token = getAccessToken();
-    return token != null && token.isNotEmpty;
+  static Future<void> removeJsonObject(String key) async {
+    await _prefs.remove(key);
   }
 
-  // ======================
-  // App Settings Storage
-  // ======================
-  
-  Future<bool> setThemeMode(String themeMode) async {
-    return await setString(StorageKeys.themeMode, themeMode);
+  // Complete Authentication Clear
+  static Future<void> clearAuthData() async {
+    await Future.wait([
+      removeAuthToken(),
+      removeUser(),
+    ]);
   }
 
-  String getThemeMode() {
-    return getString(StorageKeys.themeMode, defaultValue: AppThemeMode.system.value);
+  // Complete App Data Clear (keep theme and language preferences)
+  static Future<void> clearAppData() async {
+    await Future.wait([
+      removeAuthToken(),
+      removeUser(),
+      resetOnboarding(),
+    ]);
   }
 
-  Future<bool> setLanguage(String language) async {
-    return await setString(StorageKeys.language, language);
+  // Complete Reset (clear everything)
+  static Future<void> clearAll() async {
+    await _prefs.clear();
   }
 
-  String getLanguage() {
-    return getString(StorageKeys.language, defaultValue: AppLanguage.indonesian.languageCode);
-  }
-
-  Future<bool> setBiometricEnabled(bool enabled) async {
-    return await setBool(StorageKeys.biometricEnabled, enabled);
-  }
-
-  bool getBiometricEnabled() {
-    return getBool(StorageKeys.biometricEnabled, defaultValue: false);
-  }
-
-  Future<bool> setNotificationEnabled(bool enabled) async {
-    return await setBool(StorageKeys.notificationEnabled, enabled);
-  }
-
-  bool getNotificationEnabled() {
-    return getBool(StorageKeys.notificationEnabled, defaultValue: true);
-  }
-
-  Future<bool> setAutoSyncEnabled(bool enabled) async {
-    return await setBool(StorageKeys.autoSyncEnabled, enabled);
-  }
-
-  bool getAutoSyncEnabled() {
-    return getBool(StorageKeys.autoSyncEnabled, defaultValue: true);
-  }
-
-  Future<bool> setOnboardingCompleted(bool completed) async {
-    return await setBool(StorageKeys.onboardingCompleted, completed);
-  }
-
-  bool getOnboardingCompleted() {
-    return getBool(StorageKeys.onboardingCompleted, defaultValue: false);
-  }
-
-  // ======================
-  // Hive Storage Methods
-  // ======================
-  
-  Future<void> saveToHive(String boxName, String key, dynamic value) async {
-    try {
-      Box? box;
-      switch (boxName) {
-        case AppConfig.userBox:
-          box = _userBox;
-          break;
-        case AppConfig.settingsBox:
-          box = _settingsBox;
-          break;
-        case AppConfig.cacheBox:
-          box = _cacheBox;
-          break;
-        case AppConfig.universityBox:
-          box = _universityBox;
-          break;
-      }
-      
-      if (box != null) {
-        await box.put(key, value);
-      } else {
-        throw StorageException('Box $boxName not found');
-      }
-    } catch (e) {
-      throw StorageException('Failed to save to Hive: $e');
-    }
-  }
-
-  T? getFromHive<T>(String boxName, String key, {T? defaultValue}) {
-    try {
-      Box? box;
-      switch (boxName) {
-        case AppConfig.userBox:
-          box = _userBox;
-          break;
-        case AppConfig.settingsBox:
-          box = _settingsBox;
-          break;
-        case AppConfig.cacheBox:
-          box = _cacheBox;
-          break;
-        case AppConfig.universityBox:
-          box = _universityBox;
-          break;
-      }
-      
-      if (box != null) {
-        return box.get(key, defaultValue: defaultValue) as T?;
-      }
-      return defaultValue;
-    } catch (e) {
-      return defaultValue;
-    }
-  }
-
-  Future<void> deleteFromHive(String boxName, String key) async {
-    try {
-      Box? box;
-      switch (boxName) {
-        case AppConfig.userBox:
-          box = _userBox;
-          break;
-        case AppConfig.settingsBox:
-          box = _settingsBox;
-          break;
-        case AppConfig.cacheBox:
-          box = _cacheBox;
-          break;
-        case AppConfig.universityBox:
-          box = _universityBox;
-          break;
-      }
-      
-      if (box != null) {
-        await box.delete(key);
-      }
-    } catch (e) {
-      throw StorageException('Failed to delete from Hive: $e');
-    }
-  }
-
-  Future<void> clearHiveBox(String boxName) async {
-    try {
-      Box? box;
-      switch (boxName) {
-        case AppConfig.userBox:
-          box = _userBox;
-          break;
-        case AppConfig.settingsBox:
-          box = _settingsBox;
-          break;
-        case AppConfig.cacheBox:
-          box = _cacheBox;
-          break;
-        case AppConfig.universityBox:
-          box = _universityBox;
-          break;
-      }
-      
-      if (box != null) {
-        await box.clear();
-      }
-    } catch (e) {
-      throw StorageException('Failed to clear Hive box: $e');
-    }
-  }
-
-  // ======================
   // Cache Management
-  // ======================
-  
-  Future<void> setCache(String key, dynamic data, {Duration? expiry}) async {
-    try {
-      final cacheData = {
-        'data': data,
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-        'expiry': expiry?.inMilliseconds,
-      };
-      await saveToHive(AppConfig.cacheBox, key, cacheData);
-    } catch (e) {
-      throw StorageException('Failed to set cache: $e');
-    }
+  static Future<void> saveCacheData(String key, Map<String, dynamic> data, {Duration? expiry}) async {
+    final cacheObject = {
+      'data': data,
+      'timestamp': DateTime.now().millisecondsSinceEpoch,
+      'expiry': expiry?.inMilliseconds,
+    };
+    await saveJsonObject('cache_$key', cacheObject);
   }
 
-  T? getCache<T>(String key) {
-    try {
-      final cacheData = getFromHive<Map>(AppConfig.cacheBox, key);
-      if (cacheData == null) return null;
-      
-      final timestamp = cacheData['timestamp'] as int?;
-      final expiry = cacheData['expiry'] as int?;
-      
-      if (timestamp != null && expiry != null) {
-        final now = DateTime.now().millisecondsSinceEpoch;
-        if (now - timestamp > expiry) {
-          // Cache expired, remove it
-          deleteFromHive(AppConfig.cacheBox, key);
-          return null;
-        }
+  static Map<String, dynamic>? getCacheData(String key) {
+    final cacheObject = getJsonObject('cache_$key');
+    if (cacheObject == null) return null;
+
+    final timestamp = cacheObject['timestamp'] as int?;
+    final expiryMs = cacheObject['expiry'] as int?;
+    
+    if (timestamp != null && expiryMs != null) {
+      final expiryTime = DateTime.fromMillisecondsSinceEpoch(timestamp + expiryMs);
+      if (DateTime.now().isAfter(expiryTime)) {
+        // Cache expired, remove it
+        removeCacheData(key);
+        return null;
       }
-      
-      return cacheData['data'] as T?;
-    } catch (e) {
-      return null;
     }
+
+    return cacheObject['data'] as Map<String, dynamic>?;
   }
 
-  Future<void> clearCache() async {
-    await clearHiveBox(AppConfig.cacheBox);
+  static Future<void> removeCacheData(String key) async {
+    await removeJsonObject('cache_$key');
   }
 
-  Future<void> clearExpiredCache() async {
-    try {
-      final box = _cacheBox;
-      if (box == null) return;
-      
-      final now = DateTime.now().millisecondsSinceEpoch;
-      final keysToDelete = <String>[];
-      
-      for (final key in box.keys) {
-        final cacheData = box.get(key) as Map?;
-        if (cacheData != null) {
-          final timestamp = cacheData['timestamp'] as int?;
-          final expiry = cacheData['expiry'] as int?;
-          
-          if (timestamp != null && expiry != null && now - timestamp > expiry) {
-            keysToDelete.add(key.toString());
-          }
-        }
-      }
-      
-      for (final key in keysToDelete) {
-        await box.delete(key);
-      }
-    } catch (e) {
-      throw StorageException('Failed to clear expired cache: $e');
-    }
+  static Future<void> clearAllCache() async {
+    final keys = _prefs.getKeys();
+    final cacheKeys = keys.where((key) => key.startsWith('cache_'));
+    
+    await Future.wait(
+      cacheKeys.map((key) => _prefs.remove(key)),
+    );
   }
 
-  // ======================
-  // Utility Methods
-  // ======================
-  
-  Future<void> setLastSyncTime() async {
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    await setInt(StorageKeys.lastSyncTime, timestamp);
+  // Debug: Get all stored keys
+  static Set<String> getAllKeys() {
+    return _prefs.getKeys();
   }
 
-  DateTime? getLastSyncTime() {
-    final timestamp = getInt(StorageKeys.lastSyncTime);
-    if (timestamp == 0) return null;
-    return DateTime.fromMillisecondsSinceEpoch(timestamp);
+  // Debug: Get storage info
+  static Map<String, dynamic> getStorageInfo() {
+    final keys = _prefs.getKeys();
+    return {
+      'total_keys': keys.length,
+      'has_auth_token': hasAuthToken(),
+      'has_user': hasUser(),
+      'theme_mode': getThemeMode(),
+      'language': getLanguage(),
+      'onboarding_shown': isOnboardingShown(),
+      'cache_keys': keys.where((key) => key.startsWith('cache_')).length,
+    };
   }
-
-  Future<Map<String, dynamic>> getStorageInfo() async {
-    try {
-      final prefsKeys = _prefs?.getKeys() ?? <String>{};
-      final userBoxLength = _userBox?.length ?? 0;
-      final settingsBoxLength = _settingsBox?.length ?? 0;
-      final cacheBoxLength = _cacheBox?.length ?? 0;
-      final universityBoxLength = _universityBox?.length ?? 0;
-      
-      return {
-        'shared_preferences_keys': prefsKeys.length,
-        'user_box_items': userBoxLength,
-        'settings_box_items': settingsBoxLength,
-        'cache_box_items': cacheBoxLength,
-        'university_box_items': universityBoxLength,
-        'total_items': prefsKeys.length + userBoxLength + settingsBoxLength + cacheBoxLength + universityBoxLength,
-        'last_sync': getLastSyncTime()?.toIso8601String(),
-      };
-    } catch (e) {
-      throw StorageException('Failed to get storage info: $e');
-    }
-  }
-
-  Future<void> dispose() async {
-    try {
-      await _userBox?.close();
-      await _settingsBox?.close();
-      await _cacheBox?.close();
-      await _universityBox?.close();
-    } catch (e) {
-      // Log error but don't throw
-    }
-  }
-}
-
-// Custom Exception for Storage errors
-class StorageException implements Exception {
-  final String message;
-  
-  const StorageException(this.message);
-  
-  @override
-  String toString() => 'StorageException: $message';
 }

@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../../config/app_config.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/storage_service.dart';
+import '../../models/base_model.dart'; // Import for UserRole enum
 import '../../themes/app_theme.dart';
 import '../../utils/constants.dart';
 import '../../utils/validators.dart';
+import '../../widgets/common/custom_button.dart';
+import '../../widgets/common/custom_text_field.dart';
+import '../../widgets/common/loading_overlay.dart';
 import 'register_screen.dart';
 import 'forgot_password_screen.dart';
 
@@ -14,8 +21,7 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> 
-    with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -23,185 +29,125 @@ class _LoginScreenState extends State<LoginScreen>
   bool _obscurePassword = true;
   bool _rememberMe = false;
   
-  late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
-  late Animation<Offset> _slideAnimation;
-
   @override
   void initState() {
     super.initState();
-    _setupAnimations();
-    _loadRememberedCredentials();
-  }
-
-  void _setupAnimations() {
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 1200),
-      vsync: this,
-    );
-    
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeInOut,
-    ));
-    
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOutCubic,
-    ));
-    
-    _animationController.forward();
-  }
-
-  void _loadRememberedCredentials() {
-    // Load remembered email if any
-    // This would typically come from storage service
+    _loadRememberMe();
   }
 
   @override
   void dispose() {
-    _animationController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  Future<void> _handleLogin() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    final email = _emailController.text.trim();
-    final password = _passwordController.text;
-
-    try {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final success = await authProvider.login(email, password);
-
-      if (success && mounted) {
-        // Save credentials if remember me is checked
-        if (_rememberMe) {
-          // Save email to storage
-        }
-
-        // Navigate to appropriate screen based on user role
-        final user = authProvider.currentUser;
-        if (user != null) {
-          switch (user.role) {
-            case UserRole.student:
-              Navigator.of(context).pushReplacementNamed(Routes.studentMain);
-              break;
-            case UserRole.admin:
-              Navigator.of(context).pushReplacementNamed(Routes.adminMain);
-              break;
-          }
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        _showErrorSnackBar(e.toString());
-      }
+  void _loadRememberMe() {
+    // Load remember me state and email if exists
+    final rememberMe = StorageService.getBoolSetting('remember_me');
+    final savedEmail = StorageService.getStringSetting('remembered_email');
+    
+    if (rememberMe && savedEmail != null) {
+      _rememberMe = true;
+      _emailController.text = savedEmail;
     }
   }
 
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.error,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(AppTheme.spacing16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-        ),
-      ),
+  Future<void> _saveRememberMe() async {
+    await StorageService.saveBoolSetting('remember_me', _rememberMe);
+    if (_rememberMe) {
+      await StorageService.saveStringSetting('remembered_email', _emailController.text);
+    } else {
+      await StorageService.saveStringSetting('remembered_email', '');
+    }
+  }
+
+  Future<void> _handleLogin() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final authProvider = context.read<AuthProvider>();
+    
+    final success = await authProvider.login(
+      _emailController.text.trim(),
+      _passwordController.text,
     );
+
+    if (success) {
+      await _saveRememberMe();
+      
+      // Navigate based on user role
+      if (mounted) {
+        final user = authProvider.user;
+        if (user?.role == UserRole.admin) {
+          Navigator.pushReplacementNamed(context, '/admin');
+        } else {
+          Navigator.pushReplacementNamed(context, '/student');
+        }
+      }
+    } else {
+      // Error is handled by provider and will be shown in UI
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(authProvider.errorMessage ?? 'Login gagal'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.background,
-      body: SafeArea(
-        child: Consumer<AuthProvider>(
-          builder: (context, authProvider, child) {
-            return Stack(
-              children: [
-                // Background gradient
-                Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                        Theme.of(context).colorScheme.background,
-                      ],
-                    ),
+      body: Consumer<AuthProvider>(
+        builder: (context, authProvider, child) {
+          return LoadingOverlay(
+            isLoading: authProvider.isLoading,
+            child: SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppTheme.spacingL),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: AppTheme.spacingXXL),
+                      
+                      // Logo and title
+                      _buildHeader(),
+                      
+                      const SizedBox(height: AppTheme.spacingXXL),
+                      
+                      // Login form
+                      _buildLoginForm(),
+                      
+                      const SizedBox(height: AppTheme.spacingL),
+                      
+                      // Remember me and forgot password
+                      _buildRememberMeAndForgot(),
+                      
+                      const SizedBox(height: AppTheme.spacingXL),
+                      
+                      // Login button
+                      _buildLoginButton(),
+                      
+                      const SizedBox(height: AppTheme.spacingL),
+                      
+                      // Register link
+                      _buildRegisterLink(),
+                      
+                      const SizedBox(height: AppTheme.spacingXL),
+                      
+                      // Version info
+                      _buildVersionInfo(),
+                    ],
                   ),
                 ),
-                
-                // Main content
-                SingleChildScrollView(
-                  padding: const EdgeInsets.all(AppTheme.spacing24),
-                  child: FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: SlideTransition(
-                      position: _slideAnimation,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const SizedBox(height: AppTheme.spacing48),
-                          
-                          // Logo and title
-                          _buildHeader(),
-                          
-                          const SizedBox(height: AppTheme.spacing48),
-                          
-                          // Login form
-                          _buildLoginForm(),
-                          
-                          const SizedBox(height: AppTheme.spacing32),
-                          
-                          // Login button
-                          _buildLoginButton(authProvider),
-                          
-                          const SizedBox(height: AppTheme.spacing24),
-                          
-                          // Forgot password
-                          _buildForgotPassword(),
-                          
-                          const SizedBox(height: AppTheme.spacing32),
-                          
-                          // Divider
-                          _buildDivider(),
-                          
-                          const SizedBox(height: AppTheme.spacing32),
-                          
-                          // Register link
-                          _buildRegisterLink(),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                
-                // Loading overlay
-                if (authProvider.isLoading)
-                  Container(
-                    color: Colors.black.withOpacity(0.3),
-                    child: const Center(
-                      child: CircularProgressIndicator(),
-                    ),
-                  ),
-              ],
-            );
-          },
-        ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -209,45 +155,38 @@ class _LoginScreenState extends State<LoginScreen>
   Widget _buildHeader() {
     return Column(
       children: [
-        // Logo
+        // App logo
         Container(
-          width: 100,
-          height: 100,
+          width: 120,
+          height: 120,
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.primary,
-            borderRadius: BorderRadius.circular(AppTheme.radiusXLarge),
-            boxShadow: [
-              BoxShadow(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              ),
-            ],
+            shape: BoxShape.circle,
           ),
           child: Icon(
             Icons.account_balance_wallet,
-            size: 50,
+            size: 60,
             color: Theme.of(context).colorScheme.onPrimary,
           ),
         ),
         
-        const SizedBox(height: AppTheme.spacing24),
+        const SizedBox(height: AppTheme.spacingL),
         
-        // App title
+        // App name
         Text(
-          'Lunance',
-          style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+          AppConfig.appName,
+          style: Theme.of(context).textTheme.displayMedium?.copyWith(
             fontWeight: FontWeight.bold,
             color: Theme.of(context).colorScheme.primary,
           ),
         ),
         
-        const SizedBox(height: AppTheme.spacing8),
+        const SizedBox(height: AppTheme.spacingS),
         
-        // Subtitle
+        // App tagline
         Text(
-          'Manajemen Keuangan Mahasiswa',
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+          AppConfig.appDescription,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
           textAlign: TextAlign.center,
@@ -257,152 +196,114 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Widget _buildLoginForm() {
-    return Form(
-      key: _formKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Email field
-          TextFormField(
-            controller: _emailController,
-            keyboardType: TextInputType.emailAddress,
-            textInputAction: TextInputAction.next,
-            decoration: InputDecoration(
-              labelText: 'Email Akademik',
-              hintText: 'contoh@universitas.ac.id',
-              prefixIcon: const Icon(Icons.email_outlined),
-              suffixText: '.ac.id',
-              suffixStyle: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            validator: Validators.validateAcademicEmail,
-            onFieldSubmitted: (_) => FocusScope.of(context).nextFocus(),
-          ),
-          
-          const SizedBox(height: AppTheme.spacing20),
-          
-          // Password field
-          TextFormField(
-            controller: _passwordController,
-            obscureText: _obscurePassword,
-            textInputAction: TextInputAction.done,
-            decoration: InputDecoration(
-              labelText: 'Password',
-              hintText: 'Masukkan password',
-              prefixIcon: const Icon(Icons.lock_outlined),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                ),
-                onPressed: () {
-                  setState(() {
-                    _obscurePassword = !_obscurePassword;
-                  });
-                },
-              ),
-            ),
-            validator: Validators.validatePassword,
-            onFieldSubmitted: (_) => _handleLogin(),
-          ),
-          
-          const SizedBox(height: AppTheme.spacing16),
-          
-          // Remember me checkbox
-          Row(
-            children: [
-              Checkbox(
-                value: _rememberMe,
-                onChanged: (value) {
-                  setState(() {
-                    _rememberMe = value ?? false;
-                  });
-                },
-              ),
-              const SizedBox(width: AppTheme.spacing8),
-              Text(
-                'Ingat saya',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLoginButton(AuthProvider authProvider) {
-    return ElevatedButton(
-      onPressed: authProvider.isLoading ? null : _handleLogin,
-      style: ElevatedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: AppTheme.spacing16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+    return Column(
+      children: [
+        // Email field
+        CustomTextField(
+          controller: _emailController,
+          label: AppConstants.emailLabel,
+          hintText: 'mahasiswa@universitas.ac.id',
+          prefixIcon: AppIcons.email,
+          keyboardType: TextInputType.emailAddress,
+          validator: Validators.validateEmail,
+          onChanged: (value) {
+            // Clear error when user starts typing
+            if (context.read<AuthProvider>().hasError) {
+              context.read<AuthProvider>().clearError();
+            }
+          },
         ),
-      ),
-      child: authProvider.isLoading
-          ? const SizedBox(
-              height: 20,
-              width: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
-            )
-          : Text(
-              'Masuk',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: Theme.of(context).colorScheme.onPrimary,
-                fontWeight: FontWeight.w600,
-              ),
+        
+        const SizedBox(height: AppTheme.spacingM),
+        
+        // Password field
+        CustomTextField(
+          controller: _passwordController,
+          label: AppConstants.passwordLabel,
+          hintText: 'Masukkan password Anda',
+          prefixIcon: AppIcons.password,
+          obscureText: _obscurePassword,
+          suffixIcon: IconButton(
+            icon: Icon(
+              _obscurePassword ? AppIcons.visibilityOff : AppIcons.visibility,
             ),
-    );
-  }
-
-  Widget _buildForgotPassword() {
-    return Center(
-      child: TextButton(
-        onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => const ForgotPasswordScreen(),
-            ),
-          );
-        },
-        child: Text(
-          'Lupa Password?',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Theme.of(context).colorScheme.primary,
-            fontWeight: FontWeight.w500,
+            onPressed: () {
+              setState(() {
+                _obscurePassword = !_obscurePassword;
+              });
+            },
           ),
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return 'Password wajib diisi';
+            }
+            return null;
+          },
+          onChanged: (value) {
+            // Clear error when user starts typing
+            if (context.read<AuthProvider>().hasError) {
+              context.read<AuthProvider>().clearError();
+            }
+          },
         ),
-      ),
+      ],
     );
   }
 
-  Widget _buildDivider() {
+  Widget _buildRememberMeAndForgot() {
     return Row(
       children: [
+        // Remember me checkbox
         Expanded(
-          child: Divider(
-            color: Theme.of(context).colorScheme.outline.withOpacity(0.5),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacing16),
-          child: Text(
-            'atau',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+          child: CheckboxListTile(
+            value: _rememberMe,
+            onChanged: (value) {
+              setState(() {
+                _rememberMe = value ?? false;
+              });
+            },
+            title: Text(
+              'Ingat saya',
+              style: Theme.of(context).textTheme.bodySmall,
             ),
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: EdgeInsets.zero,
+            dense: true,
           ),
         ),
-        Expanded(
-          child: Divider(
-            color: Theme.of(context).colorScheme.outline.withOpacity(0.5),
+        
+        // Forgot password link
+        TextButton(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ForgotPasswordScreen(),
+              ),
+            );
+          },
+          child: Text(
+            'Lupa Password?',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildLoginButton() {
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, child) {
+        return CustomButton(
+          onPressed: authProvider.isLoading ? null : _handleLogin,
+          text: AppConstants.loginButton,
+          isLoading: authProvider.isLoading,
+          variant: ButtonVariant.primary,
+        );
+      },
     );
   }
 
@@ -412,21 +313,17 @@ class _LoginScreenState extends State<LoginScreen>
       children: [
         Text(
           'Belum punya akun? ',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
+          style: Theme.of(context).textTheme.bodyMedium,
         ),
         TextButton(
           onPressed: () {
-            Navigator.of(context).push(
+            Navigator.push(
+              context,
               MaterialPageRoute(
                 builder: (context) => const RegisterScreen(),
               ),
             );
           },
-          style: TextButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacing8),
-          ),
           child: Text(
             'Daftar Sekarang',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -436,6 +333,16 @@ class _LoginScreenState extends State<LoginScreen>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildVersionInfo() {
+    return Text(
+      'Versi ${AppConfig.appVersion}',
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
+      textAlign: TextAlign.center,
     );
   }
 }

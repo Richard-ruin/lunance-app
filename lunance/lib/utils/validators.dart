@@ -1,652 +1,309 @@
-import '../utils/constants.dart';
+import 'package:flutter/material.dart';
+import '../config/app_config.dart';
 
 class Validators {
-  // ======================
-  // Email Validators
-  // ======================
-  
+  // Email validation
   static String? validateEmail(String? value) {
     if (value == null || value.isEmpty) {
-      return ErrorMessages.emailRequired;
+      return 'Email wajib diisi';
     }
     
-    if (!RegExp(ValidationPatterns.email).hasMatch(value)) {
-      return ErrorMessages.emailInvalid;
+    final emailRegex = RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+    if (!emailRegex.hasMatch(value)) {
+      return 'Format email tidak valid';
     }
     
-    return null;
-  }
-
-  static String? validateAcademicEmail(String? value) {
-    if (value == null || value.isEmpty) {
-      return ErrorMessages.emailRequired;
-    }
-    
-    // Check basic email format first
-    if (!RegExp(ValidationPatterns.email).hasMatch(value)) {
-      return ErrorMessages.emailInvalid;
-    }
-    
-    // Check if it's academic email (.ac.id)
-    if (!RegExp(ValidationPatterns.academicEmail).hasMatch(value)) {
-      return ErrorMessages.emailAcademicRequired;
+    if (!value.endsWith(AppConfig.requiredEmailDomain)) {
+      return 'Email harus menggunakan domain .ac.id';
     }
     
     return null;
   }
 
-  // ======================
-  // Password Validators
-  // ======================
-  
+  // Password validation
   static String? validatePassword(String? value) {
     if (value == null || value.isEmpty) {
-      return ErrorMessages.passwordRequired;
+      return 'Password wajib diisi';
     }
     
-    if (value.length < 8) {
-      return ErrorMessages.passwordTooShort;
+    if (value.length < AppConfig.minPasswordLength) {
+      return 'Password minimal ${AppConfig.minPasswordLength} karakter';
     }
     
-    // Check for strong password pattern
-    if (!RegExp(ValidationPatterns.password).hasMatch(value)) {
-      return ErrorMessages.passwordWeak;
+    if (value.length > AppConfig.maxPasswordLength) {
+      return 'Password maksimal ${AppConfig.maxPasswordLength} karakter';
+    }
+    
+    // Check for uppercase letter
+    if (!RegExp(r'[A-Z]').hasMatch(value)) {
+      return 'Password harus mengandung huruf besar';
+    }
+    
+    // Check for lowercase letter
+    if (!RegExp(r'[a-z]').hasMatch(value)) {
+      return 'Password harus mengandung huruf kecil';
+    }
+    
+    // Check for number
+    if (!RegExp(r'[0-9]').hasMatch(value)) {
+      return 'Password harus mengandung angka';
     }
     
     return null;
   }
 
-  static String? validatePasswordConfirmation(String? value, String? password) {
+  // Confirm password validation
+  static String? validateConfirmPassword(String? value, String? password) {
     if (value == null || value.isEmpty) {
-      return ErrorMessages.passwordRequired;
+      return 'Konfirmasi password wajib diisi';
     }
     
     if (value != password) {
-      return ErrorMessages.passwordMismatch;
+      return 'Konfirmasi password tidak sama dengan password';
     }
     
     return null;
   }
 
-  // ======================
-  // Name Validators
-  // ======================
-  
+  // Name validation
   static String? validateName(String? value) {
     if (value == null || value.isEmpty) {
-      return ErrorMessages.nameRequired;
+      return 'Nama lengkap wajib diisi';
     }
     
-    if (value.trim().length < 2) {
-      return 'Nama minimal 2 karakter';
+    if (value.length < AppConfig.minNameLength) {
+      return 'Nama minimal ${AppConfig.minNameLength} karakter';
     }
     
-    if (value.trim().length > 100) {
-      return 'Nama maksimal 100 karakter';
+    if (value.length > AppConfig.maxNameLength) {
+      return 'Nama maksimal ${AppConfig.maxNameLength} karakter';
     }
     
-    // Check for valid name characters (letters, spaces, some special chars)
-    if (!RegExp(r'^[a-zA-Z\s\.\-\']+$').hasMatch(value)) {
-      return 'Nama hanya boleh mengandung huruf, spasi, titik, strip, dan apostrof';
-    }
-    
-    return null;
-  }
-
-  // ======================
-  // NIM Validators
-  // ======================
-  
-  static String? validateNim(String? value) {
-    if (value == null || value.isEmpty) {
-      return ErrorMessages.nimRequired;
-    }
-    
-    if (!RegExp(ValidationPatterns.nim).hasMatch(value)) {
-      return ErrorMessages.nimInvalid;
+    // Check if contains only letters and spaces
+    if (!RegExp(r'^[a-zA-Z\s]+$').hasMatch(value)) {
+      return 'Nama hanya boleh mengandung huruf dan spasi';
     }
     
     return null;
   }
 
-  // ======================
-  // Phone Number Validators
-  // ======================
-  
+  // Phone number validation
   static String? validatePhone(String? value) {
     if (value == null || value.isEmpty) {
-      return null; // Phone is optional in most cases
+      return 'Nomor telepon wajib diisi';
     }
     
-    if (!RegExp(ValidationPatterns.phone).hasMatch(value)) {
+    // Remove any non-digit characters for validation
+    final cleanPhone = value.replaceAll(RegExp(r'[^\d]'), '');
+    
+    // Indonesian phone number pattern
+    if (!RegExp(r'^(08|628|\+628)[0-9]{8,12}$').hasMatch(cleanPhone)) {
       return 'Format nomor telepon tidak valid';
     }
     
     return null;
   }
 
-  static String? validateRequiredPhone(String? value) {
+  // NIM validation
+  static String? validateNim(String? value) {
     if (value == null || value.isEmpty) {
-      return 'Nomor telepon wajib diisi';
+      return 'NIM wajib diisi';
     }
     
-    return validatePhone(value);
-  }
-
-  // ======================
-  // University Related Validators
-  // ======================
-  
-  static String? validateUniversityName(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Nama universitas wajib diisi';
+    if (value.length < AppConfig.minNimLength) {
+      return 'NIM minimal ${AppConfig.minNimLength} digit';
     }
     
-    if (value.trim().length < 5) {
-      return 'Nama universitas minimal 5 karakter';
+    if (value.length > AppConfig.maxNimLength) {
+      return 'NIM maksimal ${AppConfig.maxNimLength} digit';
     }
     
-    if (value.trim().length > 200) {
-      return 'Nama universitas maksimal 200 karakter';
+    if (!RegExp(r'^[0-9]+$').hasMatch(value)) {
+      return 'NIM hanya boleh mengandung angka';
     }
     
     return null;
   }
 
-  static String? validateUniversityCode(String? value) {
+  // OTP validation
+  static String? validateOtp(String? value) {
     if (value == null || value.isEmpty) {
-      return 'Kode universitas wajib diisi';
+      return 'Kode OTP wajib diisi';
     }
     
-    if (!RegExp(ValidationPatterns.universityCode).hasMatch(value)) {
-      return 'Kode universitas harus 2-10 huruf besar';
+    if (value.length != 6) {
+      return 'Kode OTP harus 6 digit';
+    }
+    
+    if (!RegExp(r'^[0-9]+$').hasMatch(value)) {
+      return 'Kode OTP hanya boleh mengandung angka';
     }
     
     return null;
   }
 
-  static String? validateFacultyName(String? value) {
+  // Amount validation
+  static String? validateAmount(String? value, {double minAmount = 0}) {
     if (value == null || value.isEmpty) {
-      return 'Nama fakultas wajib diisi';
-    }
-    
-    if (value.trim().length < 3) {
-      return 'Nama fakultas minimal 3 karakter';
-    }
-    
-    if (value.trim().length > 150) {
-      return 'Nama fakultas maksimal 150 karakter';
-    }
-    
-    return null;
-  }
-
-  static String? validateProdiName(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Nama program studi wajib diisi';
-    }
-    
-    if (value.trim().length < 3) {
-      return 'Nama program studi minimal 3 karakter';
-    }
-    
-    if (value.trim().length > 150) {
-      return 'Nama program studi maksimal 150 karakter';
-    }
-    
-    return null;
-  }
-
-  // ======================
-  // Address Validators
-  // ======================
-  
-  static String? validateAddress(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Alamat wajib diisi';
-    }
-    
-    if (value.trim().length < 10) {
-      return 'Alamat minimal 10 karakter';
-    }
-    
-    if (value.trim().length > 500) {
-      return 'Alamat maksimal 500 karakter';
-    }
-    
-    return null;
-  }
-
-  // ======================
-  // URL Validators
-  // ======================
-  
-  static String? validateUrl(String? value) {
-    if (value == null || value.isEmpty) {
-      return null; // URL is usually optional
-    }
-    
-    try {
-      final uri = Uri.parse(value);
-      if (!uri.hasScheme || (!uri.scheme.startsWith('http'))) {
-        return 'URL harus dimulai dengan http:// atau https://';
-      }
-      return null;
-    } catch (e) {
-      return 'Format URL tidak valid';
-    }
-  }
-
-  static String? validateRequiredUrl(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'URL wajib diisi';
-    }
-    
-    return validateUrl(value);
-  }
-
-  // ======================
-  // Dropdown/Selection Validators
-  // ======================
-  
-  static String? validateRequired(String? value, String fieldName) {
-    if (value == null || value.isEmpty) {
-      return '$fieldName wajib dipilih';
-    }
-    return null;
-  }
-
-  static String? validateUniversity(String? value) {
-    return validateRequired(value, 'Universitas');
-  }
-
-  static String? validateFaculty(String? value) {
-    return validateRequired(value, 'Fakultas');
-  }
-
-  static String? validateProdi(String? value) {
-    return validateRequired(value, 'Program Studi');
-  }
-
-  static String? validateDegreeType(String? value) {
-    return validateRequired(value, 'Jenjang Pendidikan');
-  }
-
-  // ======================
-  // Financial Validators (Future Implementation)
-  // ======================
-  
-  static String? validateAmount(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Jumlah wajib diisi';
+      return 'Nominal wajib diisi';
     }
     
     // Remove currency formatting
-    final cleanValue = value.replaceAll(RegExp(r'[Rp\s\.]'), '').replaceAll(',', '.');
+    final cleanValue = value.replaceAll(RegExp(r'[^\d]'), '');
     
     final amount = double.tryParse(cleanValue);
     if (amount == null) {
-      return 'Format jumlah tidak valid';
+      return 'Format nominal tidak valid';
     }
     
-    if (amount <= 0) {
-      return 'Jumlah harus lebih dari 0';
-    }
-    
-    if (amount > 999999999999) {
-      return 'Jumlah terlalu besar';
+    if (amount < minAmount) {
+      return 'Nominal minimal ${formatCurrency(minAmount)}';
     }
     
     return null;
   }
 
-  static String? validateBudgetAmount(String? value) {
-    final amountValidation = validateAmount(value);
-    if (amountValidation != null) return amountValidation;
-    
-    // Additional budget-specific validation
-    final cleanValue = value!.replaceAll(RegExp(r'[Rp\s\.]'), '').replaceAll(',', '.');
-    final amount = double.parse(cleanValue);
-    
-    if (amount < 1000) {
-      return 'Anggaran minimal Rp 1.000';
-    }
-    
-    return null;
-  }
-
-  // ======================
-  // Date Validators
-  // ======================
-  
-  static String? validateDate(DateTime? value) {
-    if (value == null) {
-      return 'Tanggal wajib dipilih';
-    }
-    
-    return null;
-  }
-
-  static String? validateBirthDate(DateTime? value) {
-    if (value == null) {
-      return 'Tanggal lahir wajib dipilih';
-    }
-    
-    final now = DateTime.now();
-    final age = now.year - value.year;
-    
-    if (age < 16) {
-      return 'Umur minimal 16 tahun';
-    }
-    
-    if (age > 100) {
-      return 'Umur tidak valid';
-    }
-    
-    return null;
-  }
-
-  static String? validateFutureDate(DateTime? value) {
-    if (value == null) {
-      return 'Tanggal wajib dipilih';
-    }
-    
-    final now = DateTime.now();
-    if (value.isBefore(now)) {
-      return 'Tanggal harus di masa depan';
-    }
-    
-    return null;
-  }
-
-  static String? validatePastDate(DateTime? value) {
-    if (value == null) {
-      return 'Tanggal wajib dipilih';
-    }
-    
-    final now = DateTime.now();
-    if (value.isAfter(now)) {
-      return 'Tanggal harus di masa lalu';
-    }
-    
-    return null;
-  }
-
-  // ======================
-  // File Validators
-  // ======================
-  
-  static String? validateImageFile(String? filePath) {
-    if (filePath == null || filePath.isEmpty) {
-      return 'File gambar wajib dipilih';
-    }
-    
-    final extension = filePath.split('.').last.toLowerCase();
-    if (!['jpg', 'jpeg', 'png', 'webp'].contains(extension)) {
-      return 'Format file harus JPG, PNG, atau WebP';
-    }
-    
-    return null;
-  }
-
-  static String? validateDocumentFile(String? filePath) {
-    if (filePath == null || filePath.isEmpty) {
-      return 'File dokumen wajib dipilih';
-    }
-    
-    final extension = filePath.split('.').last.toLowerCase();
-    if (!['pdf', 'doc', 'docx'].contains(extension)) {
-      return 'Format file harus PDF, DOC, atau DOCX';
-    }
-    
-    return null;
-  }
-
-  // ======================
-  // Text Validators
-  // ======================
-  
-  static String? validateDescription(String? value) {
+  // Required field validation
+  static String? validateRequired(String? value, String fieldName) {
     if (value == null || value.isEmpty) {
-      return null; // Description is usually optional
+      return '$fieldName wajib diisi';
     }
-    
-    if (value.trim().length > 1000) {
-      return 'Deskripsi maksimal 1000 karakter';
-    }
-    
     return null;
   }
 
-  static String? validateRequiredDescription(String? value) {
+  // Password strength calculation
+  static PasswordStrength getPasswordStrength(String password) {
+    if (password.isEmpty) return PasswordStrength.none;
+    
+    int score = 0;
+    
+    // Length
+    if (password.length >= 8) score++;
+    if (password.length >= 12) score++;
+    
+    // Character variety
+    if (RegExp(r'[a-z]').hasMatch(password)) score++;
+    if (RegExp(r'[A-Z]').hasMatch(password)) score++;
+    if (RegExp(r'[0-9]').hasMatch(password)) score++;
+    if (RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password)) score++;
+    
+    // No common patterns
+    if (!RegExp(r'(.)\1{2,}').hasMatch(password)) score++; // No repeated chars
+    if (!RegExp(r'(123|abc|qwe)', caseSensitive: false).hasMatch(password)) score++; // No sequences
+    
+    if (score <= 2) return PasswordStrength.weak;
+    if (score <= 4) return PasswordStrength.medium;
+    if (score <= 6) return PasswordStrength.strong;
+    return PasswordStrength.veryStrong;
+  }
+
+  // Email availability check (would call API in real implementation)
+  static Future<String?> validateEmailAvailability(String email) async {
+    // This would make an API call to check if email is available
+    await Future.delayed(const Duration(milliseconds: 500)); // Simulate API call
+    
+    // For demo purposes, return null (available)
+    return null;
+  }
+
+  // Format currency for display
+  static String formatCurrency(double amount) {
+    return 'Rp ${amount.toStringAsFixed(0).replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]}.',
+    )}';
+  }
+
+  // Clean phone number for API submission
+  static String cleanPhoneNumber(String phone) {
+    String cleaned = phone.replaceAll(RegExp(r'[^\d]'), '');
+    
+    // Convert to standard format (08xxx)
+    if (cleaned.startsWith('628')) {
+      cleaned = '0${cleaned.substring(2)}';
+    } else if (cleaned.startsWith('+628')) {
+      cleaned = '0${cleaned.substring(3)}';
+    }
+    
+    return cleaned;
+  }
+
+  // Validate university selection
+  static String? validateUniversitySelection(String? value) {
     if (value == null || value.isEmpty) {
-      return 'Deskripsi wajib diisi';
+      return 'Universitas wajib dipilih';
     }
-    
-    if (value.trim().length < 10) {
-      return 'Deskripsi minimal 10 karakter';
-    }
-    
-    return validateDescription(value);
+    return null;
   }
 
-  static String? validateNotes(String? value) {
+  // Validate fakultas selection
+  static String? validateFakultasSelection(String? value) {
     if (value == null || value.isEmpty) {
-      return null; // Notes are optional
+      return 'Fakultas wajib dipilih';
     }
-    
-    if (value.trim().length > 500) {
-      return 'Catatan maksimal 500 karakter';
-    }
-    
     return null;
   }
 
-  // ======================
-  // Numeric Validators
-  // ======================
-  
-  static String? validateInteger(String? value, {int? min, int? max}) {
+  // Validate prodi selection
+  static String? validateProdiSelection(String? value) {
     if (value == null || value.isEmpty) {
-      return 'Angka wajib diisi';
-    }
-    
-    final number = int.tryParse(value);
-    if (number == null) {
-      return 'Format angka tidak valid';
-    }
-    
-    if (min != null && number < min) {
-      return 'Angka minimal $min';
-    }
-    
-    if (max != null && number > max) {
-      return 'Angka maksimal $max';
-    }
-    
-    return null;
-  }
-
-  static String? validateDouble(String? value, {double? min, double? max}) {
-    if (value == null || value.isEmpty) {
-      return 'Angka wajib diisi';
-    }
-    
-    final number = double.tryParse(value);
-    if (number == null) {
-      return 'Format angka tidak valid';
-    }
-    
-    if (min != null && number < min) {
-      return 'Angka minimal $min';
-    }
-    
-    if (max != null && number > max) {
-      return 'Angka maksimal $max';
-    }
-    
-    return null;
-  }
-
-  // ======================
-  // Combined Validators
-  // ======================
-  
-  static String? validateEmailOrPhone(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Email atau nomor telepon wajib diisi';
-    }
-    
-    // Check if it's email format
-    if (value.contains('@')) {
-      return validateEmail(value);
-    } else {
-      return validatePhone(value);
-    }
-  }
-
-  // ======================
-  // Custom Business Logic Validators
-  // ======================
-  
-  static String? validateUniversityRequest(Map<String, dynamic> data) {
-    final errors = <String>[];
-    
-    if (validateUniversityName(data['university_name']) != null) {
-      errors.add('Nama universitas tidak valid');
-    }
-    
-    if (validateUniversityCode(data['university_code']) != null) {
-      errors.add('Kode universitas tidak valid');
-    }
-    
-    if (validateAddress(data['university_address']) != null) {
-      errors.add('Alamat universitas tidak valid');
-    }
-    
-    if (validateName(data['requester_name']) != null) {
-      errors.add('Nama pemohon tidak valid');
-    }
-    
-    if (validateAcademicEmail(data['email']) != null) {
-      errors.add('Email akademik tidak valid');
-    }
-    
-    if (validateNim(data['nim']) != null) {
-      errors.add('NIM tidak valid');
-    }
-    
-    if (errors.isNotEmpty) {
-      return errors.join(', ');
-    }
-    
-    return null;
-  }
-
-  // ======================
-  // Utility Methods
-  // ======================
-  
-  static bool isValidEmail(String email) {
-    return validateEmail(email) == null;
-  }
-  
-  static bool isValidAcademicEmail(String email) {
-    return validateAcademicEmail(email) == null;
-  }
-  
-  static bool isValidPassword(String password) {
-    return validatePassword(password) == null;
-  }
-  
-  static bool isValidNim(String nim) {
-    return validateNim(nim) == null;
-  }
-  
-  static bool isValidPhone(String phone) {
-    return validatePhone(phone) == null;
-  }
-  
-  static bool isValidUrl(String url) {
-    return validateUrl(url) == null;
-  }
-
-  // ======================
-  // Form Validation Helpers
-  // ======================
-  
-  static Map<String, String?> validateLoginForm({
-    required String email,
-    required String password,
-  }) {
-    return {
-      'email': validateAcademicEmail(email),
-      'password': validatePassword(password),
-    };
-  }
-
-  static Map<String, String?> validateRegisterForm({
-    required String name,
-    required String email,
-    required String nim,
-    required String password,
-    required String confirmPassword,
-    required String university,
-    required String faculty,
-    required String prodi,
-  }) {
-    return {
-      'name': validateName(name),
-      'email': validateAcademicEmail(email),
-      'nim': validateNim(nim),
-      'password': validatePassword(password),
-      'confirm_password': validatePasswordConfirmation(confirmPassword, password),
-      'university': validateUniversity(university),
-      'faculty': validateFaculty(faculty),
-      'prodi': validateProdi(prodi),
-    };
-  }
-
-  static Map<String, String?> validateUniversityRequestForm({
-    required String universityName,
-    required String universityCode,
-    required String universityAddress,
-    String? universityWebsite,
-    required String requesterName,
-    required String email,
-    required String nim,
-  }) {
-    return {
-      'university_name': validateUniversityName(universityName),
-      'university_code': validateUniversityCode(universityCode),
-      'university_address': validateAddress(universityAddress),
-      'university_website': universityWebsite?.isNotEmpty == true 
-          ? validateUrl(universityWebsite) : null,
-      'requester_name': validateName(requesterName),
-      'email': validateAcademicEmail(email),
-      'nim': validateNim(nim),
-    };
-  }
-
-  // ======================
-  // Real-time Validation Helpers
-  // ======================
-  
-  static bool hasFormErrors(Map<String, String?> validationResults) {
-    return validationResults.values.any((error) => error != null);
-  }
-  
-  static List<String> getFormErrors(Map<String, String?> validationResults) {
-    return validationResults.values
-        .where((error) => error != null)
-        .cast<String>()
-        .toList();
-  }
-  
-  static String? getFirstFormError(Map<String, String?> validationResults) {
-    for (final error in validationResults.values) {
-      if (error != null) return error;
+      return 'Program studi wajib dipilih';
     }
     return null;
+  }
+}
+
+enum PasswordStrength {
+  none,
+  weak,
+  medium,
+  strong,
+  veryStrong,
+}
+
+extension PasswordStrengthExtension on PasswordStrength {
+  String get label {
+    switch (this) {
+      case PasswordStrength.none:
+        return '';
+      case PasswordStrength.weak:
+        return 'Lemah';
+      case PasswordStrength.medium:
+        return 'Sedang';
+      case PasswordStrength.strong:
+        return 'Kuat';
+      case PasswordStrength.veryStrong:
+        return 'Sangat Kuat';
+    }
+  }
+
+  double get progress {
+    switch (this) {
+      case PasswordStrength.none:
+        return 0.0;
+      case PasswordStrength.weak:
+        return 0.25;
+      case PasswordStrength.medium:
+        return 0.5;
+      case PasswordStrength.strong:
+        return 0.75;
+      case PasswordStrength.veryStrong:
+        return 1.0;
+    }
+  }
+
+  Color get color {
+    switch (this) {
+      case PasswordStrength.none:
+        return Colors.grey;
+      case PasswordStrength.weak:
+        return Colors.red;
+      case PasswordStrength.medium:
+        return Colors.orange;
+      case PasswordStrength.strong:
+        return Colors.blue;
+      case PasswordStrength.veryStrong:
+        return Colors.green;
+    }
   }
 }

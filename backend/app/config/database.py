@@ -13,7 +13,7 @@ def init_db():
     """Initialize database connection"""
     try:
         Database.client = MongoClient(
-            Config.MONGODB_URI,
+            Config.MONGODB_URL,
             maxPoolSize=50,
             minPoolSize=10,
             serverSelectionTimeoutMS=5000,
@@ -24,7 +24,7 @@ def init_db():
         
         # Test connection
         Database.client.admin.command('ping')
-        Database.db = Database.client[Config.MONGODB_DB_NAME]
+        Database.db = Database.client[Config.DATABASE_NAME]
         
         logger.info("Koneksi MongoDB berhasil")
         
@@ -50,25 +50,51 @@ def create_indexes():
         db.universities.create_index("kode", unique=True)
         db.universities.create_index("nama")
         db.universities.create_index("status_aktif")
+        db.universities.create_index("created_at")
         
         # Fakultas indexes
         db.fakultas.create_index("kode")
         db.fakultas.create_index("university_id")
         db.fakultas.create_index([("university_id", 1), ("kode", 1)], unique=True)
+        db.fakultas.create_index("nama")
         
         # Program Studi indexes
         db.program_studi.create_index("kode")
         db.program_studi.create_index("fakultas_id")
         db.program_studi.create_index([("fakultas_id", 1), ("kode", 1)], unique=True)
+        db.program_studi.create_index("nama")
+        db.program_studi.create_index("jenjang")
         
         # Users indexes
         db.users.create_index("email", unique=True)
-        db.users.create_index("nim", unique=True, sparse=True)
+        db.users.create_index("status")
+        db.users.create_index("role")
+        db.users.create_index("university_id")
+        db.users.create_index("fakultas_id")
+        db.users.create_index("prodi_id")
+        db.users.create_index("created_at")
+        db.users.create_index("last_login")
+        db.users.create_index("otp_code", sparse=True)
+        db.users.create_index("otp_expires", sparse=True)
         
         # University requests indexes
         db.university_requests.create_index("email")
         db.university_requests.create_index("status")
         db.university_requests.create_index("created_at")
+        db.university_requests.create_index("processed_at", sparse=True)
+        
+        # Admin activities indexes
+        db.admin_activities.create_index("admin_id")
+        db.admin_activities.create_index("action")
+        db.admin_activities.create_index("created_at")
+        db.admin_activities.create_index("target_id", sparse=True)
+        
+        # System settings indexes
+        db.system_settings.create_index("key", unique=True)
+        
+        # System logs indexes
+        db.system_logs.create_index("level")
+        db.system_logs.create_index("created_at")
         
         logger.info("Database indexes created successfully")
         
@@ -80,3 +106,17 @@ async def close_db():
     if Database.client:
         Database.client.close()
         logger.info("Database connection closed")
+
+def get_collection(collection_name: str):
+    """Get specific collection"""
+    db = get_db()
+    return db[collection_name]
+
+def check_db_health():
+    """Check database health"""
+    try:
+        db = get_db()
+        result = db.command("ping")
+        return {"status": "healthy", "result": result}
+    except Exception as e:
+        return {"status": "unhealthy", "error": str(e)}

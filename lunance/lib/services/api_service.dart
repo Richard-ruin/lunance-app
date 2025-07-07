@@ -1,505 +1,438 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:dio/dio.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:http/http.dart' as http;
+
 import '../config/api_config.dart';
 import '../config/app_config.dart';
 import '../models/base_model.dart';
-import '../services/storage_service.dart';
-import '../utils/constants.dart';
+import '../models/user_model.dart';
+import '../models/university_model.dart';
+import 'storage_service.dart';
 
 class ApiService {
-  late final Dio _dio;
-  late final StorageService _storageService;
-  final Connectivity _connectivity = Connectivity();
+  static final ApiService _instance = ApiService._internal();
+  factory ApiService() => _instance;
+  ApiService._internal();
 
-  // Request interceptor for adding auth headers
-  late final InterceptorsWrapper _authInterceptor;
-  
-  // Retry interceptor for handling retries
-  late final InterceptorsWrapper _retryInterceptor;
+  late final http.Client _client;
 
-  ApiService(this._storageService) {
-    _initializeDio();
-    _setupInterceptors();
+  void init() {
+    _client = http.Client();
   }
 
-  void _initializeDio() {
-    _dio = Dio(BaseOptions(
-      baseUrl: ApiConfig.baseUrl,
-      connectTimeout: AppConfig.apiTimeout,
-      receiveTimeout: AppConfig.apiTimeout,
-      sendTimeout: AppConfig.uploadTimeout,
-      headers: ApiConfig.defaultHeaders,
-      responseType: ResponseType.json,
-      validateStatus: (status) => status != null && status < 500,
-    ));
+  void dispose() {
+    _client.close();
   }
 
-  void _setupInterceptors() {
-    // Auth Interceptor
-    _authInterceptor = InterceptorsWrapper(
-      onRequest: (options, handler) async {
-        final token = _storageService.getAccessToken();
-        if (token != null && token.isNotEmpty) {
-          options.headers['Authorization'] = '${ApiConfig.bearerTokenType} $token';
-        }
-        handler.next(options);
-      },
-      onError: (error, handler) async {
-        if (error.response?.statusCode == ApiConfig.statusUnauthorized) {
-          // Try to refresh token
-          final refreshed = await _refreshToken();
-          if (refreshed) {
-            // Retry original request with new token
-            final options = error.requestOptions;
-            final token = _storageService.getAccessToken();
-            if (token != null) {
-              options.headers['Authorization'] = '${ApiConfig.bearerTokenType} $token';
-            }
-            
-            try {
-              final response = await _dio.fetch(options);
-              handler.resolve(response);
-            } catch (e) {
-              handler.next(error);
-            }
-          } else {
-            // Refresh failed, clear auth data and redirect to login
-            await _storageService.clearAuthData();
-            handler.next(error);
-          }
-        } else {
-          handler.next(error);
-        }
-      },
-    );
-
-    // Retry Interceptor
-    _retryInterceptor = InterceptorsWrapper(
-      onError: (error, handler) async {
-        final statusCode = error.response?.statusCode;
-        if (statusCode != null && 
-            ApiConfig.isRetryableError(statusCode) && 
-            error.requestOptions.extra['retryCount'] == null) {
-          
-          error.requestOptions.extra['retryCount'] = 0;
-          await _retryRequest(error, handler);
-        } else {
-          handler.next(error);
-        }
-      },
-    );
-
-    _dio.interceptors.addAll([
-      _authInterceptor,
-      _retryInterceptor,
-      if (AppConfig.isDebug) LogInterceptor(
-        requestBody: true,
-        responseBody: true,
-        error: true,
-        requestHeader: true,
-        responseHeader: false,
-      ),
-    ]);
-  }
-
-  Future<void> _retryRequest(DioException error, ErrorInterceptorHandler handler) async {
-    final retryCount = error.requestOptions.extra['retryCount'] as int;
+  // Get headers with auth token
+  Map<String, String> _getHeaders({bool includeAuth = true}) {
+    final headers = Map<String, String>.from(ApiConfig.defaultHeaders);
     
-    if (retryCount < ApiConfig.maxRetries) {
-      error.requestOptions.extra['retryCount'] = retryCount + 1;
-      
-      // Wait before retry with exponential backoff
-      final delay = Duration(
-        milliseconds: ApiConfig.retryDelay.inMilliseconds * (retryCount + 1),
-      );
-      await Future.delayed(delay);
-      
-      try {
-        final response = await _dio.fetch(error.requestOptions);
-        handler.resolve(response);
-      } catch (e) {
-        if (e is DioException) {
-          await _retryRequest(e, handler);
-        } else {
-          handler.next(error);
-        }
+    if (includeAuth) {
+      final token = StorageService.getAuthToken();
+      if (token != null) {
+        headers[ApiConfig.authorizationHeader] = '${ApiConfig.bearerPrefix}$token';
       }
-    } else {
-      handler.next(error);
     }
+    
+    return headers;
   }
 
-  Future<bool> _refreshToken() async {
+  // Generic HTTP request method
+  Future<ApiResponse<T>> _request<T>({
+    required String method,
+    required String endpoint,
+    Map<String, String>? pathParams,
+    Map<String, dynamic>? queryParams,
+    Map<String, dynamic>? body,
+    bool includeAuth = true,
+    T Function(Map<String, dynamic>)? fromJson,
+  }) async {
     try {
-      final refreshToken = _storageService.getRefreshToken();
-      if (refreshToken == null || refreshToken.isEmpty) {
-        return false;
+      // Build URL
+      final url = Uri.parse(ApiConfig.buildUrl(endpoint, pathParams));
+      final finalUrl = queryParams != null && queryParams.isNotEmpty
+          ? url.replace(queryParameters: queryParams.map((k, v) => MapEntry(k, v.toString())))
+          : url;
+
+      // Prepare headers
+      final headers = _getHeaders(includeAuth: includeAuth);
+
+      // Prepare request
+      late http.Response response;
+      final jsonBody = body != null ? json.encode(body) : null;
+
+      // Execute request based on method
+      switch (method.toUpperCase()) {
+        case 'GET':
+          response = await _client.get(finalUrl, headers: headers)
+              .timeout(Duration(seconds: AppConfig.apiTimeout));
+          break;
+        case 'POST':
+          response = await _client.post(finalUrl, headers: headers, body: jsonBody)
+              .timeout(Duration(seconds: AppConfig.apiTimeout));
+          break;
+        case 'PUT':
+          response = await _client.put(finalUrl, headers: headers, body: jsonBody)
+              .timeout(Duration(seconds: AppConfig.apiTimeout));
+          break;
+        case 'PATCH':
+          response = await _client.patch(finalUrl, headers: headers, body: jsonBody)
+              .timeout(Duration(seconds: AppConfig.apiTimeout));
+          break;
+        case 'DELETE':
+          response = await _client.delete(finalUrl, headers: headers)
+              .timeout(Duration(seconds: AppConfig.apiTimeout));
+          break;
+        default:
+          throw ApiException('Unsupported HTTP method: $method');
       }
 
-      final response = await _dio.post(
-        ApiConfig.refreshToken,
-        data: {'refresh_token': refreshToken},
-        options: Options(
-          headers: {...ApiConfig.defaultHeaders},
-        ),
-      );
-
-      if (response.statusCode == ApiConfig.statusOk && response.data['success'] == true) {
-        final data = response.data['data'];
-        await _storageService.setAccessToken(data['access_token']);
-        if (data['refresh_token'] != null) {
-          await _storageService.setRefreshToken(data['refresh_token']);
-        }
-        return true;
-      }
-      return false;
+      // Parse response
+      return _parseResponse<T>(response, fromJson);
+    } on SocketException {
+      throw ApiException('Tidak ada koneksi internet');
+    } on HttpException {
+      throw ApiException('Terjadi kesalahan koneksi');
+    } on FormatException {
+      throw ApiException('Format respons tidak valid');
     } catch (e) {
-      return false;
+      if (e is ApiException) rethrow;
+      throw ApiException('Terjadi kesalahan: ${e.toString()}');
     }
   }
 
-  // ======================
-  // HTTP Methods
-  // ======================
+  // Parse HTTP response
+  ApiResponse<T> _parseResponse<T>(
+    http.Response response,
+    T Function(Map<String, dynamic>)? fromJson,
+  ) {
+    final statusCode = response.statusCode;
+    final responseBody = response.body;
 
+    // Try to parse JSON response
+    Map<String, dynamic> jsonResponse;
+    try {
+      jsonResponse = json.decode(responseBody) as Map<String, dynamic>;
+    } catch (e) {
+      throw ApiException('Respons server tidak valid');
+    }
+
+    // Check if request was successful
+    if (statusCode >= 200 && statusCode < 300) {
+      return ApiResponse<T>.fromJson(jsonResponse, fromJson);
+    } else {
+      // Handle error response
+      final errorResponse = ApiResponse<T>.fromJson(jsonResponse, fromJson);
+      throw ApiException(
+        errorResponse.message,
+        statusCode: statusCode,
+        errors: errorResponse.errors,
+      );
+    }
+  }
+
+  // Convenience methods for HTTP verbs
   Future<ApiResponse<T>> get<T>(
     String endpoint, {
-    Map<String, dynamic>? queryParameters,
-    Map<String, String>? headers,
-    T Function(dynamic)? fromJson,
-    bool useCache = false,
-    Duration? cacheExpiry,
-  }) async {
-    await _checkConnectivity();
-    
-    // Check cache first if enabled
-    if (useCache && ApiConfig.isCacheableEndpoint(endpoint)) {
-      final cacheKey = _getCacheKey(endpoint, queryParameters);
-      final cachedData = _storageService.getCache<Map<String, dynamic>>(cacheKey);
-      if (cachedData != null) {
-        return ApiResponse<T>.fromJson(cachedData, fromJson);
-      }
-    }
-
-    try {
-      final response = await _dio.get(
-        endpoint,
-        queryParameters: queryParameters,
-        options: Options(headers: headers),
-      );
-
-      final apiResponse = _handleResponse<T>(response, fromJson);
-      
-      // Cache successful responses if enabled
-      if (useCache && apiResponse.success && ApiConfig.isCacheableEndpoint(endpoint)) {
-        final cacheKey = _getCacheKey(endpoint, queryParameters);
-        await _storageService.setCache(
-          cacheKey,
-          response.data,
-          expiry: cacheExpiry ?? ApiConfig.cacheExpiry,
-        );
-      }
-
-      return apiResponse;
-    } catch (e) {
-      return _handleError<T>(e);
-    }
+    Map<String, String>? pathParams,
+    Map<String, dynamic>? queryParams,
+    bool includeAuth = true,
+    T Function(Map<String, dynamic>)? fromJson,
+  }) {
+    return _request<T>(
+      method: 'GET',
+      endpoint: endpoint,
+      pathParams: pathParams,
+      queryParams: queryParams,
+      includeAuth: includeAuth,
+      fromJson: fromJson,
+    );
   }
 
   Future<ApiResponse<T>> post<T>(
     String endpoint, {
-    dynamic data,
-    Map<String, dynamic>? queryParameters,
-    Map<String, String>? headers,
-    T Function(dynamic)? fromJson,
-  }) async {
-    await _checkConnectivity();
-
-    try {
-      final response = await _dio.post(
-        endpoint,
-        data: data,
-        queryParameters: queryParameters,
-        options: Options(headers: headers),
-      );
-
-      return _handleResponse<T>(response, fromJson);
-    } catch (e) {
-      return _handleError<T>(e);
-    }
+    Map<String, String>? pathParams,
+    Map<String, dynamic>? body,
+    bool includeAuth = true,
+    T Function(Map<String, dynamic>)? fromJson,
+  }) {
+    return _request<T>(
+      method: 'POST',
+      endpoint: endpoint,
+      pathParams: pathParams,
+      body: body,
+      includeAuth: includeAuth,
+      fromJson: fromJson,
+    );
   }
 
   Future<ApiResponse<T>> put<T>(
     String endpoint, {
-    dynamic data,
-    Map<String, dynamic>? queryParameters,
-    Map<String, String>? headers,
-    T Function(dynamic)? fromJson,
-  }) async {
-    await _checkConnectivity();
-
-    try {
-      final response = await _dio.put(
-        endpoint,
-        data: data,
-        queryParameters: queryParameters,
-        options: Options(headers: headers),
-      );
-
-      return _handleResponse<T>(response, fromJson);
-    } catch (e) {
-      return _handleError<T>(e);
-    }
+    Map<String, String>? pathParams,
+    Map<String, dynamic>? body,
+    bool includeAuth = true,
+    T Function(Map<String, dynamic>)? fromJson,
+  }) {
+    return _request<T>(
+      method: 'PUT',
+      endpoint: endpoint,
+      pathParams: pathParams,
+      body: body,
+      includeAuth: includeAuth,
+      fromJson: fromJson,
+    );
   }
 
   Future<ApiResponse<T>> patch<T>(
     String endpoint, {
-    dynamic data,
-    Map<String, dynamic>? queryParameters,
-    Map<String, String>? headers,
-    T Function(dynamic)? fromJson,
-  }) async {
-    await _checkConnectivity();
-
-    try {
-      final response = await _dio.patch(
-        endpoint,
-        data: data,
-        queryParameters: queryParameters,
-        options: Options(headers: headers),
-      );
-
-      return _handleResponse<T>(response, fromJson);
-    } catch (e) {
-      return _handleError<T>(e);
-    }
+    Map<String, String>? pathParams,
+    Map<String, dynamic>? body,
+    bool includeAuth = true,
+    T Function(Map<String, dynamic>)? fromJson,
+  }) {
+    return _request<T>(
+      method: 'PATCH',
+      endpoint: endpoint,
+      pathParams: pathParams,
+      body: body,
+      includeAuth: includeAuth,
+      fromJson: fromJson,
+    );
   }
 
   Future<ApiResponse<T>> delete<T>(
     String endpoint, {
-    dynamic data,
-    Map<String, dynamic>? queryParameters,
-    Map<String, String>? headers,
-    T Function(dynamic)? fromJson,
-  }) async {
-    await _checkConnectivity();
+    Map<String, String>? pathParams,
+    bool includeAuth = true,
+    T Function(Map<String, dynamic>)? fromJson,
+  }) {
+    return _request<T>(
+      method: 'DELETE',
+      endpoint: endpoint,
+      pathParams: pathParams,
+      includeAuth: includeAuth,
+      fromJson: fromJson,
+    );
+  }
 
-    try {
-      final response = await _dio.delete(
-        endpoint,
-        data: data,
-        queryParameters: queryParameters,
-        options: Options(headers: headers),
-      );
+  // Auth API methods
+  Future<ApiResponse<AuthResponse>> login(LoginRequest request) {
+    return post<AuthResponse>(
+      ApiConfig.loginEndpoint,
+      body: request.toJson(),
+      includeAuth: false,
+      fromJson: AuthResponse.fromJson,
+    );
+  }
 
-      return _handleResponse<T>(response, fromJson);
-    } catch (e) {
-      return _handleError<T>(e);
+  // Note: Removed the old register method since we're using multi-step registration now
+  // All registration is handled through AuthService with step-by-step endpoints
+
+  Future<ApiResponse<Map<String, dynamic>>> logout() {
+    return post<Map<String, dynamic>>(
+      ApiConfig.logoutEndpoint,
+      fromJson: (json) => json,
+    );
+  }
+
+  Future<ApiResponse<User>> getProfile() {
+    return get<User>(
+      ApiConfig.profileEndpoint,
+      fromJson: User.fromJson,
+    );
+  }
+
+  Future<ApiResponse<Map<String, dynamic>>> forgotPassword(ForgotPasswordRequest request) {
+    return post<Map<String, dynamic>>(
+      ApiConfig.forgotPasswordEndpoint,
+      body: request.toJson(),
+      includeAuth: false,
+      fromJson: (json) => json,
+    );
+  }
+
+  // University API methods
+  Future<ApiResponse<UniversitiesResponse>> getUniversities({
+    int page = 1,
+    int limit = 10,
+    String? search,
+  }) {
+    final queryParams = <String, dynamic>{
+      'page': page,
+      'limit': limit,
+    };
+    
+    if (search != null && search.isNotEmpty) {
+      queryParams['search'] = search;
     }
+
+    return get<UniversitiesResponse>(
+      ApiConfig.universitiesEndpoint,
+      queryParams: queryParams,
+      fromJson: UniversitiesResponse.fromJson,
+    );
   }
 
-  // ======================
-  // File Upload Methods
-  // ======================
+  Future<ApiResponse<University>> getUniversityById(String id) {
+    return get<University>(
+      ApiConfig.universityDetailEndpoint,
+      pathParams: {'id': id},
+      fromJson: University.fromJson,
+    );
+  }
 
-  Future<ApiResponse<T>> uploadFile<T>(
-    String endpoint,
-    File file, {
-    String fieldName = 'file',
-    Map<String, dynamic>? data,
-    T Function(dynamic)? fromJson,
-    void Function(int, int)? onSendProgress,
-  }) async {
-    await _checkConnectivity();
+  Future<ApiResponse<List<Fakultas>>> getUniversityFakultas(String universityId) {
+    return get<List<Fakultas>>(
+      ApiConfig.universityFakultasEndpoint,
+      pathParams: {'id': universityId},
+      fromJson: (json) => (json as List)
+          .map((item) => Fakultas.fromJson(item as Map<String, dynamic>))
+          .toList(),
+    );
+  }
 
-    try {
-      final fileName = file.path.split('/').last;
-      final formData = FormData.fromMap({
-        fieldName: await MultipartFile.fromFile(file.path, filename: fileName),
-        ...?data,
-      });
+  Future<ApiResponse<List<ProgramStudi>>> getFakultasProdi(String fakultasId) {
+    return get<List<ProgramStudi>>(
+      ApiConfig.fakultasProdiEndpoint,
+      pathParams: {'id': fakultasId},
+      fromJson: (json) => (json as List)
+          .map((item) => ProgramStudi.fromJson(item as Map<String, dynamic>))
+          .toList(),
+    );
+  }
 
-      final response = await _dio.post(
-        endpoint,
-        data: formData,
-        options: Options(
-          headers: ApiConfig.multipartHeaders,
-          sendTimeout: AppConfig.uploadTimeout,
-        ),
-        onSendProgress: onSendProgress,
-      );
+  Future<ApiResponse<UniversityRequest>> createUniversityRequest(CreateUniversityRequest request) {
+    return post<UniversityRequest>(
+      ApiConfig.universityRequestEndpoint,
+      body: request.toJson(),
+      fromJson: UniversityRequest.fromJson,
+    );
+  }
 
-      return _handleResponse<T>(response, fromJson);
-    } catch (e) {
-      return _handleError<T>(e);
+  Future<ApiResponse<List<University>>> searchUniversities(String query) {
+    return get<List<University>>(
+      ApiConfig.universitySearchEndpoint,
+      queryParams: {'q': query},
+      fromJson: (json) => (json as List)
+          .map((item) => University.fromJson(item as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  // Admin API methods
+  Future<ApiResponse<List<UniversityRequest>>> getUniversityRequests({
+    int page = 1,
+    int limit = 10,
+    RequestStatus? status,
+  }) {
+    final queryParams = <String, dynamic>{
+      'page': page,
+      'limit': limit,
+    };
+    
+    if (status != null) {
+      queryParams['status'] = status.value;
     }
+
+    return get<List<UniversityRequest>>(
+      ApiConfig.adminUniversityRequestsEndpoint,
+      queryParams: queryParams,
+      fromJson: (json) => (json as List)
+          .map((item) => UniversityRequest.fromJson(item as Map<String, dynamic>))
+          .toList(),
+    );
   }
 
-  Future<ApiResponse<T>> uploadMultipleFiles<T>(
-    String endpoint,
-    List<File> files, {
-    String fieldName = 'files',
-    Map<String, dynamic>? data,
-    T Function(dynamic)? fromJson,
-    void Function(int, int)? onSendProgress,
-  }) async {
-    await _checkConnectivity();
+  Future<ApiResponse<UniversityRequest>> approveUniversityRequest(String requestId, {String? note}) {
+    final body = <String, dynamic>{};
+    if (note != null) body['catatan_admin'] = note;
 
-    try {
-      final multipartFiles = <MultipartFile>[];
-      for (final file in files) {
-        final fileName = file.path.split('/').last;
-        multipartFiles.add(
-          await MultipartFile.fromFile(file.path, filename: fileName),
-        );
-      }
+    return post<UniversityRequest>(
+      ApiConfig.adminApproveRequestEndpoint,
+      pathParams: {'id': requestId},
+      body: body,
+      fromJson: UniversityRequest.fromJson,
+    );
+  }
 
-      final formData = FormData.fromMap({
-        fieldName: multipartFiles,
-        ...?data,
-      });
+  Future<ApiResponse<UniversityRequest>> rejectUniversityRequest(String requestId, {String? note}) {
+    final body = <String, dynamic>{};
+    if (note != null) body['catatan_admin'] = note;
 
-      final response = await _dio.post(
-        endpoint,
-        data: formData,
-        options: Options(
-          headers: ApiConfig.multipartHeaders,
-          sendTimeout: AppConfig.uploadTimeout,
-        ),
-        onSendProgress: onSendProgress,
-      );
+    return post<UniversityRequest>(
+      ApiConfig.adminRejectRequestEndpoint,
+      pathParams: {'id': requestId},
+      body: body,
+      fromJson: UniversityRequest.fromJson,
+    );
+  }
 
-      return _handleResponse<T>(response, fromJson);
-    } catch (e) {
-      return _handleError<T>(e);
+  Future<ApiResponse<Map<String, dynamic>>> getAdminStatistics() {
+    return get<Map<String, dynamic>>(
+      ApiConfig.adminStatisticsEndpoint,
+      fromJson: (json) => json,
+    );
+  }
+
+  // Health check
+  Future<ApiResponse<Map<String, dynamic>>> healthCheck() {
+    return get<Map<String, dynamic>>(
+      ApiConfig.healthCheckEndpoint,
+      includeAuth: false,
+      fromJson: (json) => json,
+    );
+  }
+}
+
+// Custom exception for API errors
+class ApiException implements Exception {
+  final String message;
+  final int? statusCode;
+  final ErrorDetails? errors;
+
+  const ApiException(
+    this.message, {
+    this.statusCode,
+    this.errors,
+  });
+
+  @override
+  String toString() {
+    return 'ApiException: $message';
+  }
+
+  // Check if it's a specific type of error
+  bool get isNetworkError => statusCode == null;
+  bool get isClientError => statusCode != null && statusCode! >= 400 && statusCode! < 500;
+  bool get isServerError => statusCode != null && statusCode! >= 500;
+  bool get isUnauthorized => statusCode == 401;
+  bool get isForbidden => statusCode == 403;
+  bool get isNotFound => statusCode == 404;
+  bool get isValidationError => statusCode == 422 || statusCode == 400;
+
+  // Get user-friendly error message
+  String get userMessage {
+    switch (statusCode) {
+      case 401:
+        return 'Sesi Anda telah habis, silakan login kembali';
+      case 403:
+        return 'Anda tidak memiliki akses untuk melakukan aksi ini';
+      case 404:
+        return 'Data yang dicari tidak ditemukan';
+      case 422:
+      case 400:
+        return message;
+      case 429:
+        return 'Terlalu banyak permintaan, silakan coba lagi nanti';
+      case 500:
+        return 'Terjadi kesalahan server, silakan coba lagi';
+      case 502:
+        return 'Server sedang tidak tersedia';
+      case 503:
+        return 'Layanan sedang dalam pemeliharaan';
+      default:
+        return message.isNotEmpty ? message : 'Terjadi kesalahan tidak terduga';
     }
-  }
-
-  // ======================
-  // Helper Methods
-  // ======================
-
-  ApiResponse<T> _handleResponse<T>(Response response, T Function(dynamic)? fromJson) {
-    if (ApiConfig.isSuccessStatusCode(response.statusCode ?? 0)) {
-      return ApiResponse<T>.fromJson(response.data, fromJson);
-    } else {
-      final errorData = response.data;
-      return ApiResponse<T>(
-        success: false,
-        message: errorData['message'] ?? ErrorMessages.serverError,
-        timestamp: DateTime.now().toIso8601String(),
-        errors: errorData['errors'],
-      );
-    }
-  }
-
-  ApiResponse<T> _handleError<T>(dynamic error) {
-    if (error is DioException) {
-      switch (error.type) {
-        case DioExceptionType.connectionTimeout:
-        case DioExceptionType.sendTimeout:
-        case DioExceptionType.receiveTimeout:
-          return ApiResponse<T>(
-            success: false,
-            message: ErrorMessages.timeoutError,
-            timestamp: DateTime.now().toIso8601String(),
-          );
-        case DioExceptionType.connectionError:
-          return ApiResponse<T>(
-            success: false,
-            message: ErrorMessages.networkError,
-            timestamp: DateTime.now().toIso8601String(),
-          );
-        case DioExceptionType.badResponse:
-          final response = error.response;
-          if (response?.data != null) {
-            return ApiResponse<T>.fromJson(response!.data, null);
-          }
-          return ApiResponse<T>(
-            success: false,
-            message: ErrorMessages.serverError,
-            timestamp: DateTime.now().toIso8601String(),
-          );
-        default:
-          return ApiResponse<T>(
-            success: false,
-            message: ErrorMessages.unknownError,
-            timestamp: DateTime.now().toIso8601String(),
-          );
-      }
-    } else {
-      return ApiResponse<T>(
-        success: false,
-        message: error.toString(),
-        timestamp: DateTime.now().toIso8601String(),
-      );
-    }
-  }
-
-  Future<void> _checkConnectivity() async {
-    final connectivityResult = await _connectivity.checkConnectivity();
-    if (connectivityResult == ConnectivityResult.none) {
-      throw DioException(
-        requestOptions: RequestOptions(path: ''),
-        type: DioExceptionType.connectionError,
-        message: ErrorMessages.networkError,
-      );
-    }
-  }
-
-  String _getCacheKey(String endpoint, Map<String, dynamic>? queryParameters) {
-    final uri = Uri(path: endpoint, queryParameters: queryParameters?.map(
-      (key, value) => MapEntry(key, value.toString()),
-    ));
-    return 'api_cache_${uri.toString().hashCode}';
-  }
-
-  // ======================
-  // Health Check
-  // ======================
-
-  Future<bool> checkHealth() async {
-    try {
-      final response = await _dio.get('/health');
-      return response.statusCode == ApiConfig.statusOk;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  // ======================
-  // Cache Management
-  // ======================
-
-  Future<void> clearCache() async {
-    await _storageService.clearCache();
-  }
-
-  Future<void> clearExpiredCache() async {
-    await _storageService.clearExpiredCache();
-  }
-
-  // ======================
-  // Configuration
-  // ======================
-
-  void updateBaseUrl(String baseUrl) {
-    _dio.options.baseUrl = baseUrl;
-  }
-
-  void updateTimeout(Duration timeout) {
-    _dio.options.connectTimeout = timeout;
-    _dio.options.receiveTimeout = timeout;
-  }
-
-  // ======================
-  // Cleanup
-  // ======================
-
-  void dispose() {
-    _dio.close();
   }
 }

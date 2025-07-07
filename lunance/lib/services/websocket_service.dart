@@ -1,434 +1,370 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'dart:developer';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
+
 import '../config/websocket_config.dart';
-import '../services/storage_service.dart';
-import '../utils/constants.dart';
+import 'storage_service.dart';
 
 class WebSocketService {
-  final StorageService _storageService;
-  
+  static final WebSocketService _instance = WebSocketService._internal();
+  factory WebSocketService() => _instance;
+  WebSocketService._internal();
+
   WebSocketChannel? _channel;
-  StreamSubscription? _subscription;
-  Timer? _heartbeatTimer;
   Timer? _reconnectTimer;
-  
+  Timer? _pingTimer;
   int _reconnectAttempts = 0;
-  bool _isConnected = false;
   bool _isConnecting = false;
-  bool _isDisposed = false;
-  bool _manualDisconnect = false;
+  bool _shouldReconnect = true;
 
   // Stream controllers for different event types
-  final StreamController<Map<String, dynamic>> _messageController = 
-      StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<WebSocketConfig.ConnectionState> _connectionController = 
-      StreamController<WebSocketConfig.ConnectionState>.broadcast();
-  final StreamController<String> _errorController = 
-      StreamController<String>.broadcast();
+  final _connectionController = StreamController<WebSocketConnectionState>.broadcast();
+  final _messageController = StreamController<WebSocketMessage>.broadcast();
+  final _errorController = StreamController<WebSocketError>.broadcast();
 
-  // Event-specific stream controllers
-  final StreamController<Map<String, dynamic>> _budgetController = 
-      StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _transactionController = 
-      StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _notificationController = 
-      StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _universityController = 
-      StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _systemController = 
-      StreamController<Map<String, dynamic>>.broadcast();
+  // Getters for streams
+  Stream<WebSocketConnectionState> get connectionStream => _connectionController.stream;
+  Stream<WebSocketMessage> get messageStream => _messageController.stream;
+  Stream<WebSocketError> get errorStream => _errorController.stream;
 
-  WebSocketService(this._storageService);
+  // Connection state
+  WebSocketConnectionState _connectionState = WebSocketConnectionState.disconnected;
+  WebSocketConnectionState get connectionState => _connectionState;
 
-  // Stream getters
-  Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
-  Stream<WebSocketConfig.ConnectionState> get connectionStream => _connectionController.stream;
-  Stream<String> get errorStream => _errorController.stream;
-  
-  // Event-specific streams
-  Stream<Map<String, dynamic>> get budgetStream => _budgetController.stream;
-  Stream<Map<String, dynamic>> get transactionStream => _transactionController.stream;
-  Stream<Map<String, dynamic>> get notificationStream => _notificationController.stream;
-  Stream<Map<String, dynamic>> get universityStream => _universityController.stream;
-  Stream<Map<String, dynamic>> get systemStream => _systemController.stream;
+  // Subscribed channels
+  final Set<String> _subscribedChannels = {};
 
-  // Connection state getters
-  bool get isConnected => _isConnected;
-  bool get isConnecting => _isConnecting;
-  bool get isDisconnected => !_isConnected && !_isConnecting;
-  int get reconnectAttempts => _reconnectAttempts;
-
-  // ======================
-  // Connection Management
-  // ======================
-
-  Future<bool> connect({String? endpoint}) async {
-    if (_isDisposed) return false;
-    if (_isConnected || _isConnecting) return _isConnected;
+  // Initialize WebSocket connection
+  Future<void> connect() async {
+    if (_isConnecting || _connectionState == WebSocketConnectionState.connected) {
+      return;
+    }
 
     _isConnecting = true;
-    _manualDisconnect = false;
-    _connectionController.add(WebSocketConfig.ConnectionState.connecting);
+    _shouldReconnect = true;
 
     try {
-      final token = _storageService.getAccessToken();
-      if (token == null || token.isEmpty) {
-        throw WebSocketException('No authentication token available');
+      final token = StorageService.getAuthToken();
+      if (token == null) {
+        throw Exception('No auth token available');
       }
 
-      final url = WebSocketConfig.buildWebSocketUrl(
-        endpoint ?? WebSocketConfig.notificationUrl,
-        token: token,
-      );
+      _setConnectionState(WebSocketConnectionState.connecting);
 
-      _channel = WebSocketChannel.connect(
-        Uri.parse(url),
-        protocols: ['lunance-protocol'],
-      );
+      final uri = Uri.parse(WebSocketConfig.wsUrl);
+      _channel = WebSocketChannel.connect(uri);
 
-      // Set up message listener
-      _subscription = _channel!.stream.listen(
-        _handleMessage,
-        onError: _handleError,
-        onDone: _handleDisconnection,
-        cancelOnError: false,
+      // Listen to messages
+      _channel!.stream.listen(
+        _onMessage,
+        onError: _onError,
+        onDone: _onDone,
       );
 
       // Send authentication message
-      _sendMessage(WebSocketConfig.createAuthMessage(token));
+      await _authenticate(token);
 
-      // Start heartbeat
-      _startHeartbeat();
+      // Start ping timer
+      _startPingTimer();
 
-      _isConnected = true;
-      _isConnecting = false;
+      _setConnectionState(WebSocketConnectionState.connected);
       _reconnectAttempts = 0;
-      _connectionController.add(WebSocketConfig.ConnectionState.connected);
+      _isConnecting = false;
 
-      return true;
+      log('WebSocket connected successfully');
     } catch (e) {
       _isConnecting = false;
-      _connectionController.add(WebSocketConfig.ConnectionState.error);
-      _errorController.add('Connection failed: $e');
-      
-      if (!_manualDisconnect && _reconnectAttempts < WebSocketConfig.maxReconnectAttempts) {
-        _scheduleReconnect();
-      }
-      
-      return false;
+      _setConnectionState(WebSocketConnectionState.disconnected);
+      _onError(e);
     }
   }
 
+  // Disconnect WebSocket
   Future<void> disconnect() async {
-    _manualDisconnect = true;
-    await _disconnect();
-  }
-
-  Future<void> _disconnect() async {
-    _stopHeartbeat();
-    _stopReconnectTimer();
+    _shouldReconnect = false;
+    _reconnectTimer?.cancel();
+    _pingTimer?.cancel();
 
     if (_channel != null) {
       await _channel!.sink.close(status.goingAway);
       _channel = null;
     }
 
-    await _subscription?.cancel();
-    _subscription = null;
-
-    _isConnected = false;
-    _isConnecting = false;
-    _connectionController.add(WebSocketConfig.ConnectionState.disconnected);
+    _setConnectionState(WebSocketConnectionState.disconnected);
+    _subscribedChannels.clear();
+    log('WebSocket disconnected');
   }
 
-  Future<void> reconnect() async {
-    await _disconnect();
-    await Future.delayed(const Duration(milliseconds: 500));
-    await connect();
+  // Send authentication message
+  Future<void> _authenticate(String token) async {
+    final authMessage = WebSocketConfig.createAuthMessage(token);
+    await _sendMessage(authMessage);
   }
 
+  // Subscribe to a channel
+  Future<void> subscribe(String channel) async {
+    if (_connectionState != WebSocketConnectionState.connected) {
+      throw Exception('WebSocket not connected');
+    }
+
+    if (_subscribedChannels.contains(channel)) {
+      return; // Already subscribed
+    }
+
+    final subscribeMessage = WebSocketConfig.createSubscribeMessage(channel);
+    await _sendMessage(subscribeMessage);
+    _subscribedChannels.add(channel);
+
+    log('Subscribed to channel: $channel');
+  }
+
+  // Unsubscribe from a channel
+  Future<void> unsubscribe(String channel) async {
+    if (_connectionState != WebSocketConnectionState.connected) {
+      return;
+    }
+
+    if (!_subscribedChannels.contains(channel)) {
+      return; // Not subscribed
+    }
+
+    final unsubscribeMessage = WebSocketConfig.createUnsubscribeMessage(channel);
+    await _sendMessage(unsubscribeMessage);
+    _subscribedChannels.remove(channel);
+
+    log('Unsubscribed from channel: $channel');
+  }
+
+  // Send a message through WebSocket
+  Future<void> _sendMessage(Map<String, dynamic> message) async {
+    if (_channel?.sink == null) {
+      throw Exception('WebSocket not connected');
+    }
+
+    final jsonMessage = json.encode(message);
+    _channel!.sink.add(jsonMessage);
+  }
+
+  // Send custom data message
+  Future<void> sendData(String event, Map<String, dynamic> data, {String? channel}) async {
+    final message = WebSocketConfig.createMessage(
+      type: WebSocketConfig.messageTypeData,
+      event: event,
+      data: data,
+      channel: channel,
+    );
+    await _sendMessage(message);
+  }
+
+  // Handle incoming messages
+  void _onMessage(dynamic message) {
+    try {
+      final Map<String, dynamic> data = json.decode(message as String);
+      final wsMessage = WebSocketMessage.fromJson(data);
+      
+      // Handle special message types
+      switch (wsMessage.type) {
+        case WebSocketConfig.messageTypeAuth:
+          _handleAuthMessage(wsMessage);
+          break;
+        case WebSocketConfig.messageTypeError:
+          _handleErrorMessage(wsMessage);
+          break;
+        case WebSocketConfig.messageTypeHeartbeat:
+          _handleHeartbeatMessage(wsMessage);
+          break;
+        default:
+          // Broadcast regular messages
+          _messageController.add(wsMessage);
+      }
+    } catch (e) {
+      log('Error parsing WebSocket message: $e');
+    }
+  }
+
+  // Handle authentication response
+  void _handleAuthMessage(WebSocketMessage message) {
+    if (message.event == 'authenticated') {
+      log('WebSocket authentication successful');
+      // Re-subscribe to previous channels
+      for (final channel in _subscribedChannels.toList()) {
+        subscribe(channel);
+      }
+    } else if (message.event == 'authentication_failed') {
+      log('WebSocket authentication failed');
+      _onError('Authentication failed');
+    }
+  }
+
+  // Handle error messages
+  void _handleErrorMessage(WebSocketMessage message) {
+    final error = WebSocketError(
+      code: message.data['code'] as int? ?? 0,
+      message: message.data['message'] as String? ?? 'Unknown error',
+    );
+    _errorController.add(error);
+  }
+
+  // Handle heartbeat messages
+  void _handleHeartbeatMessage(WebSocketMessage message) {
+    if (message.event == 'ping') {
+      // Respond with pong
+      final pongMessage = WebSocketConfig.createMessage(
+        type: WebSocketConfig.messageTypeHeartbeat,
+        event: 'pong',
+      );
+      _sendMessage(pongMessage);
+    }
+  }
+
+  // Handle WebSocket errors
+  void _onError(dynamic error) {
+    log('WebSocket error: $error');
+    _errorController.add(WebSocketError(
+      code: 0,
+      message: error.toString(),
+    ));
+
+    if (_shouldReconnect) {
+      _scheduleReconnect();
+    }
+  }
+
+  // Handle WebSocket connection close
+  void _onDone() {
+    log('WebSocket connection closed');
+    _setConnectionState(WebSocketConnectionState.disconnected);
+    _pingTimer?.cancel();
+
+    if (_shouldReconnect) {
+      _scheduleReconnect();
+    }
+  }
+
+  // Schedule reconnection attempt
   void _scheduleReconnect() {
-    if (_manualDisconnect || _isDisposed) return;
+    if (_reconnectAttempts >= WebSocketConfig.maxReconnectAttempts) {
+      log('Max reconnection attempts reached');
+      _setConnectionState(WebSocketConnectionState.failed);
+      return;
+    }
 
     _reconnectAttempts++;
-    final delay = WebSocketConfig.calculateReconnectDelay(_reconnectAttempts);
-    
-    _connectionController.add(WebSocketConfig.ConnectionState.reconnecting);
-    
-    _reconnectTimer = Timer(delay, () async {
-      if (!_manualDisconnect && !_isDisposed) {
-        await connect();
+    final delay = WebSocketConfig.reconnectDelay * _reconnectAttempts;
+
+    log('Scheduling reconnection attempt $_reconnectAttempts in ${delay.inSeconds}s');
+
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(delay, () {
+      if (_shouldReconnect) {
+        connect();
       }
     });
   }
 
-  void _stopReconnectTimer() {
-    _reconnectTimer?.cancel();
-    _reconnectTimer = null;
-  }
-
-  // ======================
-  // Message Handling
-  // ======================
-
-  void _handleMessage(dynamic message) {
-    try {
-      final Map<String, dynamic> data = jsonDecode(message.toString());
-      
-      // Emit to general message stream
-      _messageController.add(data);
-      
-      // Route to specific event streams
-      final event = data['event'] as String?;
-      if (event != null) {
-        _routeEventMessage(event, data);
+  // Start ping timer for keep-alive
+  void _startPingTimer() {
+    _pingTimer?.cancel();
+    _pingTimer = Timer.periodic(WebSocketConfig.pingInterval, (timer) {
+      if (_connectionState == WebSocketConnectionState.connected) {
+        final pingMessage = WebSocketConfig.createHeartbeatMessage();
+        _sendMessage(pingMessage).catchError((e) {
+          log('Error sending ping: $e');
+        });
       }
-      
-      // Handle special events
-      if (event == WebSocketConfig.eventHeartbeat) {
-        // Heartbeat received, connection is alive
-      } else if (event == WebSocketConfig.eventAuthentication) {
-        // Authentication response
-        final success = data['data']?['success'] as bool? ?? false;
-        if (!success) {
-          _errorController.add('Authentication failed');
-          disconnect();
-        }
-      }
-      
-    } catch (e) {
-      _errorController.add('Failed to parse message: $e');
+    });
+  }
+
+  // Set connection state and notify listeners
+  void _setConnectionState(WebSocketConnectionState state) {
+    if (_connectionState != state) {
+      _connectionState = state;
+      _connectionController.add(state);
     }
   }
 
-  void _routeEventMessage(String event, Map<String, dynamic> data) {
-    if (WebSocketConfig.isBudgetEvent(event)) {
-      _budgetController.add(data);
-    } else if (WebSocketConfig.isTransactionEvent(event)) {
-      _transactionController.add(data);
-    } else if (WebSocketConfig.isNotificationEvent(event)) {
-      _notificationController.add(data);
-    } else if (WebSocketConfig.isUniversityEvent(event)) {
-      _universityController.add(data);
-    } else if (WebSocketConfig.isSystemEvent(event)) {
-      _systemController.add(data);
-      _handleSystemEvent(event, data);
-    }
-  }
-
-  void _handleSystemEvent(String event, Map<String, dynamic> data) {
-    switch (event) {
-      case WebSocketConfig.eventForceLogout:
-        _handleForceLogout();
-        break;
-      case WebSocketConfig.eventMaintenanceMode:
-        _handleMaintenanceMode(data);
-        break;
-      case WebSocketConfig.eventServerShutdown:
-        _handleServerShutdown(data);
-        break;
-    }
-  }
-
-  void _handleForceLogout() {
-    _storageService.clearAuthData();
+  // Clean up resources
+  void dispose() {
     disconnect();
-    // Note: Navigation to login should be handled by the UI layer
+    _connectionController.close();
+    _messageController.close();
+    _errorController.close();
   }
 
-  void _handleMaintenanceMode(Map<String, dynamic> data) {
-    final message = data['data']?['message'] as String? ?? 'Server dalam mode maintenance';
-    _errorController.add(message);
-  }
+  // Get list of subscribed channels
+  List<String> get subscribedChannels => _subscribedChannels.toList();
 
-  void _handleServerShutdown(Map<String, dynamic> data) {
-    final message = data['data']?['message'] as String? ?? 'Server akan dimatikan';
-    _errorController.add(message);
-    disconnect();
-  }
+  // Check if connected
+  bool get isConnected => _connectionState == WebSocketConnectionState.connected;
 
-  void _handleError(dynamic error) {
-    _errorController.add('WebSocket error: $error');
-    
-    if (!_manualDisconnect) {
-      _isConnected = false;
-      _connectionController.add(WebSocketConfig.ConnectionState.error);
-      
-      if (_reconnectAttempts < WebSocketConfig.maxReconnectAttempts) {
-        _scheduleReconnect();
-      }
-    }
-  }
+  // Check if connecting
+  bool get isConnecting => _connectionState == WebSocketConnectionState.connecting;
 
-  void _handleDisconnection() {
-    _isConnected = false;
-    _stopHeartbeat();
-    
-    if (!_manualDisconnect) {
-      _connectionController.add(WebSocketConfig.ConnectionState.disconnected);
-      
-      if (_reconnectAttempts < WebSocketConfig.maxReconnectAttempts) {
-        _scheduleReconnect();
-      }
-    }
-  }
-
-  // ======================
-  // Message Sending
-  // ======================
-
-  bool sendMessage(Map<String, dynamic> message) {
-    if (!_isConnected || _channel == null) {
-      _errorController.add('Cannot send message: not connected');
-      return false;
-    }
-
-    try {
-      _sendMessage(message);
-      return true;
-    } catch (e) {
-      _errorController.add('Failed to send message: $e');
-      return false;
-    }
-  }
-
-  void _sendMessage(Map<String, dynamic> message) {
-    final jsonMessage = jsonEncode(message);
-    _channel?.sink.add(jsonMessage);
-  }
-
-  bool sendEvent(String event, {Map<String, dynamic>? data}) {
-    final message = WebSocketConfig.createMessage(
-      event: event,
-      data: data,
-    );
-    return sendMessage(message);
-  }
-
-  // ======================
-  // Heartbeat Management
-  // ======================
-
-  void _startHeartbeat() {
-    _stopHeartbeat();
-    _heartbeatTimer = Timer.periodic(
-      WebSocketConfig.heartbeatInterval,
-      (_) => _sendHeartbeat(),
-    );
-  }
-
-  void _stopHeartbeat() {
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = null;
-  }
-
-  void _sendHeartbeat() {
-    if (_isConnected) {
-      _sendMessage(WebSocketConfig.createHeartbeatMessage());
-    }
-  }
-
-  // ======================
-  // Event Subscription Helpers
-  // ======================
-
-  StreamSubscription<Map<String, dynamic>> listenToBudgetEvents(
-    void Function(Map<String, dynamic>) onEvent,
-  ) {
-    return budgetStream.listen(onEvent);
-  }
-
-  StreamSubscription<Map<String, dynamic>> listenToTransactionEvents(
-    void Function(Map<String, dynamic>) onEvent,
-  ) {
-    return transactionStream.listen(onEvent);
-  }
-
-  StreamSubscription<Map<String, dynamic>> listenToNotificationEvents(
-    void Function(Map<String, dynamic>) onEvent,
-  ) {
-    return notificationStream.listen(onEvent);
-  }
-
-  StreamSubscription<Map<String, dynamic>> listenToUniversityEvents(
-    void Function(Map<String, dynamic>) onEvent,
-  ) {
-    return universityStream.listen(onEvent);
-  }
-
-  StreamSubscription<Map<String, dynamic>> listenToSystemEvents(
-    void Function(Map<String, dynamic>) onEvent,
-  ) {
-    return systemStream.listen(onEvent);
-  }
-
-  StreamSubscription<WebSocketConfig.ConnectionState> listenToConnectionChanges(
-    void Function(WebSocketConfig.ConnectionState) onStateChange,
-  ) {
-    return connectionStream.listen(onStateChange);
-  }
-
-  StreamSubscription<String> listenToErrors(
-    void Function(String) onError,
-  ) {
-    return errorStream.listen(onError);
-  }
-
-  // ======================
-  // Utility Methods
-  // ======================
-
-  Future<bool> ping() async {
-    if (!_isConnected) return false;
-    
-    try {
-      _sendHeartbeat();
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  Map<String, dynamic> getConnectionInfo() {
-    return {
-      'connected': _isConnected,
-      'connecting': _isConnecting,
-      'reconnect_attempts': _reconnectAttempts,
-      'manual_disconnect': _manualDisconnect,
-    };
-  }
-
-  // ======================
-  // Cleanup
-  // ======================
-
-  Future<void> dispose() async {
-    _isDisposed = true;
-    await _disconnect();
-    
-    // Close all stream controllers
-    await Future.wait([
-      _messageController.close(),
-      _connectionController.close(),
-      _errorController.close(),
-      _budgetController.close(),
-      _transactionController.close(),
-      _notificationController.close(),
-      _universityController.close(),
-      _systemController.close(),
-    ]);
+  // Reset connection (useful for token refresh)
+  Future<void> resetConnection() async {
+    await disconnect();
+    await Future.delayed(const Duration(milliseconds: 500));
+    await connect();
   }
 }
 
-// Custom Exception for WebSocket errors
-class WebSocketException implements Exception {
+// WebSocket connection states
+enum WebSocketConnectionState {
+  disconnected,
+  connecting,
+  connected,
+  failed,
+}
+
+// WebSocket message model
+class WebSocketMessage {
+  final String type;
+  final String event;
+  final Map<String, dynamic> data;
+  final String? channel;
+  final String timestamp;
+
+  const WebSocketMessage({
+    required this.type,
+    required this.event,
+    required this.data,
+    this.channel,
+    required this.timestamp,
+  });
+
+  factory WebSocketMessage.fromJson(Map<String, dynamic> json) {
+    return WebSocketMessage(
+      type: json['type'] ?? '',
+      event: json['event'] ?? '',
+      data: json['data'] as Map<String, dynamic>? ?? {},
+      channel: json['channel'],
+      timestamp: json['timestamp'] ?? DateTime.now().toIso8601String(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'type': type,
+      'event': event,
+      'data': data,
+      'channel': channel,
+      'timestamp': timestamp,
+    };
+  }
+}
+
+// WebSocket error model
+class WebSocketError {
+  final int code;
   final String message;
-  
-  const WebSocketException(this.message);
-  
+
+  const WebSocketError({
+    required this.code,
+    required this.message,
+  });
+
   @override
-  String toString() => 'WebSocketException: $message';
+  String toString() => 'WebSocketError($code): $message';
 }

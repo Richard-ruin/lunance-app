@@ -1,229 +1,106 @@
-import 'app_config.dart';
-
 class WebSocketConfig {
-  // WebSocket URLs
-  static String get baseUrl => AppConfig.wsUrl;
-  static String get notificationUrl => '$baseUrl/notifications';
-  static String get budgetUrl => '$baseUrl/budget';
-  static String get transactionUrl => '$baseUrl/transactions';
-  static String get universityUrl => '$baseUrl/university';
+  // Base URLs for WebSocket connections
+  static const String _devWsUrl = 'ws://localhost:8000/ws';
+  static const String _prodWsUrl = 'wss://api.lunance.app/ws';
   
-  // Connection Configuration
-  static const Duration connectionTimeout = Duration(seconds: 10);
-  static const Duration heartbeatInterval = Duration(seconds: 30);
-  static const Duration reconnectDelay = Duration(seconds: 5);
-  static const int maxReconnectAttempts = 5;
-  static const Duration maxReconnectDelay = Duration(minutes: 5);
+  // Current environment WebSocket URL
+  static String get wsUrl => _getWsUrl();
   
-  // Event Types
-  static const String eventConnect = 'connect';
-  static const String eventDisconnect = 'disconnect';
-  static const String eventError = 'error';
-  static const String eventHeartbeat = 'heartbeat';
-  static const String eventAuthentication = 'authentication';
-  
-  // Budget Events
-  static const String eventBudgetCreated = 'budget_created';
-  static const String eventBudgetUpdated = 'budget_updated';
-  static const String eventBudgetDeleted = 'budget_deleted';
-  static const String eventBudgetAlert = 'budget_alert';
-  static const String eventBudgetLimitReached = 'budget_limit_reached';
-  
-  // Transaction Events
-  static const String eventTransactionAdded = 'transaction_added';
-  static const String eventTransactionUpdated = 'transaction_updated';
-  static const String eventTransactionDeleted = 'transaction_deleted';
-  static const String eventBalanceChanged = 'balance_changed';
-  
-  // Notification Events
-  static const String eventNotificationReceived = 'notification_received';
-  static const String eventNotificationRead = 'notification_read';
-  static const String eventNotificationCleared = 'notification_cleared';
-  
-  // University Events (Admin)
-  static const String eventUniversityRequestSubmitted = 'university_request_submitted';
-  static const String eventUniversityRequestApproved = 'university_request_approved';
-  static const String eventUniversityRequestRejected = 'university_request_rejected';
-  static const String eventUniversityDataUpdated = 'university_data_updated';
-  
-  // System Events
-  static const String eventMaintenanceMode = 'maintenance_mode';
-  static const String eventServerShutdown = 'server_shutdown';
-  static const String eventForceLogout = 'force_logout';
-  
-  // Message Types
-  enum MessageType {
-    text,
-    json,
-    binary,
-  }
-  
-  // Connection States
-  enum ConnectionState {
-    disconnected,
-    connecting,
-    connected,
-    reconnecting,
-    error,
+  static String _getWsUrl() {
+    const bool isProduction = bool.fromEnvironment('dart.vm.product');
+    return isProduction ? _prodWsUrl : _devWsUrl;
   }
   
   // WebSocket Events
-  static const List<String> allEvents = [
-    eventConnect,
-    eventDisconnect,
-    eventError,
-    eventHeartbeat,
-    eventAuthentication,
-    eventBudgetCreated,
-    eventBudgetUpdated,
-    eventBudgetDeleted,
-    eventBudgetAlert,
-    eventBudgetLimitReached,
-    eventTransactionAdded,
-    eventTransactionUpdated,
-    eventTransactionDeleted,
-    eventBalanceChanged,
-    eventNotificationReceived,
-    eventNotificationRead,
-    eventNotificationCleared,
-    eventUniversityRequestSubmitted,
-    eventUniversityRequestApproved,
-    eventUniversityRequestRejected,
-    eventUniversityDataUpdated,
-    eventMaintenanceMode,
-    eventServerShutdown,
-    eventForceLogout,
-  ];
+  static const String connectEvent = 'connect';
+  static const String disconnectEvent = 'disconnect';
+  static const String budgetUpdateEvent = 'budget_update';
+  static const String expenseAddedEvent = 'expense_added';
+  static const String budgetAlertEvent = 'budget_alert';
+  static const String notificationEvent = 'notification';
+  static const String userStatusEvent = 'user_status';
+  static const String transactionSyncEvent = 'transaction_sync';
   
-  // Event Categories
-  static const List<String> budgetEvents = [
-    eventBudgetCreated,
-    eventBudgetUpdated,
-    eventBudgetDeleted,
-    eventBudgetAlert,
-    eventBudgetLimitReached,
-  ];
+  // Connection Settings
+  static const Duration reconnectDelay = Duration(seconds: 5);
+  static const Duration pingInterval = Duration(seconds: 30);
+  static const Duration connectionTimeout = Duration(seconds: 10);
+  static const int maxReconnectAttempts = 5;
   
-  static const List<String> transactionEvents = [
-    eventTransactionAdded,
-    eventTransactionUpdated,
-    eventTransactionDeleted,
-    eventBalanceChanged,
-  ];
+  // Message Types
+  static const String messageTypeAuth = 'auth';
+  static const String messageTypeSubscribe = 'subscribe';
+  static const String messageTypeUnsubscribe = 'unsubscribe';
+  static const String messageTypeHeartbeat = 'heartbeat';
+  static const String messageTypeData = 'data';
+  static const String messageTypeError = 'error';
   
-  static const List<String> notificationEvents = [
-    eventNotificationReceived,
-    eventNotificationRead,
-    eventNotificationCleared,
-  ];
-  
-  static const List<String> universityEvents = [
-    eventUniversityRequestSubmitted,
-    eventUniversityRequestApproved,
-    eventUniversityRequestRejected,
-    eventUniversityDataUpdated,
-  ];
-  
-  static const List<String> systemEvents = [
-    eventMaintenanceMode,
-    eventServerShutdown,
-    eventForceLogout,
-  ];
+  // Subscription Channels
+  static const String userChannel = 'user';
+  static const String budgetChannel = 'budget';
+  static const String transactionChannel = 'transaction';
+  static const String notificationChannel = 'notification';
+  static const String adminChannel = 'admin';
   
   // Error Codes
-  static const int errorCodeNormalClosure = 1000;
-  static const int errorCodeGoingAway = 1001;
-  static const int errorCodeProtocolError = 1002;
-  static const int errorCodeUnsupportedData = 1003;
-  static const int errorCodeNoStatusReceived = 1005;
-  static const int errorCodeAbnormalClosure = 1006;
-  static const int errorCodeInvalidFramePayloadData = 1007;
-  static const int errorCodePolicyViolation = 1008;
-  static const int errorCodeMessageTooBig = 1009;
-  static const int errorCodeMandatoryExtension = 1010;
-  static const int errorCodeInternalServerError = 1011;
-  static const int errorCodeServiceRestart = 1012;
-  static const int errorCodeTryAgainLater = 1013;
-  static const int errorCodeBadGateway = 1014;
-  static const int errorCodeTlsHandshake = 1015;
+  static const int errorAuthenticationFailed = 4001;
+  static const int errorInvalidToken = 4002;
+  static const int errorRateLimitExceeded = 4003;
+  static const int errorInvalidMessage = 4004;
+  static const int errorChannelNotFound = 4005;
   
-  // Helper Methods
-  static String buildWebSocketUrl(String endpoint, {String? token}) {
-    String url = baseUrl + endpoint;
-    if (token != null && token.isNotEmpty) {
-      url += '?token=$token';
+  // Helper methods
+  static String buildChannelUrl(String channel, {String? userId}) {
+    String url = '$wsUrl/$channel';
+    if (userId != null) {
+      url += '/$userId';
     }
     return url;
   }
   
   static Map<String, dynamic> createMessage({
+    required String type,
     required String event,
     Map<String, dynamic>? data,
-    String? messageId,
+    String? channel,
   }) {
     return {
+      'type': type,
       'event': event,
       'data': data ?? {},
-      'message_id': messageId ?? _generateMessageId(),
+      'channel': channel,
       'timestamp': DateTime.now().toIso8601String(),
     };
   }
   
-  static Map<String, dynamic> createHeartbeatMessage() {
-    return createMessage(event: eventHeartbeat);
-  }
-  
   static Map<String, dynamic> createAuthMessage(String token) {
     return createMessage(
-      event: eventAuthentication,
+      type: messageTypeAuth,
+      event: 'authenticate',
       data: {'token': token},
     );
   }
   
-  static bool isSystemEvent(String event) {
-    return systemEvents.contains(event);
-  }
-  
-  static bool isBudgetEvent(String event) {
-    return budgetEvents.contains(event);
-  }
-  
-  static bool isTransactionEvent(String event) {
-    return transactionEvents.contains(event);
-  }
-  
-  static bool isNotificationEvent(String event) {
-    return notificationEvents.contains(event);
-  }
-  
-  static bool isUniversityEvent(String event) {
-    return universityEvents.contains(event);
-  }
-  
-  static Duration calculateReconnectDelay(int attempt) {
-    // Exponential backoff with jitter
-    final delay = Duration(
-      milliseconds: (reconnectDelay.inMilliseconds * 
-          (1 << attempt.clamp(0, 10))).clamp(
-        reconnectDelay.inMilliseconds,
-        maxReconnectDelay.inMilliseconds,
-      ),
+  static Map<String, dynamic> createSubscribeMessage(String channel) {
+    return createMessage(
+      type: messageTypeSubscribe,
+      event: 'subscribe',
+      channel: channel,
     );
-    
-    // Add jitter (±25%)
-    final jitter = (delay.inMilliseconds * 0.25).round();
-    final jitteredMs = delay.inMilliseconds + 
-        (jitter * 2 * (0.5 - DateTime.now().millisecond / 1000)).round();
-    
-    return Duration(milliseconds: jitteredMs.clamp(
-      reconnectDelay.inMilliseconds,
-      maxReconnectDelay.inMilliseconds,
-    ));
   }
   
-  static String _generateMessageId() {
-    return DateTime.now().millisecondsSinceEpoch.toString() +
-        '_' + 
-        (1000 + DateTime.now().microsecond % 9000).toString();
+  static Map<String, dynamic> createUnsubscribeMessage(String channel) {
+    return createMessage(
+      type: messageTypeUnsubscribe,
+      event: 'unsubscribe',
+      channel: channel,
+    );
+  }
+  
+  static Map<String, dynamic> createHeartbeatMessage() {
+    return createMessage(
+      type: messageTypeHeartbeat,
+      event: 'ping',
+    );
   }
 }
