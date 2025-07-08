@@ -1,406 +1,303 @@
-from typing import Optional, List, Dict, Any
-from datetime import datetime, date
-from pydantic import Field, field_validator
-from app.models.base import BaseModel, PyObjectId
-from app.config.database import get_db
-from bson import ObjectId
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional, List, Union
+from datetime import datetime
+from datetime import date as date_type  # Alias to avoid conflicts
+from enum import Enum
+from decimal import Decimal
 
-class Transaction(BaseModel):
-    user_id: PyObjectId = Field(...)
-    jumlah: float = Field(..., gt=0)  # Amount must be positive
-    deskripsi: str = Field(..., min_length=1, max_length=200)
-    category_id: PyObjectId = Field(...)
-    tipe: str = Field(..., pattern=r'^(pemasukan|pengeluaran)$')
-    tanggal: datetime = Field(default_factory=datetime.utcnow)
-    bukti_foto: Optional[str] = None  # Path to uploaded file
-    is_deleted: bool = Field(default=False)  # Soft delete
-    
-    @field_validator('deskripsi')
+
+class TransactionType(str, Enum):
+    """Transaction type enumeration."""
+    INCOME = "income"
+    EXPENSE = "expense"
+
+
+class TransactionBase(BaseModel):
+    """Base transaction model."""
+    category_id: str = Field(..., description="Category ID")
+    transaction_type: TransactionType = Field(..., description="Transaction type (income/expense)")
+    amount: float = Field(..., gt=0, description="Transaction amount")
+    description: str = Field(..., min_length=1, max_length=255, description="Transaction description")
+    transaction_date: date_type = Field(..., description="Transaction date")
+
+    @field_validator('amount')
     @classmethod
-    def validate_deskripsi(cls, v):
-        return v.strip()
-    
-    @field_validator('tipe')
-    @classmethod
-    def validate_tipe(cls, v):
-        return v.lower()
-    
-    @field_validator('jumlah')
-    @classmethod
-    def validate_jumlah(cls, v):
+    def validate_amount(cls, v: float) -> float:
+        """Validate transaction amount."""
         if v <= 0:
-            raise ValueError('Jumlah harus lebih besar dari 0')
+            raise ValueError('Amount must be greater than 0')
+        if v > 999999999.99:  # Max 999 million
+            raise ValueError('Amount is too large')
         # Round to 2 decimal places
         return round(v, 2)
-    
-    def save(self):
-        return super().save('transactions')
-    
+
+    @field_validator('description')
     @classmethod
-    def find_by_id(cls, transaction_id: str):
-        return super().find_by_id('transactions', transaction_id)
-    
+    def validate_description(cls, v: str) -> str:
+        """Validate and clean description."""
+        description = v.strip()
+        if not description:
+            raise ValueError('Description cannot be empty')
+        return description
+
+    @field_validator('transaction_date')
     @classmethod
-    def find_by_user(cls, user_id: str, page: int = 1, limit: int = 10, **filters):
-        """Find transactions by user with pagination and filters"""
-        try:
-            skip = (page - 1) * limit
-            filter_dict = {
-                'user_id': PyObjectId(user_id),
-                'is_deleted': False
+    def validate_date(cls, v: date_type) -> date_type:
+        """Validate transaction date."""
+        from datetime import date as date_class
+        today = date_class.today()
+        if v > today:
+            raise ValueError('Transaction date cannot be in the future')
+        # Allow transactions up to 5 years in the past
+        if (today - v).days > 5 * 365:
+            raise ValueError('Transaction date cannot be more than 5 years in the past')
+        return v
+
+    model_config = {
+        # Updated for Pydantic v2
+        'populate_by_name': True,  # Replaces allow_population_by_field_name
+        'json_encoders': {
+            date_type: lambda v: v.isoformat() if v else None
+        }
+    }
+
+
+class TransactionCreate(TransactionBase):
+    """Schema for creating a new transaction."""
+    pass
+
+
+class TransactionUpdate(BaseModel):
+    """Schema for updating transaction information."""
+    category_id: Optional[str] = Field(None, description="Category ID")
+    transaction_type: Optional[TransactionType] = Field(None, description="Transaction type")
+    amount: Optional[float] = Field(None, gt=0, description="Transaction amount")
+    description: Optional[str] = Field(None, min_length=1, max_length=255, description="Description")
+    transaction_date: Optional[date_type] = Field(None, description="Transaction date")
+
+    @field_validator('amount')
+    @classmethod
+    def validate_amount(cls, v: Optional[float]) -> Optional[float]:
+        """Validate amount if provided."""
+        if v is None:
+            return v
+        return TransactionBase.validate_amount(v)
+
+    @field_validator('description')
+    @classmethod
+    def validate_description(cls, v: Optional[str]) -> Optional[str]:
+        """Validate description if provided."""
+        if v is None:
+            return v
+        return TransactionBase.validate_description(v)
+
+    @field_validator('transaction_date')
+    @classmethod
+    def validate_date(cls, v: Optional[date_type]) -> Optional[date_type]:
+        """Validate date if provided."""
+        if v is None:
+            return v
+        return TransactionBase.validate_date(v)
+
+
+class TransactionInDB(TransactionBase):
+    """Transaction model as stored in database."""
+    id: Optional[str] = Field(None, alias="_id", description="Transaction ID")
+    user_id: str = Field(..., description="User ID who created the transaction")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
+    updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")
+
+    model_config = {
+        'populate_by_name': True,  # Updated for Pydantic v2
+        'json_schema_extra': {
+            'example': {
+                'user_id': '507f1f77bcf86cd799439011',
+                'category_id': '507f1f77bcf86cd799439012',
+                'transaction_type': 'expense',
+                'amount': 25000.0,
+                'description': 'Lunch at campus cafeteria',
+                'transaction_date': '2024-01-15'
             }
-            
-            # Apply additional filters
-            if filters.get('tipe'):
-                filter_dict['tipe'] = filters['tipe']
-            
-            if filters.get('category_id'):
-                filter_dict['category_id'] = PyObjectId(filters['category_id'])
-            
-            if filters.get('date_from') or filters.get('date_to'):
-                date_filter = {}
-                if filters.get('date_from'):
-                    date_filter['$gte'] = filters['date_from']
-                if filters.get('date_to'):
-                    date_filter['$lte'] = filters['date_to']
-                filter_dict['tanggal'] = date_filter
-            
-            if filters.get('amount_min') or filters.get('amount_max'):
-                amount_filter = {}
-                if filters.get('amount_min'):
-                    amount_filter['$gte'] = filters['amount_min']
-                if filters.get('amount_max'):
-                    amount_filter['$lte'] = filters['amount_max']
-                filter_dict['jumlah'] = amount_filter
-            
-            if filters.get('search'):
-                filter_dict['deskripsi'] = {
-                    '$regex': filters['search'],
-                    '$options': 'i'
-                }
-            
-            transactions = super().find_all(
-                'transactions', 
-                filter_dict, 
-                limit, 
-                skip, 
-                [('tanggal', -1)]
-            )
-            total = super().count_documents('transactions', filter_dict)
-            
-            return {
-                'transactions': transactions,
-                'pagination': {
-                    'page': page,
-                    'limit': limit,
-                    'total': total,
-                    'pages': (total + limit - 1) // limit,
-                    'has_next': page * limit < total,
-                    'has_prev': page > 1
-                }
+        }
+    }
+
+
+class TransactionResponse(TransactionBase):
+    """Schema for transaction response."""
+    id: Optional[str] = Field(None, alias="_id", description="Transaction ID")
+    user_id: str = Field(..., description="User ID")
+    created_at: datetime = Field(..., description="Creation timestamp")
+    updated_at: datetime = Field(..., description="Last update timestamp")
+
+    model_config = {
+        'populate_by_name': True,  # Updated for Pydantic v2
+        'from_attributes': True
+    }
+
+
+class TransactionWithCategory(TransactionResponse):
+    """Transaction response with category information."""
+    category_name: str = Field(..., description="Category name")
+    category_icon: str = Field(..., description="Category icon")
+    category_color: str = Field(..., description="Category color")
+
+    model_config = {
+        'populate_by_name': True,  # Updated for Pydantic v2
+        'from_attributes': True
+    }
+
+
+class TransactionSummary(BaseModel):
+    """Transaction summary for dashboard."""
+    total_income: float = Field(..., description="Total income amount")
+    total_expense: float = Field(..., description="Total expense amount")
+    net_amount: float = Field(..., description="Net amount (income - expense)")
+    transaction_count: int = Field(..., description="Total number of transactions")
+    average_transaction: float = Field(..., description="Average transaction amount")
+    largest_expense: Optional[float] = Field(None, description="Largest single expense")
+    largest_income: Optional[float] = Field(None, description="Largest single income")
+
+    model_config = {
+        'json_schema_extra': {
+            'example': {
+                'total_income': 2500000.0,
+                'total_expense': 1800000.0,
+                'net_amount': 700000.0,
+                'transaction_count': 45,
+                'average_transaction': 95555.56,
+                'largest_expense': 500000.0,
+                'largest_income': 1000000.0
             }
-        except Exception:
-            return {'transactions': [], 'pagination': {}}
-    
-    @classmethod
-    def get_recent_transactions(cls, user_id: str, limit: int = 5):
-        """Get recent transactions for user"""
-        try:
-            filter_dict = {
-                'user_id': PyObjectId(user_id),
-                'is_deleted': False
+        }
+    }
+
+
+class MonthlyTransactionSummary(BaseModel):
+    """Monthly transaction summary."""
+    year: int = Field(..., description="Year")
+    month: int = Field(..., ge=1, le=12, description="Month")
+    month_name: str = Field(..., description="Month name")
+    total_income: float = Field(..., description="Total income for the month")
+    total_expense: float = Field(..., description="Total expense for the month")
+    net_amount: float = Field(..., description="Net amount for the month")
+    transaction_count: int = Field(..., description="Number of transactions")
+
+    model_config = {
+        'json_schema_extra': {
+            'example': {
+                'year': 2024,
+                'month': 1,
+                'month_name': 'January',
+                'total_income': 1000000.0,
+                'total_expense': 750000.0,
+                'net_amount': 250000.0,
+                'transaction_count': 25
             }
-            
-            return super().find_all(
-                'transactions',
-                filter_dict,
-                limit,
-                sort=[('tanggal', -1)]
-            )
-        except Exception:
-            return []
-    
-    @classmethod
-    def get_monthly_summary(cls, user_id: str, year: int = None, month: int = None):
-        """Get monthly summary for user"""
-        try:
-            db = get_db()
-            
-            # Default to current month if not specified
-            if not year or not month:
-                now = datetime.utcnow()
-                year = year or now.year
-                month = month or now.month
-            
-            # Date range for the month
-            start_date = datetime(year, month, 1)
-            if month == 12:
-                end_date = datetime(year + 1, 1, 1)
-            else:
-                end_date = datetime(year, month + 1, 1)
-            
-            pipeline = [
-                {
-                    '$match': {
-                        'user_id': ObjectId(user_id),
-                        'is_deleted': False,
-                        'tanggal': {
-                            '$gte': start_date,
-                            '$lt': end_date
-                        }
-                    }
-                },
-                {
-                    '$group': {
-                        '_id': '$tipe',
-                        'total': {'$sum': '$jumlah'},
-                        'count': {'$sum': 1}
-                    }
-                }
-            ]
-            
-            results = list(db.transactions.aggregate(pipeline))
-            
-            summary = {
-                'pemasukan': {'total': 0, 'count': 0},
-                'pengeluaran': {'total': 0, 'count': 0},
-                'saldo': 0,
-                'periode': {
-                    'year': year,
-                    'month': month,
-                    'month_name': datetime(year, month, 1).strftime('%B %Y')
-                }
+        }
+    }
+
+
+class CategoryTransactionSummary(BaseModel):
+    """Transaction summary by category."""
+    category_id: str = Field(..., description="Category ID")
+    category_name: str = Field(..., description="Category name")
+    category_icon: str = Field(..., description="Category icon")
+    category_color: str = Field(..., description="Category color")
+    total_amount: float = Field(..., description="Total amount for this category")
+    transaction_count: int = Field(..., description="Number of transactions")
+    percentage: float = Field(..., description="Percentage of total expenses/income")
+    average_amount: float = Field(..., description="Average transaction amount")
+
+    model_config = {
+        'json_schema_extra': {
+            'example': {
+                'category_id': '507f1f77bcf86cd799439012',
+                'category_name': 'Food & Dining',
+                'category_icon': 'restaurant',
+                'category_color': '#FF5733',
+                'total_amount': 450000.0,
+                'transaction_count': 18,
+                'percentage': 25.5,
+                'average_amount': 25000.0
             }
-            
-            for result in results:
-                tipe = result['_id']
-                summary[tipe] = {
-                    'total': round(result['total'], 2),
-                    'count': result['count']
-                }
-            
-            summary['saldo'] = round(
-                summary['pemasukan']['total'] - summary['pengeluaran']['total'], 2
-            )
-            
-            return summary
-        except Exception:
-            return None
-    
-    @classmethod
-    def get_chart_data(cls, user_id: str, period: str = 'monthly', year: int = None, month: int = None):
-        """Get chart data for different periods"""
-        try:
-            db = get_db()
-            
-            now = datetime.utcnow()
-            year = year or now.year
-            month = month or now.month
-            
-            if period == 'daily':
-                # Daily data for current month
-                start_date = datetime(year, month, 1)
-                if month == 12:
-                    end_date = datetime(year + 1, 1, 1)
-                else:
-                    end_date = datetime(year, month + 1, 1)
-                
-                pipeline = [
-                    {
-                        '$match': {
-                            'user_id': ObjectId(user_id),
-                            'is_deleted': False,
-                            'tanggal': {'$gte': start_date, '$lt': end_date}
-                        }
-                    },
-                    {
-                        '$group': {
-                            '_id': {
-                                'day': {'$dayOfMonth': '$tanggal'},
-                                'tipe': '$tipe'
-                            },
-                            'total': {'$sum': '$jumlah'}
-                        }
-                    },
-                    {
-                        '$sort': {'_id.day': 1}
-                    }
-                ]
-            
-            elif period == 'weekly':
-                # Weekly data for current month
-                start_date = datetime(year, month, 1)
-                if month == 12:
-                    end_date = datetime(year + 1, 1, 1)
-                else:
-                    end_date = datetime(year, month + 1, 1)
-                
-                pipeline = [
-                    {
-                        '$match': {
-                            'user_id': ObjectId(user_id),
-                            'is_deleted': False,
-                            'tanggal': {'$gte': start_date, '$lt': end_date}
-                        }
-                    },
-                    {
-                        '$group': {
-                            '_id': {
-                                'week': {'$week': '$tanggal'},
-                                'tipe': '$tipe'
-                            },
-                            'total': {'$sum': '$jumlah'}
-                        }
-                    },
-                    {
-                        '$sort': {'_id.week': 1}
-                    }
-                ]
-            
-            else:  # monthly
-                # Monthly data for current year
-                start_date = datetime(year, 1, 1)
-                end_date = datetime(year + 1, 1, 1)
-                
-                pipeline = [
-                    {
-                        '$match': {
-                            'user_id': ObjectId(user_id),
-                            'is_deleted': False,
-                            'tanggal': {'$gte': start_date, '$lt': end_date}
-                        }
-                    },
-                    {
-                        '$group': {
-                            '_id': {
-                                'month': {'$month': '$tanggal'},
-                                'tipe': '$tipe'
-                            },
-                            'total': {'$sum': '$jumlah'}
-                        }
-                    },
-                    {
-                        '$sort': {'_id.month': 1}
-                    }
-                ]
-            
-            results = list(db.transactions.aggregate(pipeline))
-            return results
-        except Exception:
-            return []
-    
-    @classmethod
-    def get_spending_by_category(cls, user_id: str, year: int = None, month: int = None):
-        """Get spending breakdown by category"""
-        try:
-            db = get_db()
-            
-            now = datetime.utcnow()
-            year = year or now.year
-            month = month or now.month
-            
-            # Date range for the month
-            start_date = datetime(year, month, 1)
-            if month == 12:
-                end_date = datetime(year + 1, 1, 1)
-            else:
-                end_date = datetime(year, month + 1, 1)
-            
-            pipeline = [
-                {
-                    '$match': {
-                        'user_id': ObjectId(user_id),
-                        'is_deleted': False,
-                        'tipe': 'pengeluaran',
-                        'tanggal': {'$gte': start_date, '$lt': end_date}
-                    }
-                },
-                {
-                    '$lookup': {
-                        'from': 'categories',
-                        'localField': 'category_id',
-                        'foreignField': '_id',
-                        'as': 'category'
-                    }
-                },
-                {
-                    '$unwind': '$category'
-                },
-                {
-                    '$group': {
-                        '_id': '$category_id',
-                        'category_name': {'$first': '$category.nama'},
-                        'category_color': {'$first': '$category.warna'},
-                        'category_icon': {'$first': '$category.icon'},
-                        'total': {'$sum': '$jumlah'},
-                        'count': {'$sum': 1}
-                    }
-                },
-                {
-                    '$sort': {'total': -1}
-                }
-            ]
-            
-            results = list(db.transactions.aggregate(pipeline))
-            return results
-        except Exception:
-            return []
-    
-    @classmethod
-    def get_user_balance(cls, user_id: str):
-        """Calculate user's current balance"""
-        try:
-            db = get_db()
-            
-            # Get user's initial savings
-            from app.models.user import User
-            user = User.find_by_id(user_id)
-            initial_balance = user.tabungan_awal if user else 0
-            
-            # Calculate total from transactions
-            pipeline = [
-                {
-                    '$match': {
-                        'user_id': ObjectId(user_id),
-                        'is_deleted': False
-                    }
-                },
-                {
-                    '$group': {
-                        '_id': '$tipe',
-                        'total': {'$sum': '$jumlah'}
-                    }
-                }
-            ]
-            
-            results = list(db.transactions.aggregate(pipeline))
-            
-            pemasukan = 0
-            pengeluaran = 0
-            
-            for result in results:
-                if result['_id'] == 'pemasukan':
-                    pemasukan = result['total']
-                elif result['_id'] == 'pengeluaran':
-                    pengeluaran = result['total']
-            
-            current_balance = initial_balance + pemasukan - pengeluaran
-            
-            return {
-                'initial_balance': round(initial_balance, 2),
-                'total_income': round(pemasukan, 2),
-                'total_expense': round(pengeluaran, 2),
-                'current_balance': round(current_balance, 2)
+        }
+    }
+
+
+class DailyTransactionSummary(BaseModel):
+    """Daily transaction summary."""
+    transaction_date: date_type = Field(..., description="Transaction date")
+    total_income: float = Field(..., description="Total income for the day")
+    total_expense: float = Field(..., description="Total expense for the day")
+    net_amount: float = Field(..., description="Net amount for the day")
+    transaction_count: int = Field(..., description="Number of transactions")
+
+    model_config = {
+        'json_schema_extra': {
+            'example': {
+                'transaction_date': '2024-01-15',
+                'total_income': 0.0,
+                'total_expense': 75000.0,
+                'net_amount': -75000.0,
+                'transaction_count': 3
             }
-        except Exception:
-            return None
-    
-    def soft_delete(self):
-        """Soft delete transaction"""
-        self.is_deleted = True
-        self.updated_at = datetime.utcnow()
-        return self.save()
-    
-    def belongs_to_user(self, user_id: str) -> bool:
-        """Check if transaction belongs to user"""
-        return str(self.user_id) == user_id
+        }
+    }
+
+
+class TransactionFilters(BaseModel):
+    """Filters for transaction queries."""
+    start_date: Optional[date_type] = Field(None, description="Start date filter")
+    end_date: Optional[date_type] = Field(None, description="End date filter")
+    category_id: Optional[str] = Field(None, description="Category ID filter")
+    transaction_type: Optional[TransactionType] = Field(None, description="Transaction type filter")
+    min_amount: Optional[float] = Field(None, ge=0, description="Minimum amount filter")
+    max_amount: Optional[float] = Field(None, ge=0, description="Maximum amount filter")
+    search: Optional[str] = Field(None, min_length=1, max_length=100, description="Search in description")
+
+    @field_validator('end_date')
+    @classmethod
+    def validate_date_range(cls, v: Optional[date_type], info) -> Optional[date_type]:
+        """Validate that end_date is after start_date."""
+        if v is not None and hasattr(info, 'data') and info.data and 'start_date' in info.data and info.data['start_date'] is not None:
+            if v < info.data['start_date']:
+                raise ValueError('End date must be after start date')
+        return v
+
+    @field_validator('max_amount')
+    @classmethod
+    def validate_amount_range(cls, v: Optional[float], info) -> Optional[float]:
+        """Validate that max_amount is greater than min_amount."""
+        if v is not None and hasattr(info, 'data') and info.data and 'min_amount' in info.data and info.data['min_amount'] is not None:
+            if v < info.data['min_amount']:
+                raise ValueError('Maximum amount must be greater than minimum amount')
+        return v
+
+
+class TransactionBulkCreate(BaseModel):
+    """Schema for bulk transaction creation."""
+    transactions: List[TransactionCreate] = Field(..., max_length=100, description="List of transactions to create")
+
+    @field_validator('transactions')
+    @classmethod
+    def validate_transactions(cls, v: List[TransactionCreate]) -> List[TransactionCreate]:
+        """Validate transactions list."""
+        if len(v) == 0:
+            raise ValueError('At least one transaction is required')
+        if len(v) > 100:
+            raise ValueError('Cannot create more than 100 transactions at once')
+        return v
+
+
+class TransactionExport(BaseModel):
+    """Schema for transaction export."""
+    export_format: str = Field(default="csv", description="Export format (csv, excel)")
+    filters: Optional[TransactionFilters] = Field(None, description="Export filters")
+
+    @field_validator('export_format')
+    @classmethod
+    def validate_format(cls, v: str) -> str:
+        """Validate export format."""
+        if v not in ['csv', 'excel']:
+            raise ValueError('Format must be either csv or excel')
+        return v.lower()

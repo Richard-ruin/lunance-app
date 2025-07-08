@@ -1,160 +1,210 @@
-from typing import Optional
+from pydantic import BaseModel, Field, field_validator
+from typing import List, Optional
 from datetime import datetime
-from pydantic import Field, field_validator
-from app.models.base import BaseModel, PyObjectId
-from app.config.database import get_db
 
-class University(BaseModel):
-    nama: str = Field(..., min_length=3, max_length=200)
-    kode: str = Field(..., min_length=2, max_length=10)
-    alamat: str = Field(..., min_length=10, max_length=500)
-    status_aktif: bool = Field(default=True)
-    website: Optional[str] = None
-    telepon: Optional[str] = None
-    email: Optional[str] = None
-    
-    @field_validator('kode')
-    @classmethod
-    def validate_kode(cls, v):
-        return v.upper().strip()
-    
-    @field_validator('nama')
-    @classmethod
-    def validate_nama(cls, v):
-        return v.strip().title()
-    
-    def save(self):
-        return super().save('universities')
-    
-    @classmethod
-    def find_by_id(cls, university_id: str):
-        return super().find_by_id('universities', university_id)
-    
-    @classmethod
-    def find_all(cls, **kwargs):
-        return super().find_all('universities', **kwargs)
-    
-    @classmethod
-    def count_documents(cls, filter_dict: dict = None):
-        return super().count_documents('universities', filter_dict)
-    
-    @classmethod
-    def find_by_kode(cls, kode: str):
-        try:
-            db = get_db()
-            doc = db.universities.find_one({'kode': kode.upper()})
-            if doc:
-                return cls(**doc)
-            return None
-        except Exception:
-            return None
 
-class Fakultas(BaseModel):
-    nama: str = Field(..., min_length=3, max_length=200)
-    kode: str = Field(..., min_length=2, max_length=10)
-    university_id: PyObjectId = Field(...)
-    deskripsi: Optional[str] = None
-    
-    @field_validator('kode')
-    @classmethod
-    def validate_kode(cls, v):
-        return v.upper().strip()
-    
-    @field_validator('nama')
-    @classmethod
-    def validate_nama(cls, v):
-        return v.strip().title()
-    
-    def save(self):
-        return super().save('fakultas')
-    
-    @classmethod
-    def find_by_id(cls, fakultas_id: str):
-        return super().find_by_id('fakultas', fakultas_id)
-    
-    @classmethod
-    def find_by_university(cls, university_id: str):
-        try:
-            return super().find_all('fakultas', {'university_id': PyObjectId(university_id)})
-        except Exception:
-            return []
+class Major(BaseModel):
+    """Major model."""
+    id: Optional[str] = Field(None, alias="_id", description="Major ID")
+    name: str = Field(..., min_length=2, max_length=100, description="Major name")
 
-class ProgramStudi(BaseModel):
-    nama: str = Field(..., min_length=3, max_length=200)
-    kode: str = Field(..., min_length=2, max_length=10)
-    fakultas_id: PyObjectId = Field(...)
-    jenjang: str = Field(..., pattern=r'^(D3|D4|S1|S2|S3)$')
-    akreditasi: Optional[str] = Field(None, pattern=r'^[A-C]$')
-    
-    @field_validator('kode')
+    @field_validator('name')
     @classmethod
-    def validate_kode(cls, v):
-        return v.upper().strip()
-    
-    @field_validator('nama')
-    @classmethod
-    def validate_nama(cls, v):
+    def validate_name(cls, v: str) -> str:
+        """Validate and clean major name."""
         return v.strip().title()
-    
-    def save(self):
-        return super().save('program_studi')
-    
-    @classmethod
-    def find_by_id(cls, prodi_id: str):
-        return super().find_by_id('program_studi', prodi_id)
-    
-    @classmethod
-    def find_by_fakultas(cls, fakultas_id: str):
-        try:
-            return super().find_all('program_studi', {'fakultas_id': PyObjectId(fakultas_id)})
-        except Exception:
-            return []
 
-class UniversityRequest(BaseModel):
-    nama_university: str = Field(..., min_length=3, max_length=200)
-    kode_university: str = Field(..., min_length=2, max_length=10)
-    alamat_university: str = Field(..., min_length=10, max_length=500)
-    website_university: Optional[str] = None
-    
-    # Requester information
-    nama_pemohon: str = Field(..., min_length=3, max_length=100)
-    email: str = Field(..., pattern=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.ac\.id$')
-    nim: str = Field(..., min_length=8, max_length=20)
-    
-    # Request status
-    status: str = Field(default='pending', pattern=r'^(pending|approved|rejected)$')
-    catatan_admin: Optional[str] = None
-    processed_at: Optional[datetime] = None
-    processed_by: Optional[str] = None
-    
-    @field_validator('kode_university')
+    model_config = {
+        'populate_by_name': True,
+        'json_schema_extra': {
+            'example': {
+                'name': 'Computer Science'
+            }
+        }
+    }
+
+
+class Faculty(BaseModel):
+    """Faculty model."""
+    id: Optional[str] = Field(None, alias="_id", description="Faculty ID")
+    name: str = Field(..., min_length=2, max_length=100, description="Faculty name")
+    majors: List[Major] = Field(default_factory=list, description="List of majors in this faculty")
+
+    @field_validator('name')
     @classmethod
-    def validate_kode(cls, v):
-        return v.upper().strip()
-    
-    @field_validator('nama_university')
-    @classmethod
-    def validate_nama(cls, v):
+    def validate_name(cls, v: str) -> str:
+        """Validate and clean faculty name."""
         return v.strip().title()
-    
-    @field_validator('email')
+
+    model_config = {
+        'populate_by_name': True,
+        'json_schema_extra': {
+            'example': {
+                'name': 'Faculty of Computer Science',
+                'majors': [
+                    {'name': 'Computer Science'},
+                    {'name': 'Information Systems'},
+                    {'name': 'Software Engineering'}
+                ]
+            }
+        }
+    }
+
+
+class UniversityBase(BaseModel):
+    """Base university model."""
+    name: str = Field(..., min_length=2, max_length=150, description="University name")
+    is_active: bool = Field(default=True, description="Whether university is active")
+
+    @field_validator('name')
     @classmethod
-    def validate_email_domain(cls, v):
-        if not v.endswith('.ac.id'):
-            raise ValueError('Email harus menggunakan domain .ac.id')
-        return v.lower()
-    
-    def save(self):
-        return super().save('university_requests')
-    
+    def validate_name(cls, v: str) -> str:
+        """Validate and clean university name."""
+        return v.strip().title()
+
+
+class UniversityCreate(UniversityBase):
+    """Schema for creating a new university."""
+    faculties: List[Faculty] = Field(default_factory=list, description="List of faculties")
+
+
+class UniversityUpdate(BaseModel):
+    """Schema for updating university information."""
+    name: Optional[str] = Field(None, min_length=2, max_length=150)
+    is_active: Optional[bool] = Field(None)
+
+    @field_validator('name')
     @classmethod
-    def find_by_id(cls, request_id: str):
-        return super().find_by_id('university_requests', request_id)
-    
+    def validate_name(cls, v: Optional[str]) -> Optional[str]:
+        """Validate university name if provided."""
+        if v is None:
+            return v
+        return v.strip().title()
+
+
+class UniversityInDB(UniversityBase):
+    """University model as stored in database."""
+    id: Optional[str] = Field(None, alias="_id", description="University ID")
+    faculties: List[Faculty] = Field(default_factory=list, description="List of faculties")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
+    updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")
+
+    model_config = {
+        'populate_by_name': True,
+        'json_schema_extra': {
+            'example': {
+                'name': 'University of Indonesia',
+                'is_active': True,
+                'faculties': [
+                    {
+                        'name': 'Faculty of Computer Science',
+                        'majors': [
+                            {'name': 'Computer Science'},
+                            {'name': 'Information Systems'}
+                        ]
+                    }
+                ]
+            }
+        }
+    }
+
+
+class UniversityResponse(UniversityBase):
+    """Schema for university response."""
+    id: Optional[str] = Field(None, alias="_id", description="University ID")
+    faculties: List[Faculty] = Field(..., description="List of faculties")
+    created_at: datetime = Field(..., description="Creation timestamp")
+    updated_at: datetime = Field(..., description="Last update timestamp")
+
+    model_config = {
+        'populate_by_name': True,
+        'from_attributes': True
+    }
+
+
+class FacultyCreate(BaseModel):
+    """Schema for creating a new faculty."""
+    name: str = Field(..., min_length=2, max_length=100, description="Faculty name")
+    majors: List[Major] = Field(default_factory=list, description="List of majors")
+
+    @field_validator('name')
     @classmethod
-    def find_all(cls, **kwargs):
-        return super().find_all('university_requests', **kwargs)
-    
+    def validate_name(cls, v: str) -> str:
+        """Validate and clean faculty name."""
+        return v.strip().title()
+
+
+class FacultyUpdate(BaseModel):
+    """Schema for updating faculty information."""
+    name: Optional[str] = Field(None, min_length=2, max_length=100)
+
+    @field_validator('name')
     @classmethod
-    def count_documents(cls, filter_dict: dict = None):
-        return super().count_documents('university_requests', filter_dict)
+    def validate_name(cls, v: Optional[str]) -> Optional[str]:
+        """Validate faculty name if provided."""
+        if v is None:
+            return v
+        return v.strip().title()
+
+
+class MajorCreate(BaseModel):
+    """Schema for creating a new major."""
+    name: str = Field(..., min_length=2, max_length=100, description="Major name")
+
+    @field_validator('name')
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        """Validate and clean major name."""
+        return v.strip().title()
+
+
+class MajorUpdate(BaseModel):
+    """Schema for updating major information."""
+    name: Optional[str] = Field(None, min_length=2, max_length=100)
+
+    @field_validator('name')
+    @classmethod
+    def validate_name(cls, v: Optional[str]) -> Optional[str]:
+        """Validate major name if provided."""
+        if v is None:
+            return v
+        return v.strip().title()
+
+
+class UniversityListResponse(BaseModel):
+    """Schema for university list response."""
+    id: str = Field(..., alias="_id", description="University ID")
+    name: str = Field(..., description="University name")
+    is_active: bool = Field(..., description="Whether university is active")
+    faculty_count: int = Field(..., description="Number of faculties")
+    major_count: int = Field(..., description="Total number of majors")
+    created_at: datetime = Field(..., description="Creation timestamp")
+
+    model_config = {
+        'populate_by_name': True,
+        'from_attributes': True
+    }
+
+
+class UniversityStats(BaseModel):
+    """Schema for university statistics."""
+    total_universities: int = Field(..., description="Total number of universities")
+    active_universities: int = Field(..., description="Number of active universities")
+    total_faculties: int = Field(..., description="Total number of faculties")
+    total_majors: int = Field(..., description="Total number of majors")
+    students_per_university: List[dict] = Field(..., description="Student count per university")
+
+    model_config = {
+        'json_schema_extra': {
+            'example': {
+                'total_universities': 25,
+                'active_universities': 23,
+                'total_faculties': 150,
+                'total_majors': 450,
+                'students_per_university': [
+                    {'university_name': 'University of Indonesia', 'student_count': 1250},
+                    {'university_name': 'Gadjah Mada University', 'student_count': 980}
+                ]
+            }
+        }
+    }

@@ -1,192 +1,271 @@
-from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional
 from datetime import datetime
-from pydantic import Field, field_validator
-from app.models.base import BaseModel, PyObjectId
-from app.config.database import get_db
+import re
 
-class Category(BaseModel):
-    nama: str = Field(..., min_length=1, max_length=50)
-    icon: str = Field(..., min_length=1, max_length=100)  # nama icon atau path
-    warna: str = Field(..., pattern=r'^#[0-9a-fA-F]{6}$')  # hex color validation
-    tipe: str = Field(..., pattern=r'^(pemasukan|pengeluaran)$')
-    is_global: bool = Field(default=False)  # True=admin managed, False=user managed
-    created_by: Optional[PyObjectId] = Field(default=None)  # user_id, null jika global
-    is_active: bool = Field(default=True)
-    
-    @field_validator('nama')
+
+class CategoryBase(BaseModel):
+    """Base category model."""
+    name: str = Field(..., min_length=2, max_length=50, description="Category name")
+    icon: str = Field(..., min_length=1, max_length=50, description="Category icon")
+    color: str = Field(..., description="Category color in hex format")
+
+    @field_validator('name')
     @classmethod
-    def validate_nama(cls, v):
-        return v.strip().title()
-    
-    @field_validator('warna')
+    def validate_name(cls, v: str) -> str:
+        """Validate and clean category name."""
+        name = v.strip().title()
+        if not re.match(r'^[a-zA-Z\s&-]+$', name):
+            raise ValueError('Category name must only contain letters, spaces, & and -')
+        return name
+
+    @field_validator('color')
     @classmethod
-    def validate_warna(cls, v):
-        return v.upper()
-    
-    @field_validator('tipe')
+    def validate_color(cls, v: str) -> str:
+        """Validate hex color format."""
+        v = v.strip().upper()
+        if not re.match(r'^#[0-9A-F]{6}$', v):
+            raise ValueError('Color must be in valid hex format (e.g., #FF5733)')
+        return v
+
+    @field_validator('icon')
     @classmethod
-    def validate_tipe(cls, v):
-        return v.lower()
-    
-    def save(self):
-        return super().save('categories')
-    
+    def validate_icon(cls, v: str) -> str:
+        """Validate icon name."""
+        icon = v.strip().lower()
+        # You can add specific icon validation here if needed
+        if len(icon) < 1:
+            raise ValueError('Icon cannot be empty')
+        return icon
+
+
+class CategoryCreate(CategoryBase):
+    """Schema for creating a new category."""
+    is_global: bool = Field(default=False, description="Whether category is global or personal")
+    user_id: Optional[str] = Field(None, description="User ID for personal categories")
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        # If not global, user_id is required
+        if not self.is_global and not self.user_id:
+            raise ValueError('user_id is required for personal categories')
+        # If global, user_id should be None
+        if self.is_global and self.user_id:
+            raise ValueError('user_id should be None for global categories')
+
+
+class CategoryUpdate(BaseModel):
+    """Schema for updating category information."""
+    name: Optional[str] = Field(None, min_length=2, max_length=50)
+    icon: Optional[str] = Field(None, min_length=1, max_length=50)
+    color: Optional[str] = Field(None)
+
+    @field_validator('name')
     @classmethod
-    def find_by_id(cls, category_id: str):
-        return super().find_by_id('categories', category_id)
-    
+    def validate_name(cls, v: Optional[str]) -> Optional[str]:
+        """Validate category name if provided."""
+        if v is None:
+            return v
+        return CategoryBase.validate_name(v)
+
+    @field_validator('color')
     @classmethod
-    def find_all(cls, **kwargs):
-        return super().find_all('categories', **kwargs)
-    
+    def validate_color(cls, v: Optional[str]) -> Optional[str]:
+        """Validate color if provided."""
+        if v is None:
+            return v
+        return CategoryBase.validate_color(v)
+
+    @field_validator('icon')
     @classmethod
-    def find_global_categories(cls, tipe: str = None, is_active: bool = True):
-        """Find all global categories"""
-        try:
-            filter_dict = {'is_global': True}
-            if tipe:
-                filter_dict['tipe'] = tipe
-            if is_active is not None:
-                filter_dict['is_active'] = is_active
-            
-            return super().find_all('categories', filter_dict, sort=[('nama', 1)])
-        except Exception:
-            return []
-    
-    @classmethod
-    def find_user_categories(cls, user_id: str, tipe: str = None, is_active: bool = True):
-        """Find user's personal categories"""
-        try:
-            filter_dict = {
-                'is_global': False,
-                'created_by': PyObjectId(user_id)
+    def validate_icon(cls, v: Optional[str]) -> Optional[str]:
+        """Validate icon if provided."""
+        if v is None:
+            return v
+        return CategoryBase.validate_icon(v)
+
+
+class CategoryInDB(CategoryBase):
+    """Category model as stored in database."""
+    id: Optional[str] = Field(None, alias="_id", description="Category ID")
+    is_global: bool = Field(default=False, description="Whether category is global or personal")
+    user_id: Optional[str] = Field(None, description="User ID for personal categories")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
+    updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")
+
+    model_config = {
+        'populate_by_name': True,
+        'json_schema_extra': {
+            'example': {
+                'name': 'Food & Dining',
+                'icon': 'restaurant',
+                'color': '#FF5733',
+                'is_global': True,
+                'user_id': None
             }
-            if tipe:
-                filter_dict['tipe'] = tipe
-            if is_active is not None:
-                filter_dict['is_active'] = is_active
-            
-            return super().find_all('categories', filter_dict, sort=[('nama', 1)])
-        except Exception:
-            return []
-    
+        }
+    }
+
+
+class CategoryResponse(CategoryBase):
+    """Schema for category response."""
+    id: Optional[str] = Field(None, alias="_id", description="Category ID")
+    is_global: bool = Field(..., description="Whether category is global or personal")
+    user_id: Optional[str] = Field(None, description="User ID for personal categories")
+    created_at: datetime = Field(..., description="Creation timestamp")
+    updated_at: datetime = Field(..., description="Last update timestamp")
+
+    model_config = {
+        'populate_by_name': True,
+        'from_attributes': True
+    }
+
+
+class CategorySimple(BaseModel):
+    """Simple category schema for references."""
+    id: str = Field(..., alias="_id", description="Category ID")
+    name: str = Field(..., description="Category name")
+    icon: str = Field(..., description="Category icon")
+    color: str = Field(..., description="Category color")
+
+    model_config = {
+        'populate_by_name': True,
+        'from_attributes': True
+    }
+
+
+class CategoryWithStats(CategoryResponse):
+    """Category schema with usage statistics."""
+    transaction_count: int = Field(default=0, description="Number of transactions in this category")
+    total_amount: float = Field(default=0.0, description="Total amount in this category")
+    last_used: Optional[datetime] = Field(None, description="Last time category was used")
+
+    model_config = {
+        'populate_by_name': True,
+        'from_attributes': True
+    }
+
+
+class GlobalCategoryCreate(BaseModel):
+    """Schema for creating global categories (admin only)."""
+    name: str = Field(..., min_length=2, max_length=50, description="Category name")
+    icon: str = Field(..., min_length=1, max_length=50, description="Category icon")
+    color: str = Field(..., description="Category color in hex format")
+
+    @field_validator('name')
     @classmethod
-    def find_accessible_categories(cls, user_id: str, tipe: str = None, is_active: bool = True):
-        """Find categories accessible by user (global + personal)"""
-        try:
-            # Global categories
-            global_filter = {'is_global': True}
-            if tipe:
-                global_filter['tipe'] = tipe
-            if is_active is not None:
-                global_filter['is_active'] = is_active
-            
-            # Personal categories
-            personal_filter = {
-                'is_global': False,
-                'created_by': PyObjectId(user_id)
+    def validate_name(cls, v: str) -> str:
+        """Validate and clean category name."""
+        return CategoryBase.validate_name(v)
+
+    @field_validator('color')
+    @classmethod
+    def validate_color(cls, v: str) -> str:
+        """Validate hex color format."""
+        return CategoryBase.validate_color(v)
+
+    @field_validator('icon')
+    @classmethod
+    def validate_icon(cls, v: str) -> str:
+        """Validate icon name."""
+        return CategoryBase.validate_icon(v)
+
+
+class CategoryStats(BaseModel):
+    """Schema for category statistics."""
+    total_categories: int = Field(..., description="Total number of categories")
+    global_categories: int = Field(..., description="Number of global categories")
+    personal_categories: int = Field(..., description="Number of personal categories")
+    most_used_categories: list = Field(..., description="Most frequently used categories")
+    categories_by_user: int = Field(..., description="Average categories per user")
+
+    model_config = {
+        'json_schema_extra': {
+            'example': {
+                'total_categories': 45,
+                'global_categories': 15,
+                'personal_categories': 30,
+                'most_used_categories': [
+                    {'name': 'Food & Dining', 'usage_count': 1250},
+                    {'name': 'Transportation', 'usage_count': 980},
+                    {'name': 'Education', 'usage_count': 750}
+                ],
+                'categories_by_user': 8
             }
-            if tipe:
-                personal_filter['tipe'] = tipe
-            if is_active is not None:
-                personal_filter['is_active'] = is_active
-            
-            # Combine results
-            global_categories = super().find_all('categories', global_filter)
-            personal_categories = super().find_all('categories', personal_filter)
-            
-            all_categories = global_categories + personal_categories
-            # Sort by nama
-            all_categories.sort(key=lambda x: x.nama)
-            
-            return all_categories
-        except Exception:
-            return []
-    
-    @classmethod
-    def find_by_name_and_user(cls, nama: str, user_id: str = None, is_global: bool = False):
-        """Check if category name exists for user or globally"""
-        try:
-            db = get_db()
-            
-            if is_global:
-                filter_dict = {
-                    'nama': nama.strip().title(),
-                    'is_global': True
-                }
-            else:
-                filter_dict = {
-                    'nama': nama.strip().title(),
-                    'is_global': False,
-                    'created_by': PyObjectId(user_id) if user_id else None
-                }
-            
-            doc = db.categories.find_one(filter_dict)
-            if doc:
-                return cls(**doc)
-            return None
-        except Exception:
-            return None
-    
-    @classmethod
-    def get_category_usage_analytics(cls):
-        """Get category usage analytics for admin"""
-        try:
-            db = get_db()
-            
-            # Aggregate categories with transaction count
-            pipeline = [
-                {
-                    '$lookup': {
-                        'from': 'transactions',
-                        'localField': '_id',
-                        'foreignField': 'category_id',
-                        'as': 'transactions'
-                    }
-                },
-                {
-                    '$addFields': {
-                        'usage_count': {'$size': '$transactions'}
-                    }
-                },
-                {
-                    '$project': {
-                        'nama': 1,
-                        'tipe': 1,
-                        'is_global': 1,
-                        'is_active': 1,
-                        'created_by': 1,
-                        'usage_count': 1,
-                        'created_at': 1
-                    }
-                },
-                {
-                    '$sort': {'usage_count': -1}
-                }
-            ]
-            
-            results = list(db.categories.aggregate(pipeline))
-            return results
-        except Exception:
-            return []
-    
-    def is_accessible_by_user(self, user_id: str) -> bool:
-        """Check if category is accessible by user"""
-        if self.is_global:
-            return True
-        
-        if self.created_by and str(self.created_by) == user_id:
-            return True
-        
-        return False
-    
-    def can_be_modified_by_user(self, user_id: str, is_admin: bool = False) -> bool:
-        """Check if category can be modified by user"""
-        if is_admin:
-            return True
-        
-        # Only personal categories can be modified by non-admin users
-        if not self.is_global and self.created_by and str(self.created_by) == user_id:
-            return True
-        
-        return False
+        }
+    }
+
+
+# Default global categories that should be created
+DEFAULT_GLOBAL_CATEGORIES = [
+    {
+        'name': 'Food & Dining',
+        'icon': 'restaurant',
+        'color': '#FF5733',
+        'is_global': True,
+        'user_id': None
+    },
+    {
+        'name': 'Transportation',
+        'icon': 'directions_car',
+        'color': '#3498DB',
+        'is_global': True,
+        'user_id': None
+    },
+    {
+        'name': 'Education',
+        'icon': 'school',
+        'color': '#2ECC71',
+        'is_global': True,
+        'user_id': None
+    },
+    {
+        'name': 'Healthcare',
+        'icon': 'local_hospital',
+        'color': '#E74C3C',
+        'is_global': True,
+        'user_id': None
+    },
+    {
+        'name': 'Entertainment',
+        'icon': 'movie',
+        'color': '#9B59B6',
+        'is_global': True,
+        'user_id': None
+    },
+    {
+        'name': 'Shopping',
+        'icon': 'shopping_cart',
+        'color': '#F39C12',
+        'is_global': True,
+        'user_id': None
+    },
+    {
+        'name': 'Bills & Utilities',
+        'icon': 'receipt',
+        'color': '#34495E',
+        'is_global': True,
+        'user_id': None
+    },
+    {
+        'name': 'Salary & Income',
+        'icon': 'attach_money',
+        'color': '#27AE60',
+        'is_global': True,
+        'user_id': None
+    },
+    {
+        'name': 'Freelance',
+        'icon': 'work',
+        'color': '#8E44AD',
+        'is_global': True,
+        'user_id': None
+    },
+    {
+        'name': 'Investment',
+        'icon': 'trending_up',
+        'color': '#16A085',
+        'is_global': True,
+        'user_id': None
+    }
+]
