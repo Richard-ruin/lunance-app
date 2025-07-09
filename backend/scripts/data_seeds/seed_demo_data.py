@@ -1,7 +1,7 @@
-# scripts/data_seeds/seed_demo_data.py
+# scripts/data_seeds/seed_demo_data_fixed.py
 """
-Seeding script untuk data demo (users, transactions, savings targets).
-Script ini akan membuat data demo untuk testing dan development.
+Seeding script yang diperbaiki untuk data demo (users, transactions, savings targets).
+Script ini akan membuat 100 user mahasiswa dan 1 admin.
 """
 
 import asyncio
@@ -12,6 +12,7 @@ import logging
 import random
 from bson import ObjectId
 from faker import Faker
+import uuid
 
 # Tambahkan path root project
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
@@ -29,9 +30,8 @@ logger = logging.getLogger(__name__)
 # Setup Faker untuk data Indonesia
 fake = Faker('id_ID')
 
-
-class DemoDataSeeder:
-    """Seeder untuk data demo."""
+class DemoDataSeederFixed:
+    """Seeder yang diperbaiki untuk data demo."""
     
     def __init__(self):
         self.users_created = 0
@@ -40,6 +40,58 @@ class DemoDataSeeder:
         self.demo_users = []
         self.categories = []
         self.universities = []
+        self.existing_emails = set()
+    
+    async def check_and_drop_problematic_indexes(self):
+        """Cek dan hapus index yang bermasalah."""
+        try:
+            db = await get_database()
+            collection = db.users
+            
+            # Ambil semua index yang ada
+            indexes = await collection.list_indexes().to_list(length=None)
+            
+            logger.info("🔍 Memeriksa index yang ada...")
+            
+            for index in indexes:
+                index_name = index.get('name', '')
+                index_key = index.get('key', {})
+                
+                logger.info(f"   Index: {index_name} - Keys: {index_key}")
+                
+                # Hapus index username jika ada (karena tidak diperlukan)
+                if 'username' in index_key and index_name != '_id_':
+                    logger.warning(f"⚠️ Menghapus index yang bermasalah: {index_name}")
+                    try:
+                        await collection.drop_index(index_name)
+                        logger.info(f"✅ Index {index_name} berhasil dihapus")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Gagal menghapus index {index_name}: {e}")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Error checking indexes: {e}")
+            return False
+    
+    async def load_existing_emails(self):
+        """Load email yang sudah ada untuk menghindari duplikasi."""
+        try:
+            db = await get_database()
+            collection = db.users
+            
+            # Ambil semua email yang sudah ada
+            cursor = collection.find({}, {"email": 1})
+            users = await cursor.to_list(length=None)
+            
+            self.existing_emails = {user.get("email") for user in users if user.get("email")}
+            logger.info(f"📧 Loaded {len(self.existing_emails)} existing emails")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Error loading existing emails: {e}")
+            return False
     
     async def load_existing_data(self):
         """Load data yang sudah ada (categories, universities)."""
@@ -91,8 +143,8 @@ class DemoDataSeeder:
         
         return university_id, faculty_id, major_id
     
-    def _generate_academic_email(self, name):
-        """Generate email akademik yang valid."""
+    def _generate_unique_email(self, name, attempt=0):
+        """Generate email akademik yang unik."""
         # Ambil universitas secara random
         university = random.choice(self.universities)
         university_name = university["name"].lower()
@@ -112,56 +164,127 @@ class DemoDataSeeder:
             domain = "ac.id"
         
         # Buat username dari nama
-        username = name.lower().replace(" ", ".")
-        return f"{username}@{domain}"
+        base_username = name.lower().replace(" ", ".")
+        
+        # Tambahkan suffix jika email sudah ada
+        if attempt > 0:
+            username = f"{base_username}.{attempt}"
+        else:
+            username = base_username
+        
+        email = f"{username}@{domain}"
+        
+        # Cek apakah email sudah ada
+        if email in self.existing_emails:
+            if attempt < 100:  # Maksimal 100 attempt
+                return self._generate_unique_email(name, attempt + 1)
+            else:
+                # Jika masih duplikasi, gunakan UUID
+                unique_id = str(uuid.uuid4())[:8]
+                email = f"{base_username}.{unique_id}@{domain}"
+        
+        return email
     
-    async def create_demo_users(self, count=20):
-        """Buat users demo."""
+    async def create_admin_user(self):
+        """Buat user admin untuk testing."""
         try:
             db = await get_database()
             collection = db.users
             
-            logger.info(f"👥 Membuat {count} users demo...")
+            admin_email = "admin@lunance.ac.id"
+            
+            # Cek apakah admin sudah ada
+            existing_admin = await collection.find_one({"email": admin_email})
+            if existing_admin:
+                logger.info("✅ Admin user sudah ada, dilewati")
+                return True
+            
+            # Clean data untuk admin - pastikan tidak ada field yang None/undefined
+            admin_data = {
+                "email": admin_email,
+                "full_name": "Admin Lunance",
+                "phone_number": "6281234567890",
+                "role": UserRole.ADMIN.value,
+                "initial_savings": 0.0,
+                "password_hash": hash_password("AdminPassword123!"),
+                "is_active": True,
+                "is_verified": True,
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            }
+            
+            # Hanya tambahkan field university jika tidak None
+            if hasattr(UserInDB.model_fields, 'university_id'):
+                admin_data["university_id"] = None
+                admin_data["faculty_id"] = None  
+                admin_data["major_id"] = None
+            
+            result = await collection.insert_one(admin_data)
+            
+            logger.info(f"✨ Admin user berhasil dibuat dengan ID: {result.inserted_id}")
+            logger.info("   📧 Email: admin@lunance.ac.id")
+            logger.info("   🔐 Password: AdminPassword123!")
+            
+            # Tambahkan email admin ke set existing emails
+            self.existing_emails.add(admin_email)
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Error creating admin user: {e}")
+            return False
+    
+    async def create_demo_users(self, count=100):
+        """Buat 100 users mahasiswa demo."""
+        try:
+            db = await get_database()
+            collection = db.users
+            
+            logger.info(f"👥 Membuat {count} users mahasiswa demo...")
+            
+            # Batch processing untuk performa lebih baik
+            batch_size = 10
+            batch_count = 0
             
             for i in range(count):
-                name = fake.name()
-                email = self._generate_academic_email(name)
-                
-                # Cek apakah email sudah ada
-                existing = await collection.find_one({"email": email})
-                if existing:
-                    continue
-                
-                university_id, faculty_id, major_id = self._get_random_university_data()
-                
-                # Generate phone number Indonesia
-                phone = f"628{random.randint(10000000, 99999999)}"
-                
-                # Initial savings antara 500rb - 10jt
-                initial_savings = random.uniform(500000, 10000000)
-                
-                user_doc = UserInDB(
-                    email=email,
-                    full_name=name,
-                    phone_number=phone,
-                    university_id=university_id,
-                    faculty_id=faculty_id,
-                    major_id=major_id,
-                    role=UserRole.STUDENT,
-                    initial_savings=round(initial_savings, 2),
-                    password_hash=hash_password("Password123!"),
-                    is_active=True,
-                    is_verified=random.choice([True, True, True, False]),  # 75% verified
-                    created_at=datetime.utcnow() - timedelta(days=random.randint(1, 365)),
-                    updated_at=datetime.utcnow()
-                )
-                
-                # Pastikan tidak ada field yang null/undefined yang bisa menyebabkan index error
-                doc_data = user_doc.model_dump(by_alias=True, exclude={"id"})
-                
                 try:
-                    result = await collection.insert_one(doc_data)
+                    name = fake.name()
+                    email = self._generate_unique_email(name)
                     
+                    # Skip jika email masih duplikasi
+                    if email in self.existing_emails:
+                        logger.warning(f"⚠️ Email {email} masih duplikasi, skip...")
+                        continue
+                    
+                    university_id, faculty_id, major_id = self._get_random_university_data()
+                    
+                    # Generate phone number Indonesia yang unik
+                    phone = f"628{random.randint(10000000, 99999999)}"
+                    
+                    # Initial savings antara 500rb - 10jt
+                    initial_savings = random.uniform(500000, 10000000)
+                    
+                    # Clean data untuk user - pastikan tidak ada field yang None kecuali yang memang boleh None
+                    user_data = {
+                        "email": email,
+                        "full_name": name,
+                        "phone_number": phone,
+                        "university_id": university_id,
+                        "faculty_id": faculty_id,
+                        "major_id": major_id,
+                        "role": UserRole.STUDENT.value,
+                        "initial_savings": round(initial_savings, 2),
+                        "password_hash": hash_password("Password123!"),
+                        "is_active": True,
+                        "is_verified": random.choice([True, True, True, False]),  # 75% verified
+                        "created_at": datetime.utcnow() - timedelta(days=random.randint(1, 365)),
+                        "updated_at": datetime.utcnow()
+                    }
+                    
+                    result = await collection.insert_one(user_data)
+                    
+                    # Tambahkan ke existing emails dan demo users
+                    self.existing_emails.add(email)
                     self.demo_users.append({
                         "id": str(result.inserted_id),
                         "email": email,
@@ -170,27 +293,25 @@ class DemoDataSeeder:
                     })
                     
                     self.users_created += 1
+                    batch_count += 1
+                    
+                    # Log progress setiap batch
+                    if batch_count >= batch_size:
+                        logger.info(f"   ✨ Created {self.users_created}/{count} users")
+                        batch_count = 0
                     
                 except Exception as insert_error:
-                    logger.warning(f"⚠️ Gagal insert user {email}: {insert_error}")
-                    # Skip user ini dan lanjut ke user berikutnya
+                    logger.warning(f"⚠️ Gagal insert user {i+1}: {insert_error}")
                     continue
-                
-                if (i + 1) % 5 == 0:
-                    logger.info(f"   ✨ Created {self.users_created}/{count} users")
             
-            logger.info(f"✅ Berhasil membuat {self.users_created} users demo")
+            logger.info(f"✅ Berhasil membuat {self.users_created} users mahasiswa demo")
             return True
             
         except Exception as e:
             logger.error(f"❌ Error creating demo users: {e}")
-            # Jika error karena duplicate key, coba cek lebih detail
-            if "E11000" in str(e) and "username" in str(e):
-                logger.error("❌ Error disebabkan oleh index 'username' yang tidak diperlukan")
-                logger.info("💡 Jalankan: python scripts/data_seeds/fix_database_indexes.py")
             return False
     
-    async def create_demo_transactions(self, transactions_per_user=30):
+    async def create_demo_transactions(self, transactions_per_user=50):
         """Buat transactions demo untuk setiap user."""
         try:
             db = await get_database()
@@ -201,32 +322,38 @@ class DemoDataSeeder:
             # Daftar deskripsi transaksi yang realistis
             income_descriptions = [
                 "Gaji part-time", "Uang saku bulanan", "Freelance project", 
-                "Jualan online", "Les privat", "Beasiswa", "Hadiah ulang tahun"
+                "Jualan online", "Les privat", "Beasiswa", "Hadiah ulang tahun",
+                "Hasil investasi", "Bonus kerja", "Jual barang bekas"
             ]
             
             expense_descriptions = [
                 "Makan siang kampus", "Transportasi online", "Beli buku kuliah",
                 "Bayar kos", "Beli pulsa", "Jajan di kantin", "Fotokopi tugas",
                 "Beli alat tulis", "Nonton bioskop", "Belanja online",
-                "Bayar internet", "Beli kopi", "Makan malam", "Bensin motor"
+                "Bayar internet", "Beli kopi", "Makan malam", "Bensin motor",
+                "Bayar listrik", "Laundry", "Beli obat", "Potong rambut"
             ]
             
-            for user in self.demo_users:
+            # Batch insert untuk performa
+            batch_size = 100
+            transactions_batch = []
+            
+            for user_idx, user in enumerate(self.demo_users):
                 user_id = user["id"]
                 
                 for _ in range(transactions_per_user):
-                    # 20% income, 80% expense
-                    transaction_type = TransactionType.INCOME if random.random() < 0.2 else TransactionType.EXPENSE
+                    # 25% income, 75% expense
+                    transaction_type = TransactionType.INCOME if random.random() < 0.25 else TransactionType.EXPENSE
                     
                     # Pilih kategori yang sesuai
                     if transaction_type == TransactionType.INCOME:
-                        # Kategori income: Salary, Freelance, Investment
+                        # Kategori income
                         income_categories = [c for c in self.categories if c["name"] in ["Salary & Income", "Freelance", "Investment"]]
                         category = random.choice(income_categories) if income_categories else random.choice(self.categories)
                         description = random.choice(income_descriptions)
                         amount = random.uniform(100000, 2000000)  # 100rb - 2jt
                     else:
-                        # Kategori expense: yang lainnya
+                        # Kategori expense
                         expense_categories = [c for c in self.categories if c["name"] not in ["Salary & Income", "Freelance", "Investment"]]
                         category = random.choice(expense_categories) if expense_categories else random.choice(self.categories)
                         description = random.choice(expense_descriptions)
@@ -236,25 +363,33 @@ class DemoDataSeeder:
                     days_ago = random.randint(1, 180)
                     transaction_date = date.today() - timedelta(days=days_ago)
                     
-                    transaction_doc = TransactionInDB(
-                        user_id=user_id,
-                        category_id=str(category["_id"]),
-                        transaction_type=transaction_type,
-                        amount=round(amount, 2),
-                        description=description,
-                        transaction_date=transaction_date,
-                        created_at=datetime.utcnow() - timedelta(days=days_ago),
-                        updated_at=datetime.utcnow() - timedelta(days=days_ago)
-                    )
+                    transaction_data = {
+                        "user_id": user_id,
+                        "category_id": str(category["_id"]),
+                        "transaction_type": transaction_type.value,
+                        "amount": round(amount, 2),
+                        "description": description,
+                        "transaction_date": transaction_date,
+                        "created_at": datetime.utcnow() - timedelta(days=days_ago),
+                        "updated_at": datetime.utcnow() - timedelta(days=days_ago)
+                    }
                     
-                    await collection.insert_one(
-                        transaction_doc.model_dump(by_alias=True, exclude={"id"})
-                    )
+                    transactions_batch.append(transaction_data)
                     
-                    self.transactions_created += 1
+                    # Insert batch ketika mencapai batch_size
+                    if len(transactions_batch) >= batch_size:
+                        await collection.insert_many(transactions_batch)
+                        self.transactions_created += len(transactions_batch)
+                        transactions_batch = []
                 
-                if len(self.demo_users) > 10 and (len([u for u in self.demo_users if u == user]) % 5 == 0):
-                    logger.info(f"   ✨ Created transactions for {self.demo_users.index(user) + 1}/{len(self.demo_users)} users")
+                # Log progress
+                if (user_idx + 1) % 10 == 0:
+                    logger.info(f"   ✨ Created transactions for {user_idx + 1}/{len(self.demo_users)} users")
+            
+            # Insert sisa batch
+            if transactions_batch:
+                await collection.insert_many(transactions_batch)
+                self.transactions_created += len(transactions_batch)
             
             logger.info(f"✅ Berhasil membuat {self.transactions_created} transaksi demo")
             return True
@@ -263,7 +398,7 @@ class DemoDataSeeder:
             logger.error(f"❌ Error creating demo transactions: {e}")
             return False
     
-    async def create_demo_savings_targets(self, targets_per_user=3):
+    async def create_demo_savings_targets(self, targets_per_user=4):
         """Buat savings targets demo untuk setiap user."""
         try:
             db = await get_database()
@@ -275,10 +410,15 @@ class DemoDataSeeder:
                 "Laptop baru", "Liburan akhir tahun", "Emergency fund", 
                 "Motor baru", "Kamera DSLR", "iPhone baru", "Dana skripsi",
                 "Uang semester", "Modal usaha", "Gadget gaming", "Travelling Eropa",
-                "Wedding fund", "Investasi emas", "Dana tugas akhir"
+                "Wedding fund", "Investasi emas", "Dana tugas akhir", "Tablet untuk kuliah",
+                "Sepatu sneakers", "Headphone premium", "Smartwatch", "Dana magang"
             ]
             
-            for user in self.demo_users:
+            # Batch insert untuk performa
+            batch_size = 50
+            targets_batch = []
+            
+            for user_idx, user in enumerate(self.demo_users):
                 user_id = user["id"]
                 
                 for _ in range(random.randint(1, targets_per_user)):
@@ -293,27 +433,34 @@ class DemoDataSeeder:
                     days_ahead = random.randint(90, 730)
                     target_date = date.today() + timedelta(days=days_ahead)
                     
-                    # 20% chance sudah achieved
-                    is_achieved = random.random() < 0.2
+                    # 15% chance sudah achieved
+                    is_achieved = random.random() < 0.15
                     if is_achieved:
                         current_amount = target_amount
                     
-                    savings_target_doc = SavingsTargetInDB(
-                        user_id=user_id,
-                        target_name=target_name,
-                        target_amount=round(target_amount, 2),
-                        current_amount=round(current_amount, 2),
-                        target_date=target_date,
-                        is_achieved=is_achieved,
-                        created_at=datetime.utcnow() - timedelta(days=random.randint(1, 100)),
-                        updated_at=datetime.utcnow()
-                    )
+                    target_data = {
+                        "user_id": user_id,
+                        "target_name": target_name,
+                        "target_amount": round(target_amount, 2),
+                        "current_amount": round(current_amount, 2),
+                        "target_date": target_date,
+                        "is_achieved": is_achieved,
+                        "created_at": datetime.utcnow() - timedelta(days=random.randint(1, 100)),
+                        "updated_at": datetime.utcnow()
+                    }
                     
-                    await collection.insert_one(
-                        savings_target_doc.model_dump(by_alias=True, exclude={"id"})
-                    )
+                    targets_batch.append(target_data)
                     
-                    self.savings_targets_created += 1
+                    # Insert batch ketika mencapai batch_size
+                    if len(targets_batch) >= batch_size:
+                        await collection.insert_many(targets_batch)
+                        self.savings_targets_created += len(targets_batch)
+                        targets_batch = []
+            
+            # Insert sisa batch
+            if targets_batch:
+                await collection.insert_many(targets_batch)
+                self.savings_targets_created += len(targets_batch)
             
             logger.info(f"✅ Berhasil membuat {self.savings_targets_created} target tabungan demo")
             return True
@@ -322,66 +469,20 @@ class DemoDataSeeder:
             logger.error(f"❌ Error creating demo savings targets: {e}")
             return False
     
-    async def create_admin_user(self):
-        """Buat user admin untuk testing."""
-        try:
-            db = await get_database()
-            collection = db.users
-            
-            # Cek apakah admin sudah ada
-            existing_admin = await collection.find_one({"email": "admin@lunance.ac.id"})
-            if existing_admin:
-                logger.info("✅ Admin user sudah ada, dilewati")
-                return True
-            
-            admin_doc = UserInDB(
-                email="admin@lunance.ac.id",
-                full_name="Admin Lunance",
-                phone_number="6281234567890",
-                university_id=None,
-                faculty_id=None,
-                major_id=None,
-                role=UserRole.ADMIN,
-                initial_savings=0.0,
-                password_hash=hash_password("AdminPassword123!"),
-                is_active=True,
-                is_verified=True,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow()
-            )
-            
-            # Pastikan tidak ada field yang null/undefined yang bisa menyebabkan index error
-            doc_data = admin_doc.model_dump(by_alias=True, exclude={"id"})
-            
-            result = await collection.insert_one(doc_data)
-            
-            logger.info(f"✨ Admin user berhasil dibuat dengan ID: {result.inserted_id}")
-            logger.info("   📧 Email: admin@lunance.ac.id")
-            logger.info("   🔐 Password: AdminPassword123!")
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"❌ Error creating admin user: {e}")
-            # Jika error karena duplicate key, coba cek lebih detail
-            if "E11000" in str(e) and "username" in str(e):
-                logger.error("❌ Error disebabkan oleh index 'username' yang tidak diperlukan")
-                logger.info("💡 Jalankan: python scripts/data_seeds/fix_database_indexes.py")
-            return False
-    
     async def print_summary(self):
         """Cetak ringkasan hasil seeding."""
         logger.info("\n" + "="*60)
         logger.info("📊 RINGKASAN SEEDING DATA DEMO")
         logger.info("="*60)
-        logger.info(f"👥 Users demo dibuat: {self.users_created}")
+        logger.info(f"👑 Admin user dibuat: 1")
+        logger.info(f"👥 Users mahasiswa dibuat: {self.users_created}")
         logger.info(f"💰 Transaksi dibuat: {self.transactions_created}")
         logger.info(f"🎯 Target tabungan dibuat: {self.savings_targets_created}")
         logger.info("="*60)
         
         # Tampilkan beberapa contoh user
-        logger.info("\n👥 CONTOH USERS DEMO:")
-        logger.info("-" * 50)
+        logger.info("\n👥 CONTOH USERS MAHASISWA DEMO:")
+        logger.info("-" * 60)
         for i, user in enumerate(self.demo_users[:5], 1):
             logger.info(f"{i}. {user['name']:<25} | {user['email']}")
         
@@ -393,18 +494,32 @@ class DemoDataSeeder:
         logger.info("👑 Admin:")
         logger.info("   Email: admin@lunance.ac.id")
         logger.info("   Password: AdminPassword123!")
-        logger.info("\n👤 Student (semua demo users):")
+        logger.info(f"\n👤 Student (semua {self.users_created} demo users):")
         logger.info("   Password: Password123!")
+        
+        logger.info("\n💡 STATISTIK TAMBAHAN:")
+        logger.info("-" * 30)
+        if self.demo_users:
+            avg_transactions = self.transactions_created / len(self.demo_users)
+            avg_targets = self.savings_targets_created / len(self.demo_users)
+            logger.info(f"📊 Rata-rata transaksi per user: {avg_transactions:.1f}")
+            logger.info(f"📊 Rata-rata target per user: {avg_targets:.1f}")
 
 
 async def main():
     """Fungsi utama untuk menjalankan seeding."""
-    seeder = DemoDataSeeder()
+    seeder = DemoDataSeederFixed()
     
     try:
         # Koneksi ke database
         await connect_to_mongo()
         logger.info("🔗 Berhasil terhubung ke MongoDB")
+        
+        # Cek dan hapus index yang bermasalah
+        await seeder.check_and_drop_problematic_indexes()
+        
+        # Load existing emails untuk menghindari duplikasi
+        await seeder.load_existing_emails()
         
         # Load existing data
         if not await seeder.load_existing_data():
@@ -412,25 +527,28 @@ async def main():
             sys.exit(1)
         
         # Buat admin user
-        await seeder.create_admin_user()
+        success = await seeder.create_admin_user()
+        if not success:
+            logger.error("❌ Gagal membuat admin user!")
+            sys.exit(1)
         
-        # Buat demo users
-        success = await seeder.create_demo_users(count=20)
+        # Buat 100 demo users mahasiswa
+        success = await seeder.create_demo_users(count=100)
         if not success:
             logger.error("❌ Gagal membuat demo users!")
             sys.exit(1)
         
-        # Buat demo transactions
-        success = await seeder.create_demo_transactions(transactions_per_user=50)
-        if not success:
-            logger.error("❌ Gagal membuat demo transactions!")
-            sys.exit(1)
-        
-        # Buat demo savings targets
-        success = await seeder.create_demo_savings_targets(targets_per_user=4)
-        if not success:
-            logger.error("❌ Gagal membuat demo savings targets!")
-            sys.exit(1)
+        # Hanya buat transaksi dan target jika berhasil buat users
+        if seeder.users_created > 0:
+            # Buat demo transactions
+            success = await seeder.create_demo_transactions(transactions_per_user=50)
+            if not success:
+                logger.warning("⚠️ Gagal membuat demo transactions, tapi users sudah berhasil dibuat")
+            
+            # Buat demo savings targets
+            success = await seeder.create_demo_savings_targets(targets_per_user=4)
+            if not success:
+                logger.warning("⚠️ Gagal membuat demo savings targets, tapi users sudah berhasil dibuat")
         
         # Tampilkan ringkasan
         await seeder.print_summary()
@@ -438,6 +556,9 @@ async def main():
         logger.info("\n🎉 Seeding data demo berhasil!")
         logger.info("💡 Tip: Gunakan kredensial di atas untuk login dan testing")
         
+    except KeyboardInterrupt:
+        logger.info("\n⚠️ Proses dihentikan oleh user")
+        sys.exit(1)
     except Exception as e:
         logger.error(f"❌ Error utama: {e}")
         sys.exit(1)

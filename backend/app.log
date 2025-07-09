@@ -1791,3 +1791,643 @@ pydantic_core._pydantic_core.PydanticSerializationError: Unable to serialize unk
 2025-07-08 15:35:01,528 - app.core.startup - INFO - All startup tasks completed successfully!
 2025-07-08 15:35:09,381 - app.config.database - INFO - Closing MongoDB connection...
 2025-07-08 15:35:09,382 - app.config.database - INFO - MongoDB connection closed.
+2025-07-08 16:28:58,503 - app.config.database - INFO - Connecting to MongoDB...
+2025-07-08 16:28:58,546 - app.config.database - INFO - Successfully connected to MongoDB!
+2025-07-08 16:28:58,547 - app.config.database - INFO - Creating database indexes...
+2025-07-08 16:28:58,554 - app.config.database - INFO - Database indexes created successfully!
+2025-07-08 16:28:58,584 - app.config.database_indexes - INFO - Creating database indexes...
+2025-07-08 16:28:58,588 - app.config.database_indexes - INFO - User indexes created successfully
+2025-07-08 16:28:58,593 - app.config.database_indexes - INFO - University indexes created successfully
+2025-07-08 16:28:58,596 - app.config.database_indexes - INFO - Category indexes created successfully
+2025-07-08 16:28:58,603 - app.config.database_indexes - INFO - Transaction indexes created successfully
+2025-07-08 16:28:58,608 - app.config.database_indexes - INFO - Savings target indexes created successfully
+2025-07-08 16:28:58,611 - app.config.database_indexes - INFO - University request indexes created successfully
+2025-07-08 16:28:58,616 - app.config.database_indexes - INFO - OTP verification indexes created successfully
+2025-07-08 16:28:58,616 - app.config.database_indexes - INFO - All database indexes created successfully!
+2025-07-08 16:28:58,629 - app.core.startup - INFO - Running startup tasks...
+2025-07-08 16:28:58,629 - app.core.startup - INFO - Initializing core services...
+2025-07-08 16:28:58,630 - app.core.startup - WARNING - Email service initialization failed: 'EmailService' object has no attribute 'verify_smtp_connection'
+2025-07-08 16:28:58,630 - app.core.startup - INFO - Core services initialized
+2025-07-08 16:28:58,630 - app.core.startup - INFO - Initializing AI services...
+2025-07-08 16:28:58,630 - app.core.startup - INFO - Chatbot service initialized
+2025-07-08 16:29:05,731 - app.core.startup - WARNING - Prediction service not available: cannot import name 'IncomePredictin' from 'app.models.prediction' (D:\kuliah\semester 6\Tugas Akhir\aplikasi\lunance\backend\app\models\prediction.py)
+2025-07-08 16:29:05,731 - app.core.startup - INFO - Creating placeholder prediction service...
+2025-07-08 16:29:05,731 - app.core.startup - INFO - Financial prediction service will be available when dependencies are installed
+2025-07-08 16:29:05,735 - app.core.startup - INFO - Context service initialized
+2025-07-08 16:29:05,743 - app.core.startup - INFO - Analytics service initialized
+2025-07-08 16:29:05,744 - app.core.startup - INFO - Hugging Face API key configured
+2025-07-08 16:29:05,744 - app.core.startup - INFO - AI services initialized
+2025-07-08 16:29:05,744 - app.core.startup - INFO - Verifying services health...
+2025-07-08 16:29:05,751 - app.core.startup - INFO - Health check: 5/5 services healthy
+2025-07-08 16:29:05,751 - app.core.startup - INFO - Creating default data for development...
+2025-07-08 16:29:05,754 - app.core.startup - INFO - 10 global categories already exist
+2025-07-08 16:29:05,966 - app.core.startup - ERROR - Error creating demo user: E11000 duplicate key error collection: lunance_db.users index: username_1 dup key: { : null }, full error: {'index': 0, 'code': 11000, 'errmsg': 'E11000 duplicate key error collection: lunance_db.users index: username_1 dup key: { : null }'}
+2025-07-08 16:29:05,966 - app.core.startup - INFO - Default data created
+2025-07-08 16:29:05,966 - app.core.startup - INFO - All startup tasks completed successfully!
+2025-07-08 16:29:05,974 - app.main - INFO -    - Local: http://localhost:8000
+2025-07-08 16:29:05,974 - app.main - INFO -    - Network: http://192.168.101.5:8000
+2025-07-08 16:29:05,975 - app.main - INFO -    - Documentation: http://192.168.101.5:8000/docs
+2025-07-08 16:29:52,489 - app.main - WARNING - HTTP Exception: 404 - Not Found
+2025-07-08 16:34:15,666 - app.config.database - INFO - Closing MongoDB connection...
+2025-07-08 16:34:15,668 - app.config.database - INFO - MongoDB connection closed.
+2025-07-08 16:50:50,379 - app.config.database - INFO - Connecting to MongoDB...
+2025-07-08 16:50:50,408 - app.config.database - INFO - Successfully connected to MongoDB!
+2025-07-08 16:50:50,409 - app.config.database - INFO - Creating database indexes...
+2025-07-08 16:50:50,420 - app.config.database - ERROR - Error creating indexes: E11000 duplicate key error collection: lunance_db.users index: username_1 dup key: { : null }, full error: {'ok': 0.0, 'errmsg': 'E11000 duplicate key error collection: lunance_db.users index: username_1 dup key: { : null }', 'code': 11000, 'codeName': 'DuplicateKey'}
+2025-07-08 16:50:50,429 - app.config.database_indexes - INFO - Creating database indexes...
+2025-07-08 16:50:50,434 - app.config.database_indexes - INFO - User indexes created successfully
+2025-07-08 16:50:50,437 - app.config.database_indexes - INFO - University indexes created successfully
+2025-07-08 16:50:50,441 - app.config.database_indexes - INFO - Category indexes created successfully
+2025-07-08 16:50:50,446 - app.config.database_indexes - INFO - Transaction indexes created successfully
+2025-07-08 16:50:50,451 - app.config.database_indexes - INFO - Savings target indexes created successfully
+2025-07-08 16:50:50,454 - app.config.database_indexes - INFO - University request indexes created successfully
+2025-07-08 16:50:50,458 - app.config.database_indexes - INFO - OTP verification indexes created successfully
+2025-07-08 16:50:50,458 - app.config.database_indexes - INFO - All database indexes created successfully!
+2025-07-08 16:50:50,464 - app.core.startup - INFO - Running startup tasks...
+2025-07-08 16:50:50,464 - app.core.startup - INFO - Initializing core services...
+2025-07-08 16:50:50,464 - app.core.startup - WARNING - Email service initialization failed: 'EmailService' object has no attribute 'verify_smtp_connection'
+2025-07-08 16:50:50,464 - app.core.startup - INFO - Core services initialized
+2025-07-08 16:50:50,464 - app.core.startup - INFO - Initializing AI services...
+2025-07-08 16:50:50,464 - app.core.startup - INFO - Chatbot service initialized
+2025-07-08 16:50:50,787 - app.core.startup - WARNING - Prediction service not available: cannot import name 'IncomePredictin' from 'app.models.prediction' (D:\kuliah\semester 6\Tugas Akhir\aplikasi\lunance\backend\app\models\prediction.py)
+2025-07-08 16:50:50,787 - app.core.startup - INFO - Creating placeholder prediction service...
+2025-07-08 16:50:50,787 - app.core.startup - INFO - Financial prediction service will be available when dependencies are installed
+2025-07-08 16:50:50,788 - app.core.startup - INFO - Context service initialized
+2025-07-08 16:50:50,789 - app.core.startup - INFO - Analytics service initialized
+2025-07-08 16:50:50,789 - app.core.startup - INFO - Hugging Face API key configured
+2025-07-08 16:50:50,789 - app.core.startup - INFO - AI services initialized
+2025-07-08 16:50:50,789 - app.core.startup - INFO - Verifying services health...
+2025-07-08 16:50:50,795 - app.core.startup - INFO - Health check: 5/5 services healthy
+2025-07-08 16:50:50,795 - app.core.startup - INFO - Creating default data for development...
+2025-07-08 16:50:50,796 - app.core.startup - INFO - 10 global categories already exist
+2025-07-08 16:50:51,001 - app.core.startup - INFO - Demo user created: demo@university.ac.id / DemoPassword123!
+2025-07-08 16:50:51,001 - app.core.startup - INFO - Default data created
+2025-07-08 16:50:51,001 - app.core.startup - INFO - All startup tasks completed successfully!
+2025-07-08 16:50:51,006 - app.main - INFO -    - Local: http://localhost:8000
+2025-07-08 16:50:51,006 - app.main - INFO -    - Network: http://192.168.101.5:8000
+2025-07-08 16:50:51,007 - app.main - INFO -    - Documentation: http://192.168.101.5:8000/docs
+2025-07-08 16:51:25,358 - app.main - WARNING - HTTP Exception: 404 - Not Found
+2025-07-08 16:51:38,874 - app.main - WARNING - HTTP Exception: 404 - Not Found
+2025-07-08 16:51:46,895 - app.utils.jwt - ERROR - Error creating access token: module 'jwt' has no attribute 'encode'
+2025-07-08 16:51:46,895 - app.services.auth_service - ERROR - Login error: Failed to create access token
+2025-07-08 16:51:46,895 - app.api.v1.endpoints.auth - WARNING - Failed login attempt for: admin@lunance.ac.id from IP: 127.0.0.1
+2025-07-08 16:51:46,896 - app.main - WARNING - HTTP Exception: 401 - Login failed
+2025-07-08 16:53:23,215 - app.utils.jwt - ERROR - Error creating access token: module 'jwt' has no attribute 'encode'
+2025-07-08 16:53:23,216 - app.services.auth_service - ERROR - Login error: Failed to create access token
+2025-07-08 16:53:23,216 - app.api.v1.endpoints.auth - WARNING - Failed login attempt for: admin@lunance.ac.id from IP: 127.0.0.1
+2025-07-08 16:53:23,217 - app.main - WARNING - HTTP Exception: 401 - Login failed
+2025-07-08 16:53:37,777 - app.api.v1.endpoints.auth - WARNING - Failed login attempt for: ahmad.fauzi@ui.ac.id from IP: 127.0.0.1
+2025-07-08 16:53:37,778 - app.main - WARNING - HTTP Exception: 401 - Invalid email or password
+2025-07-08 17:02:21,510 - app.utils.jwt - ERROR - Error creating access token: module 'jwt' has no attribute 'encode'
+2025-07-08 17:02:21,510 - app.services.auth_service - ERROR - Login error: Failed to create access token
+2025-07-08 17:02:21,510 - app.api.v1.endpoints.auth - WARNING - Failed login attempt for: admin@lunance.ac.id from IP: 127.0.0.1
+2025-07-08 17:02:21,511 - app.main - WARNING - HTTP Exception: 401 - Login failed
+2025-07-08 17:02:23,570 - app.main - WARNING - HTTP Exception: 404 - Not Found
+2025-07-08 17:02:25,631 - app.main - WARNING - HTTP Exception: 404 - Not Found
+2025-07-08 17:02:27,719 - app.main - WARNING - HTTP Exception: 404 - Not Found
+2025-07-08 17:02:29,776 - app.main - WARNING - HTTP Exception: 404 - Not Found
+2025-07-08 17:02:31,853 - app.main - WARNING - HTTP Exception: 404 - Not Found
+2025-07-08 17:02:34,133 - app.utils.jwt - ERROR - Error creating access token: module 'jwt' has no attribute 'encode'
+2025-07-08 17:02:34,133 - app.services.auth_service - ERROR - Login error: Failed to create access token
+2025-07-08 17:02:34,133 - app.api.v1.endpoints.auth - WARNING - Failed login attempt for: admin@lunance.ac.id from IP: 127.0.0.1
+2025-07-08 17:02:34,133 - app.main - WARNING - HTTP Exception: 401 - Login failed
+2025-07-08 17:02:36,426 - app.services.auth_service - WARNING - Failed login attempt for: admin@lunance.ac.id
+2025-07-08 17:02:36,427 - app.api.v1.endpoints.auth - WARNING - Failed login attempt for: admin@lunance.ac.id from IP: 127.0.0.1
+2025-07-08 17:02:36,427 - app.main - WARNING - HTTP Exception: 401 - Invalid email or password
+2025-07-08 17:02:38,720 - app.services.auth_service - WARNING - Failed login attempt for: admin@lunance.ac.id
+2025-07-08 17:02:38,722 - app.api.v1.endpoints.auth - WARNING - Failed login attempt for: admin@lunance.ac.id from IP: 127.0.0.1
+2025-07-08 17:02:38,722 - app.main - WARNING - HTTP Exception: 401 - Invalid email or password
+2025-07-08 17:02:40,805 - app.api.v1.endpoints.auth - WARNING - Failed login attempt for: test@ui.ac.id from IP: 127.0.0.1
+2025-07-08 17:02:40,806 - app.main - WARNING - HTTP Exception: 401 - Invalid email or password
+2025-07-08 17:05:59,686 - app.config.database - INFO - Closing MongoDB connection...
+2025-07-08 17:05:59,687 - app.config.database - INFO - MongoDB connection closed.
+2025-07-08 17:06:01,781 - app.config.database - INFO - Connecting to MongoDB...
+2025-07-08 17:06:01,803 - app.config.database - INFO - Successfully connected to MongoDB!
+2025-07-08 17:06:01,804 - app.config.database - INFO - Creating database indexes...
+2025-07-08 17:06:01,822 - app.config.database - ERROR - Error creating indexes: E11000 duplicate key error collection: lunance_db.users index: username_1 dup key: { : null }, full error: {'ok': 0.0, 'errmsg': 'E11000 duplicate key error collection: lunance_db.users index: username_1 dup key: { : null }', 'code': 11000, 'codeName': 'DuplicateKey'}
+2025-07-08 17:06:01,830 - app.config.database_indexes - INFO - Creating database indexes...
+2025-07-08 17:06:01,838 - app.config.database_indexes - INFO - User indexes created successfully
+2025-07-08 17:06:01,841 - app.config.database_indexes - INFO - University indexes created successfully
+2025-07-08 17:06:01,844 - app.config.database_indexes - INFO - Category indexes created successfully
+2025-07-08 17:06:01,849 - app.config.database_indexes - INFO - Transaction indexes created successfully
+2025-07-08 17:06:01,852 - app.config.database_indexes - INFO - Savings target indexes created successfully
+2025-07-08 17:06:01,855 - app.config.database_indexes - INFO - University request indexes created successfully
+2025-07-08 17:06:01,859 - app.config.database_indexes - INFO - OTP verification indexes created successfully
+2025-07-08 17:06:01,860 - app.config.database_indexes - INFO - All database indexes created successfully!
+2025-07-08 17:06:01,868 - app.core.startup - INFO - Running startup tasks...
+2025-07-08 17:06:01,868 - app.core.startup - INFO - Initializing core services...
+2025-07-08 17:06:01,868 - app.core.startup - WARNING - Email service initialization failed: 'EmailService' object has no attribute 'verify_smtp_connection'
+2025-07-08 17:06:01,868 - app.core.startup - INFO - Core services initialized
+2025-07-08 17:06:01,868 - app.core.startup - INFO - Initializing AI services...
+2025-07-08 17:06:01,868 - app.core.startup - INFO - Chatbot service initialized
+2025-07-08 17:06:02,216 - app.core.startup - WARNING - Prediction service not available: cannot import name 'IncomePredictin' from 'app.models.prediction' (D:\kuliah\semester 6\Tugas Akhir\aplikasi\lunance\backend\app\models\prediction.py)
+2025-07-08 17:06:02,217 - app.core.startup - INFO - Creating placeholder prediction service...
+2025-07-08 17:06:02,217 - app.core.startup - INFO - Financial prediction service will be available when dependencies are installed
+2025-07-08 17:06:02,218 - app.core.startup - INFO - Context service initialized
+2025-07-08 17:06:02,219 - app.core.startup - INFO - Analytics service initialized
+2025-07-08 17:06:02,219 - app.core.startup - INFO - Hugging Face API key configured
+2025-07-08 17:06:02,220 - app.core.startup - INFO - AI services initialized
+2025-07-08 17:06:02,220 - app.core.startup - INFO - Verifying services health...
+2025-07-08 17:06:02,225 - app.core.startup - INFO - Health check: 5/5 services healthy
+2025-07-08 17:06:02,225 - app.core.startup - INFO - Creating default data for development...
+2025-07-08 17:06:02,226 - app.core.startup - INFO - 10 global categories already exist
+2025-07-08 17:06:02,227 - app.core.startup - INFO - Demo user already exists
+2025-07-08 17:06:02,227 - app.core.startup - INFO - Default data created
+2025-07-08 17:06:02,228 - app.core.startup - INFO - All startup tasks completed successfully!
+2025-07-08 17:06:02,235 - app.main - INFO -    - Local: http://localhost:8000
+2025-07-08 17:06:02,235 - app.main - INFO -    - Network: http://192.168.101.5:8000
+2025-07-08 17:06:02,235 - app.main - INFO -    - Documentation: http://192.168.101.5:8000/docs
+2025-07-08 17:06:27,029 - app.services.auth_service - ERROR - Login error: 1 validation error for UserInDB
+role
+  Input should be 'admin' or 'student' [type=enum, input_value='ADMIN', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.11/v/enum
+2025-07-08 17:06:27,032 - app.api.v1.endpoints.auth - WARNING - Failed login attempt for: admin@lunance.ac.id from IP: 127.0.0.1
+2025-07-08 17:06:27,032 - app.main - WARNING - HTTP Exception: 401 - Login failed
+2025-07-08 17:06:52,581 - app.services.auth_service - ERROR - Login error: 1 validation error for UserInDB
+role
+  Input should be 'admin' or 'student' [type=enum, input_value='STUDENT', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.11/v/enum
+2025-07-08 17:06:52,581 - app.api.v1.endpoints.auth - WARNING - Failed login attempt for: sabrina.uwais@ugm.ac.id from IP: 127.0.0.1
+2025-07-08 17:06:52,581 - app.main - WARNING - HTTP Exception: 401 - Login failed
+2025-07-08 17:07:46,801 - app.services.auth_service - ERROR - Login error: 1 validation error for UserInDB
+role
+  Input should be 'admin' or 'student' [type=enum, input_value='ADMIN', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.11/v/enum
+2025-07-08 17:07:46,801 - app.api.v1.endpoints.auth - WARNING - Failed login attempt for: admin@lunance.ac.id from IP: 127.0.0.1
+2025-07-08 17:07:46,802 - app.main - WARNING - HTTP Exception: 401 - Login failed
+2025-07-08 17:13:05,331 - app.config.database - INFO - Closing MongoDB connection...
+2025-07-08 17:13:05,332 - app.config.database - INFO - MongoDB connection closed.
+2025-07-08 17:13:07,911 - app.config.database - INFO - Connecting to MongoDB...
+2025-07-08 17:13:07,922 - app.config.database - INFO - Successfully connected to MongoDB!
+2025-07-08 17:13:07,923 - app.config.database - INFO - Creating database indexes...
+2025-07-08 17:13:07,936 - app.config.database - INFO - Database indexes created successfully!
+2025-07-08 17:13:07,942 - app.config.database_indexes - INFO - Creating database indexes...
+2025-07-08 17:13:08,016 - app.config.database_indexes - INFO - User indexes created successfully
+2025-07-08 17:13:08,018 - app.config.database_indexes - INFO - University indexes created successfully
+2025-07-08 17:13:08,021 - app.config.database_indexes - INFO - Category indexes created successfully
+2025-07-08 17:13:08,028 - app.config.database_indexes - INFO - Transaction indexes created successfully
+2025-07-08 17:13:08,033 - app.config.database_indexes - INFO - Savings target indexes created successfully
+2025-07-08 17:13:08,038 - app.config.database_indexes - INFO - University request indexes created successfully
+2025-07-08 17:13:08,042 - app.config.database_indexes - INFO - OTP verification indexes created successfully
+2025-07-08 17:13:08,042 - app.config.database_indexes - INFO - All database indexes created successfully!
+2025-07-08 17:13:08,049 - app.core.startup - INFO - Running startup tasks...
+2025-07-08 17:13:08,049 - app.core.startup - INFO - Initializing core services...
+2025-07-08 17:13:08,049 - app.core.startup - WARNING - Email service initialization failed: 'EmailService' object has no attribute 'verify_smtp_connection'
+2025-07-08 17:13:08,049 - app.core.startup - INFO - Core services initialized
+2025-07-08 17:13:08,050 - app.core.startup - INFO - Initializing AI services...
+2025-07-08 17:13:08,050 - app.core.startup - INFO - Chatbot service initialized
+2025-07-08 17:13:08,382 - app.core.startup - WARNING - Prediction service not available: cannot import name 'IncomePredictin' from 'app.models.prediction' (D:\kuliah\semester 6\Tugas Akhir\aplikasi\lunance\backend\app\models\prediction.py)
+2025-07-08 17:13:08,382 - app.core.startup - INFO - Creating placeholder prediction service...
+2025-07-08 17:13:08,382 - app.core.startup - INFO - Financial prediction service will be available when dependencies are installed
+2025-07-08 17:13:08,384 - app.core.startup - INFO - Context service initialized
+2025-07-08 17:13:08,385 - app.core.startup - INFO - Analytics service initialized
+2025-07-08 17:13:08,385 - app.core.startup - INFO - Hugging Face API key configured
+2025-07-08 17:13:08,385 - app.core.startup - INFO - AI services initialized
+2025-07-08 17:13:08,385 - app.core.startup - INFO - Verifying services health...
+2025-07-08 17:13:08,390 - app.core.startup - INFO - Health check: 5/5 services healthy
+2025-07-08 17:13:08,390 - app.core.startup - INFO - Creating default data for development...
+2025-07-08 17:13:08,391 - app.core.startup - INFO - 10 global categories already exist
+2025-07-08 17:13:08,392 - app.core.startup - INFO - Demo user already exists
+2025-07-08 17:13:08,392 - app.core.startup - INFO - Default data created
+2025-07-08 17:13:08,393 - app.core.startup - INFO - All startup tasks completed successfully!
+2025-07-08 17:13:08,398 - app.main - INFO -    - Local: http://localhost:8000
+2025-07-08 17:13:08,398 - app.main - INFO -    - Network: http://192.168.101.5:8000
+2025-07-08 17:13:08,399 - app.main - INFO -    - Documentation: http://192.168.101.5:8000/docs
+2025-07-08 17:13:11,787 - app.utils.jwt - ERROR - Error creating access token: module 'jwt' has no attribute 'encode'
+2025-07-08 17:13:11,787 - app.services.auth_service - ERROR - Login error: Failed to create access token
+2025-07-08 17:13:11,787 - app.api.v1.endpoints.auth - WARNING - Failed login attempt for: sabrina.uwais@ugm.ac.id from IP: 127.0.0.1
+2025-07-08 17:13:11,788 - app.main - WARNING - HTTP Exception: 401 - Login failed
+2025-07-08 17:13:41,201 - app.utils.jwt - ERROR - Error creating access token: module 'jwt' has no attribute 'encode'
+2025-07-08 17:13:41,202 - app.services.auth_service - ERROR - Login error: Failed to create access token
+2025-07-08 17:13:41,202 - app.api.v1.endpoints.auth - WARNING - Failed login attempt for: sabrina.uwais@ugm.ac.id from IP: 127.0.0.1
+2025-07-08 17:13:41,203 - app.main - WARNING - HTTP Exception: 401 - Login failed
+2025-07-08 17:14:19,616 - app.utils.jwt - ERROR - Error creating access token: module 'jwt' has no attribute 'encode'
+2025-07-08 17:14:19,617 - app.services.auth_service - ERROR - Login error: Failed to create access token
+2025-07-08 17:14:19,617 - app.api.v1.endpoints.auth - WARNING - Failed login attempt for: admin@lunance.ac.id from IP: 127.0.0.1
+2025-07-08 17:14:19,617 - app.main - WARNING - HTTP Exception: 401 - Login failed
+2025-07-08 17:21:58,148 - app.utils.jwt - ERROR - Error creating access token: module 'jwt' has no attribute 'encode'
+2025-07-08 17:21:58,149 - app.services.auth_service - ERROR - Login error: Failed to create access token
+2025-07-08 17:21:58,149 - app.api.v1.endpoints.auth - WARNING - Failed login attempt for: admin@lunance.ac.id from IP: 127.0.0.1
+2025-07-08 17:21:58,149 - app.main - WARNING - HTTP Exception: 401 - Login failed
+2025-07-08 17:22:13,356 - app.config.database - INFO - Connecting to MongoDB...
+2025-07-08 17:22:13,376 - app.config.database - INFO - Successfully connected to MongoDB!
+2025-07-08 17:22:13,376 - app.config.database - INFO - Creating database indexes...
+2025-07-08 17:22:13,381 - app.config.database - INFO - Database indexes created successfully!
+2025-07-08 17:22:13,396 - app.config.database_indexes - INFO - Creating database indexes...
+2025-07-08 17:22:13,402 - app.config.database_indexes - INFO - User indexes created successfully
+2025-07-08 17:22:13,404 - app.config.database_indexes - INFO - University indexes created successfully
+2025-07-08 17:22:13,407 - app.config.database_indexes - INFO - Category indexes created successfully
+2025-07-08 17:22:13,412 - app.config.database_indexes - INFO - Transaction indexes created successfully
+2025-07-08 17:22:13,417 - app.config.database_indexes - INFO - Savings target indexes created successfully
+2025-07-08 17:22:13,420 - app.config.database_indexes - INFO - University request indexes created successfully
+2025-07-08 17:22:13,423 - app.config.database_indexes - INFO - OTP verification indexes created successfully
+2025-07-08 17:22:13,423 - app.config.database_indexes - INFO - All database indexes created successfully!
+2025-07-08 17:22:13,431 - app.core.startup - INFO - Running startup tasks...
+2025-07-08 17:22:13,431 - app.core.startup - INFO - Initializing core services...
+2025-07-08 17:22:13,431 - app.core.startup - WARNING - Email service initialization failed: 'EmailService' object has no attribute 'verify_smtp_connection'
+2025-07-08 17:22:13,431 - app.core.startup - INFO - Core services initialized
+2025-07-08 17:22:13,431 - app.core.startup - INFO - Initializing AI services...
+2025-07-08 17:22:13,431 - app.core.startup - INFO - Chatbot service initialized
+2025-07-08 17:22:13,750 - app.core.startup - WARNING - Prediction service not available: cannot import name 'IncomePredictin' from 'app.models.prediction' (D:\kuliah\semester 6\Tugas Akhir\aplikasi\lunance\backend\app\models\prediction.py)
+2025-07-08 17:22:13,750 - app.core.startup - INFO - Creating placeholder prediction service...
+2025-07-08 17:22:13,750 - app.core.startup - INFO - Financial prediction service will be available when dependencies are installed
+2025-07-08 17:22:13,751 - app.core.startup - INFO - Context service initialized
+2025-07-08 17:22:13,752 - app.core.startup - INFO - Analytics service initialized
+2025-07-08 17:22:13,752 - app.core.startup - INFO - Hugging Face API key configured
+2025-07-08 17:22:13,752 - app.core.startup - INFO - AI services initialized
+2025-07-08 17:22:13,752 - app.core.startup - INFO - Verifying services health...
+2025-07-08 17:22:13,758 - app.core.startup - INFO - Health check: 5/5 services healthy
+2025-07-08 17:22:13,758 - app.core.startup - INFO - Creating default data for development...
+2025-07-08 17:22:13,759 - app.core.startup - INFO - 10 global categories already exist
+2025-07-08 17:22:13,759 - app.core.startup - INFO - Demo user already exists
+2025-07-08 17:22:13,760 - app.core.startup - INFO - Default data created
+2025-07-08 17:22:13,760 - app.core.startup - INFO - All startup tasks completed successfully!
+2025-07-08 17:22:13,765 - app.main - INFO -    - Local: http://localhost:8000
+2025-07-08 17:22:13,765 - app.main - INFO -    - Network: http://192.168.101.5:8000
+2025-07-08 17:22:13,765 - app.main - INFO -    - Documentation: http://192.168.101.5:8000/docs
+2025-07-08 17:22:17,077 - app.utils.jwt - ERROR - Error creating access token: module 'jwt' has no attribute 'encode'
+2025-07-08 17:22:17,078 - app.utils.jwt - ERROR - PyJWT module: <module 'jwt' (namespace) from ['D:\\kuliah\\semester 6\\Tugas Akhir\\aplikasi\\lunance\\backend\\venv\\Lib\\site-packages\\jwt']>
+2025-07-08 17:22:17,078 - app.utils.jwt - ERROR - PyJWT encode method: False
+2025-07-08 17:22:17,078 - app.services.auth_service - ERROR - Login error: Failed to create access token: module 'jwt' has no attribute 'encode'
+2025-07-08 17:22:17,078 - app.api.v1.endpoints.auth - WARNING - Failed login attempt for: admin@lunance.ac.id from IP: 127.0.0.1
+2025-07-08 17:22:17,079 - app.main - WARNING - HTTP Exception: 401 - Login failed
+2025-07-08 17:24:14,131 - app.config.database - INFO - Closing MongoDB connection...
+2025-07-08 17:24:14,132 - app.config.database - INFO - MongoDB connection closed.
+2025-07-08 17:25:52,827 - app.config.database - INFO - Connecting to MongoDB...
+2025-07-08 17:25:52,861 - app.config.database - INFO - Successfully connected to MongoDB!
+2025-07-08 17:25:52,861 - app.config.database - INFO - Creating database indexes...
+2025-07-08 17:25:52,868 - app.config.database - INFO - Database indexes created successfully!
+2025-07-08 17:25:52,876 - app.config.database_indexes - INFO - Creating database indexes...
+2025-07-08 17:25:52,880 - app.config.database_indexes - INFO - User indexes created successfully
+2025-07-08 17:25:52,883 - app.config.database_indexes - INFO - University indexes created successfully
+2025-07-08 17:25:52,886 - app.config.database_indexes - INFO - Category indexes created successfully
+2025-07-08 17:25:52,891 - app.config.database_indexes - INFO - Transaction indexes created successfully
+2025-07-08 17:25:52,895 - app.config.database_indexes - INFO - Savings target indexes created successfully
+2025-07-08 17:25:52,898 - app.config.database_indexes - INFO - University request indexes created successfully
+2025-07-08 17:25:52,903 - app.config.database_indexes - INFO - OTP verification indexes created successfully
+2025-07-08 17:25:52,904 - app.config.database_indexes - INFO - All database indexes created successfully!
+2025-07-08 17:25:52,910 - app.core.startup - INFO - Running startup tasks...
+2025-07-08 17:25:52,910 - app.core.startup - INFO - Initializing core services...
+2025-07-08 17:25:52,910 - app.core.startup - WARNING - Email service initialization failed: 'EmailService' object has no attribute 'verify_smtp_connection'
+2025-07-08 17:25:52,910 - app.core.startup - INFO - Core services initialized
+2025-07-08 17:25:52,910 - app.core.startup - INFO - Initializing AI services...
+2025-07-08 17:25:52,910 - app.core.startup - INFO - Chatbot service initialized
+2025-07-08 17:25:53,238 - app.core.startup - WARNING - Prediction service not available: cannot import name 'IncomePredictin' from 'app.models.prediction' (D:\kuliah\semester 6\Tugas Akhir\aplikasi\lunance\backend\app\models\prediction.py)
+2025-07-08 17:25:53,238 - app.core.startup - INFO - Creating placeholder prediction service...
+2025-07-08 17:25:53,240 - app.core.startup - INFO - Financial prediction service will be available when dependencies are installed
+2025-07-08 17:25:53,241 - app.core.startup - INFO - Context service initialized
+2025-07-08 17:25:53,241 - app.core.startup - INFO - Analytics service initialized
+2025-07-08 17:25:53,241 - app.core.startup - INFO - Hugging Face API key configured
+2025-07-08 17:25:53,241 - app.core.startup - INFO - AI services initialized
+2025-07-08 17:25:53,241 - app.core.startup - INFO - Verifying services health...
+2025-07-08 17:25:53,247 - app.core.startup - INFO - Health check: 5/5 services healthy
+2025-07-08 17:25:53,248 - app.core.startup - INFO - Creating default data for development...
+2025-07-08 17:25:53,249 - app.core.startup - INFO - 10 global categories already exist
+2025-07-08 17:25:53,249 - app.core.startup - INFO - Demo user already exists
+2025-07-08 17:25:53,250 - app.core.startup - INFO - Default data created
+2025-07-08 17:25:53,250 - app.core.startup - INFO - All startup tasks completed successfully!
+2025-07-08 17:25:53,256 - app.main - INFO -    - Local: http://localhost:8000
+2025-07-08 17:25:53,257 - app.main - INFO -    - Network: http://192.168.101.5:8000
+2025-07-08 17:25:53,257 - app.main - INFO -    - Documentation: http://192.168.101.5:8000/docs
+2025-07-08 17:25:56,262 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 127.0.0.1
+2025-07-08 17:25:56,503 - app.services.auth_service - INFO - User logged in successfully: admin@lunance.ac.id
+2025-07-08 17:25:56,504 - app.api.v1.endpoints.auth - INFO - Successful login for: admin@lunance.ac.id from IP: 127.0.0.1
+2025-07-08 17:25:56,507 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 200 (0.245s)
+2025-07-08 17:42:13,783 - app.main - INFO - [REQUEST] GET /docs from 127.0.0.1
+2025-07-08 17:42:13,785 - app.main - INFO - [RESPONSE] GET /docs - 200 (0.002s)
+2025-07-08 17:42:13,874 - app.main - INFO - [REQUEST] GET /openapi.json from 127.0.0.1
+2025-07-08 17:42:14,054 - app.main - INFO - [RESPONSE] GET /openapi.json - 200 (0.179s)
+2025-07-08 20:52:02,724 - app.main - INFO - [REQUEST] GET / from 127.0.0.1
+2025-07-08 20:52:02,772 - app.main - INFO - [RESPONSE] GET / - 200 (0.052s)
+2025-07-08 20:52:10,573 - app.main - INFO - [REQUEST] GET /docs from 127.0.0.1
+2025-07-08 20:52:10,577 - app.main - INFO - [RESPONSE] GET /docs - 200 (0.003s)
+2025-07-08 20:52:10,658 - app.main - INFO - [REQUEST] GET /openapi.json from 127.0.0.1
+2025-07-08 20:52:10,677 - app.main - INFO - [RESPONSE] GET /openapi.json - 200 (0.019s)
+2025-07-09 09:16:35,343 - app.config.database - INFO - Connecting to MongoDB...
+2025-07-09 09:16:35,440 - app.config.database - INFO - Successfully connected to MongoDB!
+2025-07-09 09:16:35,440 - app.config.database - INFO - Creating database indexes...
+2025-07-09 09:16:35,454 - app.config.database - INFO - Database indexes created successfully!
+2025-07-09 09:16:35,516 - app.config.database_indexes - INFO - Creating database indexes...
+2025-07-09 09:16:35,525 - app.config.database_indexes - INFO - User indexes created successfully
+2025-07-09 09:16:35,530 - app.config.database_indexes - INFO - University indexes created successfully
+2025-07-09 09:16:35,538 - app.config.database_indexes - INFO - Category indexes created successfully
+2025-07-09 09:16:35,551 - app.config.database_indexes - INFO - Transaction indexes created successfully
+2025-07-09 09:16:35,560 - app.config.database_indexes - INFO - Savings target indexes created successfully
+2025-07-09 09:16:35,568 - app.config.database_indexes - INFO - University request indexes created successfully
+2025-07-09 09:16:35,577 - app.config.database_indexes - INFO - OTP verification indexes created successfully
+2025-07-09 09:16:35,578 - app.config.database_indexes - INFO - All database indexes created successfully!
+2025-07-09 09:16:35,595 - app.core.startup - INFO - Running startup tasks...
+2025-07-09 09:16:35,595 - app.core.startup - INFO - Initializing core services...
+2025-07-09 09:16:35,595 - app.core.startup - WARNING - Email service initialization failed: 'EmailService' object has no attribute 'verify_smtp_connection'
+2025-07-09 09:16:35,596 - app.core.startup - INFO - Core services initialized
+2025-07-09 09:16:35,596 - app.core.startup - INFO - Initializing AI services...
+2025-07-09 09:16:35,596 - app.core.startup - INFO - Chatbot service initialized
+2025-07-09 09:16:38,108 - app.core.startup - WARNING - Prediction service not available: cannot import name 'IncomePredictin' from 'app.models.prediction' (D:\kuliah\semester 6\Tugas Akhir\aplikasi\lunance\backend\app\models\prediction.py)
+2025-07-09 09:16:38,108 - app.core.startup - INFO - Creating placeholder prediction service...
+2025-07-09 09:16:38,109 - app.core.startup - INFO - Financial prediction service will be available when dependencies are installed
+2025-07-09 09:16:38,111 - app.core.startup - INFO - Context service initialized
+2025-07-09 09:16:38,114 - app.core.startup - INFO - Analytics service initialized
+2025-07-09 09:16:38,114 - app.core.startup - INFO - Hugging Face API key configured
+2025-07-09 09:16:38,114 - app.core.startup - INFO - AI services initialized
+2025-07-09 09:16:38,114 - app.core.startup - INFO - Verifying services health...
+2025-07-09 09:16:38,125 - app.core.startup - INFO - Health check: 5/5 services healthy
+2025-07-09 09:16:38,125 - app.core.startup - INFO - Creating default data for development...
+2025-07-09 09:16:38,157 - app.core.startup - INFO - 10 global categories already exist
+2025-07-09 09:16:38,213 - app.core.startup - INFO - Demo user already exists
+2025-07-09 09:16:38,213 - app.core.startup - INFO - Default data created
+2025-07-09 09:16:38,213 - app.core.startup - INFO - All startup tasks completed successfully!
+2025-07-09 09:16:38,229 - app.main - INFO -    - Local: http://localhost:8000
+2025-07-09 09:16:38,230 - app.main - INFO -    - Network: http://192.168.101.5:8000
+2025-07-09 09:16:38,230 - app.main - INFO -    - Documentation: http://192.168.101.5:8000/docs
+2025-07-09 09:16:48,434 - app.main - INFO - [REQUEST] GET / from 127.0.0.1
+2025-07-09 09:16:48,441 - app.main - INFO - [RESPONSE] GET / - 200 (0.007s)
+2025-07-09 09:16:48,585 - app.main - INFO - [REQUEST] GET /favicon.ico from 127.0.0.1
+2025-07-09 09:16:48,586 - app.main - WARNING - HTTP Exception: 404 - Not Found
+2025-07-09 09:16:48,586 - app.main - INFO - [RESPONSE] GET /favicon.ico - 404 (0.001s)
+2025-07-09 09:16:52,216 - app.main - INFO - [REQUEST] GET /docs from 127.0.0.1
+2025-07-09 09:16:52,218 - app.main - INFO - [RESPONSE] GET /docs - 200 (0.002s)
+2025-07-09 09:16:52,335 - app.main - INFO - [REQUEST] GET /openapi.json from 127.0.0.1
+2025-07-09 09:16:52,722 - app.main - INFO - [RESPONSE] GET /openapi.json - 200 (0.387s)
+2025-07-09 09:16:58,200 - app.main - INFO - [REQUEST] GET /redocs from 127.0.0.1
+2025-07-09 09:16:58,202 - app.main - WARNING - HTTP Exception: 404 - Not Found
+2025-07-09 09:16:58,204 - app.main - INFO - [RESPONSE] GET /redocs - 404 (0.004s)
+2025-07-09 09:17:11,863 - app.main - INFO - [REQUEST] GET /docs from 127.0.0.1
+2025-07-09 09:17:11,864 - app.main - INFO - [RESPONSE] GET /docs - 200 (0.001s)
+2025-07-09 09:17:11,920 - app.main - INFO - [REQUEST] GET /openapi.json from 127.0.0.1
+2025-07-09 09:17:11,929 - app.main - INFO - [RESPONSE] GET /openapi.json - 200 (0.009s)
+2025-07-09 09:27:59,322 - app.config.database - INFO - Connecting to MongoDB...
+2025-07-09 09:27:59,525 - app.config.database - INFO - Successfully connected to MongoDB!
+2025-07-09 09:27:59,526 - app.config.database - INFO - Creating database indexes...
+2025-07-09 09:27:59,545 - app.config.database - INFO - Database indexes created successfully!
+2025-07-09 09:27:59,629 - app.config.database_indexes - INFO - Creating database indexes...
+2025-07-09 09:27:59,639 - app.config.database_indexes - INFO - User indexes created successfully
+2025-07-09 09:27:59,645 - app.config.database_indexes - INFO - University indexes created successfully
+2025-07-09 09:27:59,652 - app.config.database_indexes - INFO - Category indexes created successfully
+2025-07-09 09:27:59,662 - app.config.database_indexes - INFO - Transaction indexes created successfully
+2025-07-09 09:27:59,675 - app.config.database_indexes - INFO - Savings target indexes created successfully
+2025-07-09 09:27:59,680 - app.config.database_indexes - INFO - University request indexes created successfully
+2025-07-09 09:27:59,688 - app.config.database_indexes - INFO - OTP verification indexes created successfully
+2025-07-09 09:27:59,688 - app.config.database_indexes - INFO - All database indexes created successfully!
+2025-07-09 09:27:59,699 - app.core.startup - INFO - Running startup tasks...
+2025-07-09 09:27:59,699 - app.core.startup - INFO - Initializing core services...
+2025-07-09 09:27:59,699 - app.core.startup - WARNING - Email service initialization failed: 'EmailService' object has no attribute 'verify_smtp_connection'
+2025-07-09 09:27:59,700 - app.core.startup - INFO - Core services initialized
+2025-07-09 09:27:59,700 - app.core.startup - INFO - Initializing AI services...
+2025-07-09 09:27:59,700 - app.core.startup - INFO - Chatbot service initialized
+2025-07-09 09:28:04,097 - app.core.startup - WARNING - Prediction service not available: cannot import name 'IncomePredictin' from 'app.models.prediction' (D:\kuliah\semester 6\Tugas Akhir\aplikasi\lunance\backend\app\models\prediction.py)
+2025-07-09 09:28:04,098 - app.core.startup - INFO - Creating placeholder prediction service...
+2025-07-09 09:28:04,098 - app.core.startup - INFO - Financial prediction service will be available when dependencies are installed
+2025-07-09 09:28:04,100 - app.core.startup - INFO - Context service initialized
+2025-07-09 09:28:04,101 - app.core.startup - INFO - Analytics service initialized
+2025-07-09 09:28:04,102 - app.core.startup - INFO - Hugging Face API key configured
+2025-07-09 09:28:04,102 - app.core.startup - INFO - AI services initialized
+2025-07-09 09:28:04,102 - app.core.startup - INFO - Verifying services health...
+2025-07-09 09:28:04,116 - app.core.startup - INFO - Health check: 5/5 services healthy
+2025-07-09 09:28:04,117 - app.core.startup - INFO - Creating default data for development...
+2025-07-09 09:28:04,125 - app.core.startup - INFO - 10 global categories already exist
+2025-07-09 09:28:04,129 - app.core.startup - INFO - Demo user already exists
+2025-07-09 09:28:04,129 - app.core.startup - INFO - Default data created
+2025-07-09 09:28:04,130 - app.core.startup - INFO - All startup tasks completed successfully!
+2025-07-09 09:28:04,144 - app.main - INFO -    - Local: http://localhost:8000
+2025-07-09 09:28:04,144 - app.main - INFO -    - Network: http://192.168.101.5:8000
+2025-07-09 09:28:04,144 - app.main - INFO -    - Documentation: http://192.168.101.5:8000/docs
+2025-07-09 15:17:22,859 - app.config.database - INFO - Connecting to MongoDB...
+2025-07-09 15:17:22,936 - app.config.database - INFO - Successfully connected to MongoDB!
+2025-07-09 15:17:22,936 - app.config.database - INFO - Creating database indexes...
+2025-07-09 15:17:22,949 - app.config.database - INFO - Database indexes created successfully!
+2025-07-09 15:17:22,979 - app.config.database_indexes - INFO - Creating database indexes...
+2025-07-09 15:17:22,993 - app.config.database_indexes - INFO - User indexes created successfully
+2025-07-09 15:17:22,999 - app.config.database_indexes - INFO - University indexes created successfully
+2025-07-09 15:17:23,005 - app.config.database_indexes - INFO - Category indexes created successfully
+2025-07-09 15:17:23,013 - app.config.database_indexes - INFO - Transaction indexes created successfully
+2025-07-09 15:17:23,023 - app.config.database_indexes - INFO - Savings target indexes created successfully
+2025-07-09 15:17:23,028 - app.config.database_indexes - INFO - University request indexes created successfully
+2025-07-09 15:17:23,033 - app.config.database_indexes - INFO - OTP verification indexes created successfully
+2025-07-09 15:17:23,033 - app.config.database_indexes - INFO - All database indexes created successfully!
+2025-07-09 15:17:23,045 - app.core.startup - INFO - Running startup tasks...
+2025-07-09 15:17:23,045 - app.core.startup - INFO - Initializing core services...
+2025-07-09 15:17:23,045 - app.core.startup - WARNING - Email service initialization failed: 'EmailService' object has no attribute 'verify_smtp_connection'
+2025-07-09 15:17:23,045 - app.core.startup - INFO - Core services initialized
+2025-07-09 15:17:23,046 - app.core.startup - INFO - Initializing AI services...
+2025-07-09 15:17:23,046 - app.core.startup - INFO - Chatbot service initialized
+2025-07-09 15:17:24,902 - app.core.startup - WARNING - Prediction service not available: cannot import name 'IncomePredictin' from 'app.models.prediction' (D:\kuliah\semester 6\Tugas Akhir\aplikasi\lunance\backend\app\models\prediction.py)
+2025-07-09 15:17:24,902 - app.core.startup - INFO - Creating placeholder prediction service...
+2025-07-09 15:17:24,902 - app.core.startup - INFO - Financial prediction service will be available when dependencies are installed
+2025-07-09 15:17:24,904 - app.core.startup - INFO - Context service initialized
+2025-07-09 15:17:24,906 - app.core.startup - INFO - Analytics service initialized
+2025-07-09 15:17:24,906 - app.core.startup - INFO - Hugging Face API key configured
+2025-07-09 15:17:24,906 - app.core.startup - INFO - AI services initialized
+2025-07-09 15:17:24,906 - app.core.startup - INFO - Verifying services health...
+2025-07-09 15:17:24,913 - app.core.startup - INFO - Health check: 5/5 services healthy
+2025-07-09 15:17:24,913 - app.core.startup - INFO - Creating default data for development...
+2025-07-09 15:17:24,926 - app.core.startup - INFO - 10 global categories already exist
+2025-07-09 15:17:24,927 - app.core.startup - INFO - Demo user already exists
+2025-07-09 15:17:24,928 - app.core.startup - INFO - Default data created
+2025-07-09 15:17:24,928 - app.core.startup - INFO - All startup tasks completed successfully!
+2025-07-09 15:17:24,933 - app.main - INFO -    - Local: http://localhost:8000
+2025-07-09 15:17:24,934 - app.main - INFO -    - Network: http://192.168.101.5:8000
+2025-07-09 15:17:24,934 - app.main - INFO -    - Documentation: http://192.168.101.5:8000/docs
+2025-07-09 15:21:05,322 - app.config.database - INFO - Closing MongoDB connection...
+2025-07-09 15:21:05,324 - app.config.database - INFO - MongoDB connection closed.
+2025-07-09 15:21:09,462 - app.config.database - INFO - Connecting to MongoDB...
+2025-07-09 15:21:09,473 - app.config.database - INFO - Successfully connected to MongoDB!
+2025-07-09 15:21:09,473 - app.config.database - INFO - Creating database indexes...
+2025-07-09 15:21:09,480 - app.config.database - INFO - Database indexes created successfully!
+2025-07-09 15:21:09,498 - app.config.database_indexes - INFO - Creating database indexes...
+2025-07-09 15:21:09,504 - app.config.database_indexes - INFO - User indexes created successfully
+2025-07-09 15:21:09,507 - app.config.database_indexes - INFO - University indexes created successfully
+2025-07-09 15:21:09,509 - app.config.database_indexes - INFO - Category indexes created successfully
+2025-07-09 15:21:09,515 - app.config.database_indexes - INFO - Transaction indexes created successfully
+2025-07-09 15:21:09,519 - app.config.database_indexes - INFO - Savings target indexes created successfully
+2025-07-09 15:21:09,523 - app.config.database_indexes - INFO - University request indexes created successfully
+2025-07-09 15:21:09,527 - app.config.database_indexes - INFO - OTP verification indexes created successfully
+2025-07-09 15:21:09,527 - app.config.database_indexes - INFO - All database indexes created successfully!
+2025-07-09 15:21:09,533 - app.core.startup - INFO - Running startup tasks...
+2025-07-09 15:21:09,533 - app.core.startup - INFO - Initializing core services...
+2025-07-09 15:21:09,533 - app.core.startup - WARNING - Email service initialization failed: 'EmailService' object has no attribute 'verify_smtp_connection'
+2025-07-09 15:21:09,533 - app.core.startup - INFO - Core services initialized
+2025-07-09 15:21:09,533 - app.core.startup - INFO - Initializing AI services...
+2025-07-09 15:21:09,533 - app.core.startup - INFO - Chatbot service initialized
+2025-07-09 15:21:09,893 - app.core.startup - WARNING - Prediction service not available: cannot import name 'IncomePredictin' from 'app.models.prediction' (D:\kuliah\semester 6\Tugas Akhir\aplikasi\lunance\backend\app\models\prediction.py)
+2025-07-09 15:21:09,894 - app.core.startup - INFO - Creating placeholder prediction service...
+2025-07-09 15:21:09,894 - app.core.startup - INFO - Financial prediction service will be available when dependencies are installed
+2025-07-09 15:21:09,895 - app.core.startup - INFO - Context service initialized
+2025-07-09 15:21:09,896 - app.core.startup - INFO - Analytics service initialized
+2025-07-09 15:21:09,896 - app.core.startup - INFO - Hugging Face API key configured
+2025-07-09 15:21:09,896 - app.core.startup - INFO - AI services initialized
+2025-07-09 15:21:09,896 - app.core.startup - INFO - Verifying services health...
+2025-07-09 15:21:09,902 - app.core.startup - INFO - Health check: 5/5 services healthy
+2025-07-09 15:21:09,902 - app.core.startup - INFO - Creating default data for development...
+2025-07-09 15:21:09,903 - app.core.startup - INFO - 10 global categories already exist
+2025-07-09 15:21:09,904 - app.core.startup - INFO - Demo user already exists
+2025-07-09 15:21:09,905 - app.core.startup - INFO - Default data created
+2025-07-09 15:21:09,905 - app.core.startup - INFO - All startup tasks completed successfully!
+2025-07-09 15:21:09,911 - app.main - INFO -    - Local: http://localhost:8000
+2025-07-09 15:21:09,911 - app.main - INFO -    - Network: http://192.168.101.5:8000
+2025-07-09 15:21:09,911 - app.main - INFO -    - Documentation: http://192.168.101.5:8000/docs
+2025-07-09 15:21:54,087 - app.main - INFO - [REQUEST] GET / from 192.168.101.4
+2025-07-09 15:21:54,089 - app.main - INFO - [RESPONSE] GET / - 200 (0.003s)
+2025-07-09 15:21:54,194 - app.main - INFO - [REQUEST] GET /favicon.ico from 192.168.101.4
+2025-07-09 15:21:54,196 - app.main - WARNING - HTTP Exception: 404 - Not Found
+2025-07-09 15:21:54,196 - app.main - INFO - [RESPONSE] GET /favicon.ico - 404 (0.002s)
+2025-07-09 15:37:26,759 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 127.0.0.1
+2025-07-09 15:37:27,122 - app.services.auth_service - INFO - User logged in successfully: admin@lunance.ac.id
+2025-07-09 15:37:27,124 - app.api.v1.endpoints.auth - INFO - Successful login for: admin@lunance.ac.id from IP: 127.0.0.1
+2025-07-09 15:37:27,128 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 200 (0.371s)
+2025-07-09 15:42:28,776 - app.main - INFO - [REQUEST] POST /api/v1/auth/validate-token from 192.168.101.4
+2025-07-09 15:42:28,785 - app.utils.jwt - ERROR - Token verification error: Signature verification failed
+2025-07-09 15:42:28,788 - app.main - WARNING - HTTP Exception: 401 - Invalid authentication token
+2025-07-09 15:42:28,789 - app.main - INFO - [RESPONSE] POST /api/v1/auth/validate-token - 401 (0.013s)
+2025-07-09 15:43:03,629 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 192.168.101.4
+2025-07-09 15:43:04,021 - app.services.auth_service - INFO - User logged in successfully: admin@lunance.ac.id
+2025-07-09 15:43:04,022 - app.api.v1.endpoints.auth - INFO - Successful login for: admin@lunance.ac.id from IP: 192.168.101.4
+2025-07-09 15:43:04,023 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 200 (0.395s)
+2025-07-09 15:43:17,743 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 192.168.101.4
+2025-07-09 15:43:18,187 - app.services.auth_service - INFO - User logged in successfully: admin@lunance.ac.id
+2025-07-09 15:43:18,189 - app.api.v1.endpoints.auth - INFO - Successful login for: admin@lunance.ac.id from IP: 192.168.101.4
+2025-07-09 15:43:18,191 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 200 (0.448s)
+2025-07-09 16:07:54,781 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 192.168.101.4
+2025-07-09 16:07:55,009 - app.services.auth_service - INFO - User logged in successfully: admin@lunance.ac.id
+2025-07-09 16:07:55,009 - app.api.v1.endpoints.auth - INFO - Successful login for: admin@lunance.ac.id from IP: 192.168.101.4
+2025-07-09 16:07:55,011 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 200 (0.230s)
+2025-07-09 16:08:12,152 - app.main - INFO - [REQUEST] POST /api/v1/auth/logout from 192.168.101.4
+2025-07-09 16:08:12,157 - app.utils.jwt - ERROR - Token verification error: Signature has expired
+2025-07-09 16:08:12,157 - app.main - WARNING - HTTP Exception: 401 - Invalid authentication token
+2025-07-09 16:08:12,158 - app.main - INFO - [RESPONSE] POST /api/v1/auth/logout - 401 (0.007s)
+2025-07-09 16:09:26,407 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 192.168.101.4
+2025-07-09 16:09:26,624 - app.services.auth_service - INFO - User logged in successfully: sabrina.uwais@ugm.ac.id
+2025-07-09 16:09:26,624 - app.api.v1.endpoints.auth - INFO - Successful login for: sabrina.uwais@ugm.ac.id from IP: 192.168.101.4
+2025-07-09 16:09:26,626 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 200 (0.219s)
+2025-07-09 17:06:13,893 - app.main - INFO - [REQUEST] POST /api/v1/auth/validate-token from 192.168.101.4
+2025-07-09 17:06:13,899 - app.utils.jwt - ERROR - Token verification error: Signature has expired
+2025-07-09 17:06:13,900 - app.main - WARNING - HTTP Exception: 401 - Invalid authentication token
+2025-07-09 17:06:13,902 - app.main - INFO - [RESPONSE] POST /api/v1/auth/validate-token - 401 (0.009s)
+2025-07-09 17:07:51,662 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 192.168.101.4
+2025-07-09 17:07:51,887 - app.services.auth_service - INFO - User logged in successfully: richard@std.ulbi.ac.id
+2025-07-09 17:07:51,887 - app.api.v1.endpoints.auth - INFO - Successful login for: richard@std.ulbi.ac.id from IP: 192.168.101.4
+2025-07-09 17:07:51,888 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 200 (0.227s)
+2025-07-09 17:38:10,750 - app.main - INFO - [REQUEST] POST /api/v1/auth/validate-token from 192.168.101.4
+2025-07-09 17:38:10,768 - app.utils.jwt - ERROR - Token verification error: Signature has expired
+2025-07-09 17:38:10,770 - app.main - WARNING - HTTP Exception: 401 - Invalid authentication token
+2025-07-09 17:38:10,773 - app.main - INFO - [RESPONSE] POST /api/v1/auth/validate-token - 401 (0.024s)
+2025-07-09 17:39:41,699 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 192.168.101.4
+2025-07-09 17:39:41,905 - app.services.auth_service - INFO - User logged in successfully: ricgard@unigga.ac.id
+2025-07-09 17:39:41,906 - app.api.v1.endpoints.auth - INFO - Successful login for: ricgard@unigga.ac.id from IP: 192.168.101.4
+2025-07-09 17:39:41,908 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 200 (0.209s)
+2025-07-09 17:40:12,092 - app.main - INFO - [REQUEST] POST /api/v1/auth/logout from 192.168.101.4
+2025-07-09 17:40:12,093 - app.utils.jwt - ERROR - Token verification error: Signature has expired
+2025-07-09 17:40:12,093 - app.main - WARNING - HTTP Exception: 401 - Invalid authentication token
+2025-07-09 17:40:12,094 - app.main - INFO - [RESPONSE] POST /api/v1/auth/logout - 401 (0.002s)
+2025-07-09 17:41:02,803 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 192.168.101.4
+2025-07-09 17:41:03,018 - app.services.auth_service - INFO - User logged in successfully: admin@lunance.ac.id
+2025-07-09 17:41:03,018 - app.api.v1.endpoints.auth - INFO - Successful login for: admin@lunance.ac.id from IP: 192.168.101.4
+2025-07-09 17:41:03,020 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 200 (0.217s)
+2025-07-09 17:43:35,299 - app.main - INFO - [REQUEST] POST /api/v1/auth/logout from 192.168.101.4
+2025-07-09 17:43:35,301 - app.utils.jwt - ERROR - Token verification error: Signature has expired
+2025-07-09 17:43:35,301 - app.main - WARNING - HTTP Exception: 401 - Invalid authentication token
+2025-07-09 17:43:35,302 - app.main - INFO - [RESPONSE] POST /api/v1/auth/logout - 401 (0.003s)
+2025-07-09 17:47:08,251 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 192.168.101.4
+2025-07-09 17:47:08,470 - app.services.auth_service - WARNING - Failed login attempt for: ricgard@unigga.ac.id
+2025-07-09 17:47:08,471 - app.api.v1.endpoints.auth - WARNING - Failed login attempt for: ricgard@unigga.ac.id from IP: 192.168.101.4
+2025-07-09 17:47:08,472 - app.main - WARNING - HTTP Exception: 401 - Invalid email or password
+2025-07-09 17:47:08,472 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 401 (0.221s)
+2025-07-09 17:47:51,556 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 192.168.101.4
+2025-07-09 17:47:51,771 - app.services.auth_service - WARNING - Failed login attempt for: ricgard@unigga.ac.id
+2025-07-09 17:47:51,772 - app.api.v1.endpoints.auth - WARNING - Failed login attempt for: ricgard@unigga.ac.id from IP: 192.168.101.4
+2025-07-09 17:47:51,772 - app.main - WARNING - HTTP Exception: 401 - Invalid email or password
+2025-07-09 17:47:51,773 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 401 (0.217s)
+2025-07-09 17:48:40,729 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 192.168.101.4
+2025-07-09 17:48:40,938 - app.services.auth_service - WARNING - Failed login attempt for: admin@lunance.ac.id
+2025-07-09 17:48:40,939 - app.api.v1.endpoints.auth - WARNING - Failed login attempt for: admin@lunance.ac.id from IP: 192.168.101.4
+2025-07-09 17:48:40,939 - app.main - WARNING - HTTP Exception: 401 - Invalid email or password
+2025-07-09 17:48:40,940 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 401 (0.211s)
+2025-07-09 17:49:23,187 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 192.168.101.4
+2025-07-09 17:49:23,406 - app.services.auth_service - WARNING - Failed login attempt for: admin@lunance.ac.id
+2025-07-09 17:49:23,407 - app.api.v1.endpoints.auth - WARNING - Failed login attempt for: admin@lunance.ac.id from IP: 192.168.101.4
+2025-07-09 17:49:23,407 - app.main - WARNING - HTTP Exception: 401 - Invalid email or password
+2025-07-09 17:49:23,408 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 401 (0.221s)
+2025-07-09 17:49:30,982 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 127.0.0.1
+2025-07-09 17:49:31,217 - app.services.auth_service - INFO - User logged in successfully: admin@lunance.ac.id
+2025-07-09 17:49:31,217 - app.api.v1.endpoints.auth - INFO - Successful login for: admin@lunance.ac.id from IP: 127.0.0.1
+2025-07-09 17:49:31,218 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 200 (0.236s)
+2025-07-09 17:50:19,053 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 192.168.101.4
+2025-07-09 17:50:19,278 - app.services.auth_service - INFO - User logged in successfully: admin@lunance.ac.id
+2025-07-09 17:50:19,278 - app.api.v1.endpoints.auth - INFO - Successful login for: admin@lunance.ac.id from IP: 192.168.101.4
+2025-07-09 17:50:19,279 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 200 (0.226s)
+2025-07-09 17:51:45,496 - app.main - INFO - [REQUEST] POST /api/v1/auth/logout from 192.168.101.4
+2025-07-09 17:51:45,497 - app.utils.jwt - ERROR - Token verification error: Signature has expired
+2025-07-09 17:51:45,497 - app.main - WARNING - HTTP Exception: 401 - Invalid authentication token
+2025-07-09 17:51:45,498 - app.main - INFO - [RESPONSE] POST /api/v1/auth/logout - 401 (0.002s)
+2025-07-09 17:52:31,028 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 192.168.101.4
+2025-07-09 17:52:31,031 - app.api.v1.endpoints.auth - WARNING - Failed login attempt for: ricgard@uniga.ac.id from IP: 192.168.101.4
+2025-07-09 17:52:31,031 - app.main - WARNING - HTTP Exception: 401 - Invalid email or password
+2025-07-09 17:52:31,032 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 401 (0.004s)
+2025-07-09 17:52:44,349 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 192.168.101.4
+2025-07-09 17:52:44,575 - app.services.auth_service - INFO - User logged in successfully: ricgard@unigga.ac.id
+2025-07-09 17:52:44,575 - app.api.v1.endpoints.auth - INFO - Successful login for: ricgard@unigga.ac.id from IP: 192.168.101.4
+2025-07-09 17:52:44,575 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 200 (0.226s)
+2025-07-09 17:56:13,541 - app.main - INFO - [REQUEST] POST /api/v1/auth/validate-token from 192.168.101.4
+2025-07-09 17:56:13,542 - app.utils.jwt - ERROR - Token verification error: Signature has expired
+2025-07-09 17:56:13,544 - app.main - WARNING - HTTP Exception: 401 - Invalid authentication token
+2025-07-09 17:56:13,558 - app.main - INFO - [RESPONSE] POST /api/v1/auth/validate-token - 401 (0.017s)
+2025-07-09 17:56:54,229 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 192.168.101.4
+2025-07-09 17:56:54,451 - app.services.auth_service - INFO - User logged in successfully: ricgard@unigga.ac.id
+2025-07-09 17:56:54,451 - app.api.v1.endpoints.auth - INFO - Successful login for: ricgard@unigga.ac.id from IP: 192.168.101.4
+2025-07-09 17:56:54,451 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 200 (0.222s)
+2025-07-09 17:56:58,515 - app.main - INFO - [REQUEST] POST /api/v1/auth/logout from 192.168.101.4
+2025-07-09 17:56:58,516 - app.utils.jwt - ERROR - Token verification error: Signature has expired
+2025-07-09 17:56:58,517 - app.main - WARNING - HTTP Exception: 401 - Invalid authentication token
+2025-07-09 17:56:58,517 - app.main - INFO - [RESPONSE] POST /api/v1/auth/logout - 401 (0.002s)
+2025-07-09 17:57:20,982 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 192.168.101.4
+2025-07-09 17:57:21,195 - app.services.auth_service - INFO - User logged in successfully: admin@lunance.ac.id
+2025-07-09 17:57:21,195 - app.api.v1.endpoints.auth - INFO - Successful login for: admin@lunance.ac.id from IP: 192.168.101.4
+2025-07-09 17:57:21,195 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 200 (0.213s)
+2025-07-09 17:57:32,740 - app.main - INFO - [REQUEST] POST /api/v1/auth/validate-token from 192.168.101.4
+2025-07-09 17:57:32,742 - app.utils.jwt - ERROR - Token verification error: Signature has expired
+2025-07-09 17:57:32,743 - app.main - WARNING - HTTP Exception: 401 - Invalid authentication token
+2025-07-09 17:57:32,743 - app.main - INFO - [RESPONSE] POST /api/v1/auth/validate-token - 401 (0.003s)
+2025-07-09 18:00:36,268 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 192.168.101.4
+2025-07-09 18:00:36,496 - app.services.auth_service - INFO - User logged in successfully: admin@lunance.ac.id
+2025-07-09 18:00:36,497 - app.api.v1.endpoints.auth - INFO - Successful login for: admin@lunance.ac.id from IP: 192.168.101.4
+2025-07-09 18:00:36,497 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 200 (0.229s)
+2025-07-09 18:00:49,866 - app.main - INFO - [REQUEST] POST /api/v1/auth/validate-token from 192.168.101.4
+2025-07-09 18:00:49,867 - app.utils.jwt - ERROR - Token verification error: Signature has expired
+2025-07-09 18:00:49,867 - app.main - WARNING - HTTP Exception: 401 - Invalid authentication token
+2025-07-09 18:00:49,868 - app.main - INFO - [RESPONSE] POST /api/v1/auth/validate-token - 401 (0.002s)
+2025-07-09 18:03:53,852 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 192.168.101.4
+2025-07-09 18:03:54,086 - app.services.auth_service - INFO - User logged in successfully: admin@lunance.ac.id
+2025-07-09 18:03:54,086 - app.api.v1.endpoints.auth - INFO - Successful login for: admin@lunance.ac.id from IP: 192.168.101.4
+2025-07-09 18:03:54,087 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 200 (0.235s)
+2025-07-09 18:18:14,173 - app.main - INFO - [REQUEST] POST /api/v1/auth/validate-token from 192.168.101.4
+2025-07-09 18:18:14,176 - app.utils.jwt - ERROR - Token verification error: Signature has expired
+2025-07-09 18:18:14,176 - app.main - WARNING - HTTP Exception: 401 - Invalid authentication token
+2025-07-09 18:18:14,178 - app.main - INFO - [RESPONSE] POST /api/v1/auth/validate-token - 401 (0.005s)
+2025-07-09 18:19:09,275 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 192.168.101.4
+2025-07-09 18:19:09,730 - app.services.auth_service - INFO - User logged in successfully: admin@lunance.ac.id
+2025-07-09 18:19:09,731 - app.api.v1.endpoints.auth - INFO - Successful login for: admin@lunance.ac.id from IP: 192.168.101.4
+2025-07-09 18:19:09,732 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 200 (0.456s)
+2025-07-09 18:20:47,480 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 127.0.0.1
+2025-07-09 18:20:47,889 - app.services.auth_service - INFO - User logged in successfully: admin@lunance.ac.id
+2025-07-09 18:20:47,889 - app.api.v1.endpoints.auth - INFO - Successful login for: admin@lunance.ac.id from IP: 127.0.0.1
+2025-07-09 18:20:47,890 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 200 (0.411s)
+2025-07-09 18:23:46,544 - app.main - INFO - [REQUEST] POST /api/v1/auth/logout from 192.168.101.4
+2025-07-09 18:23:46,545 - app.utils.jwt - ERROR - Token verification error: Signature has expired
+2025-07-09 18:23:46,546 - app.main - WARNING - HTTP Exception: 401 - Invalid authentication token
+2025-07-09 18:23:46,546 - app.main - INFO - [RESPONSE] POST /api/v1/auth/logout - 401 (0.002s)
+2025-07-09 18:25:30,542 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 192.168.101.4
+2025-07-09 18:25:30,760 - app.services.auth_service - WARNING - Failed login attempt for: admin@lunance.ac.id
+2025-07-09 18:25:30,760 - app.api.v1.endpoints.auth - WARNING - Failed login attempt for: admin@lunance.ac.id from IP: 192.168.101.4
+2025-07-09 18:25:30,760 - app.main - WARNING - HTTP Exception: 401 - Invalid email or password
+2025-07-09 18:25:30,760 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 401 (0.218s)
+2025-07-09 18:26:04,328 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 192.168.101.4
+2025-07-09 18:26:04,791 - app.services.auth_service - INFO - User logged in successfully: admin@lunance.ac.id
+2025-07-09 18:26:04,792 - app.api.v1.endpoints.auth - INFO - Successful login for: admin@lunance.ac.id from IP: 192.168.101.4
+2025-07-09 18:26:04,793 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 200 (0.464s)
+2025-07-09 18:26:53,628 - app.main - INFO - [REQUEST] POST /api/v1/auth/logout from 192.168.101.4
+2025-07-09 18:26:53,629 - app.utils.jwt - ERROR - Token verification error: Signature has expired
+2025-07-09 18:26:53,629 - app.main - WARNING - HTTP Exception: 401 - Invalid authentication token
+2025-07-09 18:26:53,630 - app.main - INFO - [RESPONSE] POST /api/v1/auth/logout - 401 (0.002s)
+2025-07-09 18:27:24,952 - app.main - INFO - [REQUEST] POST /api/v1/auth/login from 192.168.101.4
+2025-07-09 18:27:25,171 - app.services.auth_service - INFO - User logged in successfully: admin@lunance.ac.id
+2025-07-09 18:27:25,172 - app.api.v1.endpoints.auth - INFO - Successful login for: admin@lunance.ac.id from IP: 192.168.101.4
+2025-07-09 18:27:25,172 - app.main - INFO - [RESPONSE] POST /api/v1/auth/login - 200 (0.221s)

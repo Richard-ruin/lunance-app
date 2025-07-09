@@ -19,8 +19,9 @@ class LoginRequest(BaseModel):
     @classmethod
     def validate_email_domain(cls, v):
         """Validate email is academic domain (ac.id)."""
-        if not str(v).endswith('.ac.id'):
-            raise ValueError('Email must be from academic domain (.ac.id)')
+        email_str = str(v).lower()
+        if not email_str.endswith('ac.id'):
+            raise ValueError('Email must be from academic domain (ac.id)')
         return v
 
 
@@ -41,8 +42,9 @@ class RegisterRequest(BaseModel):
     @classmethod
     def validate_email_domain(cls, v):
         """Validate email is academic domain (ac.id)."""
-        if not str(v).endswith('.ac.id'):
-            raise ValueError('Email must be from academic domain (.ac.id)')
+        email_str = str(v).lower()
+        if not email_str.endswith('ac.id'):
+            raise ValueError('Email must be from academic domain (ac.id)')
         return v
     
     @field_validator('password')
@@ -117,8 +119,9 @@ class PasswordResetRequest(BaseModel):
     @classmethod
     def validate_email_domain(cls, v):
         """Validate email is academic domain (ac.id)."""
-        if not str(v).endswith('.ac.id'):
-            raise ValueError('Email must be from academic domain (.ac.id)')
+        email_str = str(v).lower()
+        if not email_str.endswith('ac.id'):
+            raise ValueError('Email must be from academic domain (ac.id)')
         return v
 
 
@@ -133,8 +136,9 @@ class PasswordResetConfirm(BaseModel):
     @classmethod
     def validate_email_domain(cls, v):
         """Validate email is academic domain (ac.id)."""
-        if not str(v).endswith('.ac.id'):
-            raise ValueError('Email must be from academic domain (.ac.id)')
+        email_str = str(v).lower()
+        if not email_str.endswith('ac.id'):
+            raise ValueError('Email must be from academic domain (ac.id)')
         return v
     
     @field_validator('new_password')
@@ -175,8 +179,9 @@ class EmailVerificationRequest(BaseModel):
     @classmethod
     def validate_email_domain(cls, v):
         """Validate email is academic domain (ac.id)."""
-        if not str(v).endswith('.ac.id'):
-            raise ValueError('Email must be from academic domain (.ac.id)')
+        email_str = str(v).lower()
+        if not email_str.endswith('ac.id'):
+            raise ValueError('Email must be from academic domain (ac.id)')
         return v
 
 
@@ -189,8 +194,9 @@ class EmailVerificationConfirm(BaseModel):
     @classmethod
     def validate_email_domain(cls, v):
         """Validate email is academic domain (ac.id)."""
-        if not str(v).endswith('.ac.id'):
-            raise ValueError('Email must be from academic domain (.ac.id)')
+        email_str = str(v).lower()
+        if not email_str.endswith('ac.id'):
+            raise ValueError('Email must be from academic domain (ac.id)')
         return v
     
     @field_validator('otp_code')

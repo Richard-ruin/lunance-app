@@ -218,7 +218,7 @@ async def add_process_time_header(request: Request, call_next):
     
     # Log incoming request
     client_ip = request.client.host if request.client else "unknown"
-    logger.info(f"📡 {request.method} {request.url.path} from {client_ip}")
+    logger.info(f"[REQUEST] {request.method} {request.url.path} from {client_ip}")
     
     response = await call_next(request)
     process_time = time.time() - start_time
@@ -229,7 +229,7 @@ async def add_process_time_header(request: Request, call_next):
     response.headers["X-Powered-By"] = "FastAPI"
     
     # Log response
-    logger.info(f"✅ {request.method} {request.url.path} - {response.status_code} ({process_time:.3f}s)")
+    logger.info(f"[RESPONSE] {request.method} {request.url.path} - {response.status_code} ({process_time:.3f}s)")
     
     return response
 

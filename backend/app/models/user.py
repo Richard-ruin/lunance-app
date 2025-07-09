@@ -47,8 +47,8 @@ class PyObjectId(ObjectId):
 
 class UserRole(str, Enum):
     """User role enumeration."""
-    ADMIN = "admin"
-    STUDENT = "student"
+    ADMIN = "ADMIN"
+    STUDENT = "STUDENT"
 
 
 class UserBase(BaseModel):
@@ -66,7 +66,7 @@ class UserBase(BaseModel):
     @classmethod
     def validate_email_domain(cls, v: str) -> str:
         """Validate that email ends with ac.id for academic domain."""
-        if not v.endswith('ac.id'):
+        if not v.lower().endswith('ac.id'):
             raise ValueError('Email must be from academic domain (ending with ac.id)')
         return v.lower()
 

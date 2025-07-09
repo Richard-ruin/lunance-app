@@ -1,476 +1,447 @@
+// lib/services/auth_service.dart
 import 'dart:convert';
-import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-
-import '../config/api_config.dart';
-import '../config/app_config.dart';
-import '../models/base_model.dart';
+import '../models/auth_response_model.dart';
 import '../models/user_model.dart';
-import '../models/auth/register_data.dart';
-import '../models/auth/auth_responses.dart';
-import 'storage_service.dart';
+import '../utils/constants.dart';
 
 class AuthService {
-  static final AuthService _instance = AuthService._internal();
-  factory AuthService() => _instance;
-  AuthService._internal();
-
-  late final http.Client _client;
-
-  void init() {
-    _client = http.Client();
-  }
-
-  void dispose() {
-    _client.close();
-  }
-
-  // Get headers with auth token
-  Map<String, String> _getHeaders({bool includeAuth = true}) {
-    final headers = Map<String, String>.from(ApiConfig.defaultHeaders);
+  static const String _baseUrl = AppConstants.authBaseUrl;
+  
+  static Map<String, String> _getHeaders({String? token}) {
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
     
-    if (includeAuth) {
-      final token = StorageService.getAuthToken();
-      if (token != null) {
-        headers[ApiConfig.authorizationHeader] = '${ApiConfig.bearerPrefix}$token';
-      }
+    if (token != null) {
+      headers['Authorization'] = 'Bearer $token';
     }
     
     return headers;
   }
 
-  // Generic HTTP request method
-  Future<ApiResponse<T>> _request<T>({
-    required String method,
-    required String endpoint,
-    Map<String, String>? pathParams,
-    Map<String, dynamic>? queryParams,
-    Map<String, dynamic>? body,
-    bool includeAuth = true,
-    T Function(Map<String, dynamic>)? fromJson,
+  // Register User
+  static Future<AuthResponse> register(RegisterRequest request) async {
+    try {
+      debugPrint('Sending registration request to: $_baseUrl/register');
+      debugPrint('Request body: ${jsonEncode(request.toJson())}');
+      
+      final response = await http.post(
+        Uri.parse('$_baseUrl/register'),
+        headers: _getHeaders(),
+        body: jsonEncode(request.toJson()),
+      );
+
+      debugPrint('Registration response status: ${response.statusCode}');
+      debugPrint('Registration response body: ${response.body}');
+      
+      final responseData = jsonDecode(response.body);
+      
+      if (response.statusCode == 201) {
+        return AuthResponse(
+          success: true,
+          message: responseData['message'] ?? 'Registration successful',
+          user: responseData['data']?['user'] != null 
+              ? User.fromJson(responseData['data']['user']) 
+              : null,
+          tokens: responseData['data']?['tokens'] != null 
+              ? AuthTokens.fromJson(responseData['data']['tokens']) 
+              : null,
+        );
+      } else {
+        return AuthResponse(
+          success: false,
+          message: responseData['message'] ?? 'Registration failed',
+        );
+      }
+    } catch (e) {
+      debugPrint('Registration error: $e');
+      return AuthResponse(
+        success: false,
+        message: 'Network error: ${e.toString()}',
+      );
+    }
+  }
+
+  // Send Registration OTP
+  static Future<OTPResponse> sendRegistrationOTP(String email) async {
+    try {
+      debugPrint('Sending registration OTP to: $email');
+      
+      final response = await http.post(
+        Uri.parse('$_baseUrl/send-registration-otp'),
+        headers: _getHeaders(),
+        body: jsonEncode({'email': email}),
+      );
+
+      debugPrint('OTP response status: ${response.statusCode}');
+      debugPrint('OTP response body: ${response.body}');
+      
+      final responseData = jsonDecode(response.body);
+      
+      return OTPResponse(
+        success: response.statusCode == 200,
+        message: responseData['message'] ?? 'OTP sent',
+        expiresInSeconds: responseData['data']?['expires_in_seconds'] ?? 300,
+      );
+    } catch (e) {
+      debugPrint('Send registration OTP error: $e');
+      return OTPResponse(
+        success: false,
+        message: 'Network error: ${e.toString()}',
+        expiresInSeconds: 0,
+      );
+    }
+  }
+
+  // Login User
+  static Future<AuthResponse> login({
+    required String email,
+    required String password,
+    bool rememberMe = false,
   }) async {
     try {
-      // Build URL
-      final url = Uri.parse(ApiConfig.buildUrl(endpoint, pathParams));
-      final finalUrl = queryParams != null && queryParams.isNotEmpty
-          ? url.replace(queryParameters: queryParams.map((k, v) => MapEntry(k, v.toString())))
-          : url;
+      debugPrint('Sending login request to: $_baseUrl/login');
+      debugPrint('Request body: ${jsonEncode({
+        'email': email,
+        'password': password,
+        'remember_me': rememberMe,
+      })}');
+      
+      final response = await http.post(
+        Uri.parse('$_baseUrl/login'),
+        headers: _getHeaders(),
+        body: jsonEncode({
+          'email': email,
+          'password': password,
+          'remember_me': rememberMe,
+        }),
+      );
 
-      // Prepare headers
-      final headers = _getHeaders(includeAuth: includeAuth);
-
-      // Prepare request
-      late http.Response response;
-      final jsonBody = body != null ? json.encode(body) : null;
-
-      // Execute request based on method
-      switch (method.toUpperCase()) {
-        case 'GET':
-          response = await _client.get(finalUrl, headers: headers)
-              .timeout(Duration(seconds: AppConfig.apiTimeout));
-          break;
-        case 'POST':
-          response = await _client.post(finalUrl, headers: headers, body: jsonBody)
-              .timeout(Duration(seconds: AppConfig.apiTimeout));
-          break;
-        case 'PUT':
-          response = await _client.put(finalUrl, headers: headers, body: jsonBody)
-              .timeout(Duration(seconds: AppConfig.apiTimeout));
-          break;
-        case 'PATCH':
-          response = await _client.patch(finalUrl, headers: headers, body: jsonBody)
-              .timeout(Duration(seconds: AppConfig.apiTimeout));
-          break;
-        case 'DELETE':
-          response = await _client.delete(finalUrl, headers: headers)
-              .timeout(Duration(seconds: AppConfig.apiTimeout));
-          break;
-        default:
-          throw AuthException('Unsupported HTTP method: $method');
+      debugPrint('Login response status: ${response.statusCode}');
+      debugPrint('Login response body: ${response.body}');
+      
+      final responseData = jsonDecode(response.body);
+      
+      if (response.statusCode == 200) {
+        return AuthResponse(
+          success: true,
+          message: responseData['message'] ?? 'Login successful',
+          user: responseData['user'] != null 
+              ? User.fromJson(responseData['user']) 
+              : null,
+          tokens: responseData['tokens'] != null 
+              ? AuthTokens.fromJson(responseData['tokens']) 
+              : null,
+        );
+      } else {
+        return AuthResponse(
+          success: false,
+          message: responseData['message'] ?? 'Login failed',
+        );
       }
-
-      // Parse response
-      return _parseResponse<T>(response, fromJson);
-    } on SocketException {
-      throw AuthException('Tidak ada koneksi internet');
-    } on HttpException {
-      throw AuthException('Terjadi kesalahan koneksi');
-    } on FormatException {
-      throw AuthException('Format respons tidak valid');
     } catch (e) {
-      if (e is AuthException) rethrow;
-      throw AuthException('Terjadi kesalahan: ${e.toString()}');
-    }
-  }
-
-  // Parse HTTP response
-  ApiResponse<T> _parseResponse<T>(
-    http.Response response,
-    T Function(Map<String, dynamic>)? fromJson,
-  ) {
-    final statusCode = response.statusCode;
-    final responseBody = response.body;
-
-    // Try to parse JSON response
-    Map<String, dynamic> jsonResponse;
-    try {
-      jsonResponse = json.decode(responseBody) as Map<String, dynamic>;
-    } catch (e) {
-      throw AuthException('Respons server tidak valid');
-    }
-
-    // Check if request was successful
-    if (statusCode >= 200 && statusCode < 300) {
-      return ApiResponse<T>.fromJson(jsonResponse, fromJson);
-    } else {
-      // Handle error response
-      final errorResponse = ApiResponse<T>.fromJson(jsonResponse, fromJson);
-      throw AuthException(
-        errorResponse.message,
-        statusCode: statusCode,
-        errors: errorResponse.errors,
+      debugPrint('Login error: $e');
+      return AuthResponse(
+        success: false,
+        message: 'Network error: ${e.toString()}',
       );
     }
   }
 
-  // REGISTER STEP METHODS
-
-  // Register Step 1: Basic Information
-  Future<ApiResponse<RegisterStepResponse>> registerStep1(RegisterStep1Data data) async {
+  // Refresh Token
+  static Future<AuthResponse> refreshToken(String refreshToken) async {
     try {
-      final response = await _request<RegisterStepResponse>(
-        method: 'POST',
-        endpoint: ApiConfig.registerStep1Endpoint,
-        body: data.toJson(),
-        includeAuth: false,
-        fromJson: RegisterStepResponse.fromJson,
+      debugPrint('Refreshing token...');
+      
+      final response = await http.post(
+        Uri.parse('$_baseUrl/refresh-token'),
+        headers: _getHeaders(),
+        body: jsonEncode({'refresh_token': refreshToken}),
       );
-      return response;
+
+      debugPrint('Refresh token response status: ${response.statusCode}');
+      debugPrint('Refresh token response body: ${response.body}');
+      
+      final responseData = jsonDecode(response.body);
+      
+      if (response.statusCode == 200) {
+        return AuthResponse(
+          success: true,
+          message: 'Token refreshed successfully',
+          tokens: AuthTokens.fromJson(responseData),
+        );
+      } else {
+        return AuthResponse(
+          success: false,
+          message: responseData['message'] ?? 'Token refresh failed',
+        );
+      }
     } catch (e) {
-      if (e is AuthException) rethrow;
-      throw AuthException('Gagal mengirim data pribadi');
+      debugPrint('Refresh token error: $e');
+      return AuthResponse(
+        success: false,
+        message: 'Network error: ${e.toString()}',
+      );
     }
   }
 
-  // Register Step 2: University Information
-  Future<ApiResponse<RegisterStepResponse>> registerStep2(RegisterStep2Data data) async {
+  // Logout User
+  static Future<AuthResponse> logout({
+    required String accessToken,
+    required String refreshToken,
+  }) async {
     try {
-      final response = await _request<RegisterStepResponse>(
-        method: 'POST',
-        endpoint: ApiConfig.registerStep2Endpoint,
-        body: data.toJson(),
-        includeAuth: false,
-        fromJson: RegisterStepResponse.fromJson,
+      debugPrint('Logging out user...');
+      
+      final response = await http.post(
+        Uri.parse('$_baseUrl/logout'),
+        headers: _getHeaders(token: accessToken),
+        body: jsonEncode({'refresh_token': refreshToken}),
       );
-      return response;
+
+      debugPrint('Logout response status: ${response.statusCode}');
+      debugPrint('Logout response body: ${response.body}');
+      
+      final responseData = jsonDecode(response.body);
+      
+      if (response.statusCode == 200) {
+        return AuthResponse(
+          success: true,
+          message: responseData['message'] ?? 'Logged out successfully',
+        );
+      } else {
+        return AuthResponse(
+          success: false,
+          message: responseData['message'] ?? 'Logout failed',
+        );
+      }
     } catch (e) {
-      if (e is AuthException) rethrow;
-      throw AuthException('Gagal menyimpan data akademik');
+      debugPrint('Logout error: $e');
+      return AuthResponse(
+        success: false,
+        message: 'Network error: ${e.toString()}',
+      );
     }
   }
 
-  // Register Step 3: OTP Verification
-  Future<ApiResponse<RegisterStepResponse>> registerStep3(RegisterStep3Data data) async {
+  // Forgot Password
+  static Future<OTPResponse> forgotPassword(String email) async {
     try {
-      final response = await _request<RegisterStepResponse>(
-        method: 'POST',
-        endpoint: ApiConfig.registerStep3Endpoint,
-        body: data.toJson(),
-        includeAuth: false,
-        fromJson: RegisterStepResponse.fromJson,
+      debugPrint('Sending forgot password OTP to: $email');
+      
+      final response = await http.post(
+        Uri.parse('$_baseUrl/forgot-password'),
+        headers: _getHeaders(),
+        body: jsonEncode({'email': email}),
       );
-      return response;
+
+      debugPrint('Forgot password response status: ${response.statusCode}');
+      debugPrint('Forgot password response body: ${response.body}');
+      
+      final responseData = jsonDecode(response.body);
+      
+      return OTPResponse(
+        success: response.statusCode == 200,
+        message: responseData['message'] ?? 'Reset code sent',
+        expiresInSeconds: responseData['data']?['expires_in_seconds'] ?? 300,
+      );
     } catch (e) {
-      if (e is AuthException) rethrow;
-      throw AuthException('Kode OTP tidak valid');
+      debugPrint('Forgot password error: $e');
+      return OTPResponse(
+        success: false,
+        message: 'Network error: ${e.toString()}',
+        expiresInSeconds: 0,
+      );
     }
   }
 
-  // Register Step 4: Initial Savings
-  Future<ApiResponse<RegisterStepResponse>> registerStep4(RegisterStep4Data data) async {
+  // Reset Password
+  static Future<AuthResponse> resetPassword(ResetPasswordRequest request) async {
     try {
-      final response = await _request<RegisterStepResponse>(
-        method: 'POST',
-        endpoint: ApiConfig.registerStep4Endpoint,
-        body: data.toJson(),
-        includeAuth: false,
-        fromJson: RegisterStepResponse.fromJson,
+      debugPrint('Resetting password...');
+      
+      final response = await http.post(
+        Uri.parse('$_baseUrl/reset-password'),
+        headers: _getHeaders(),
+        body: jsonEncode(request.toJson()),
       );
-      return response;
+
+      debugPrint('Reset password response status: ${response.statusCode}');
+      debugPrint('Reset password response body: ${response.body}');
+      
+      final responseData = jsonDecode(response.body);
+      
+      return AuthResponse(
+        success: response.statusCode == 200,
+        message: responseData['message'] ?? 'Password reset',
+      );
     } catch (e) {
-      if (e is AuthException) rethrow;
-      throw AuthException('Gagal menyimpan data tabungan');
+      debugPrint('Reset password error: $e');
+      return AuthResponse(
+        success: false,
+        message: 'Network error: ${e.toString()}',
+      );
     }
   }
 
-  // Register Step 5: Complete Registration
-  Future<ApiResponse<RegistrationCompleteResponse>> registerStep5(RegisterStep5Data data) async {
+  // Change Password
+  static Future<AuthResponse> changePassword(
+    String accessToken,
+    ChangePasswordRequest request,
+  ) async {
     try {
-      final response = await _request<RegistrationCompleteResponse>(
-        method: 'POST',
-        endpoint: ApiConfig.registerStep5Endpoint,
-        body: data.toJson(),
-        includeAuth: false,
-        fromJson: RegistrationCompleteResponse.fromJson,
+      debugPrint('Changing password...');
+      
+      final response = await http.post(
+        Uri.parse('$_baseUrl/change-password'),
+        headers: _getHeaders(token: accessToken),
+        body: jsonEncode(request.toJson()),
       );
-      return response;
+
+      debugPrint('Change password response status: ${response.statusCode}');
+      debugPrint('Change password response body: ${response.body}');
+      
+      final responseData = jsonDecode(response.body);
+      
+      return AuthResponse(
+        success: response.statusCode == 200,
+        message: responseData['message'] ?? 'Password changed',
+      );
     } catch (e) {
-      if (e is AuthException) rethrow;
-      throw AuthException('Gagal menyelesaikan registrasi');
+      debugPrint('Change password error: $e');
+      return AuthResponse(
+        success: false,
+        message: 'Network error: ${e.toString()}',
+      );
     }
   }
 
-  // LOGIN & AUTH METHODS
-
-  // Login
-  Future<ApiResponse<LoginResponse>> login(LoginRequest request) async {
+  // Send Email Verification
+  static Future<OTPResponse> sendEmailVerification(String accessToken) async {
     try {
-      final response = await _request<LoginResponse>(
-        method: 'POST',
-        endpoint: ApiConfig.loginEndpoint,
-        body: request.toJson(),
-        includeAuth: false,
-        fromJson: LoginResponse.fromJson,
+      debugPrint('Sending email verification...');
+      
+      final response = await http.post(
+        Uri.parse('$_baseUrl/send-email-verification'),
+        headers: _getHeaders(token: accessToken),
       );
-      return response;
+
+      debugPrint('Send email verification response status: ${response.statusCode}');
+      debugPrint('Send email verification response body: ${response.body}');
+      
+      final responseData = jsonDecode(response.body);
+      
+      return OTPResponse(
+        success: response.statusCode == 200,
+        message: responseData['message'] ?? 'Verification code sent',
+        expiresInSeconds: responseData['data']?['expires_in_seconds'] ?? 300,
+      );
     } catch (e) {
-      if (e is AuthException) rethrow;
-      throw AuthException('Gagal login');
+      debugPrint('Send email verification error: $e');
+      return OTPResponse(
+        success: false,
+        message: 'Network error: ${e.toString()}',
+        expiresInSeconds: 0,
+      );
     }
   }
 
-  // Logout
-  Future<ApiResponse<LogoutResponse>> logout() async {
+  // Verify Email
+  static Future<AuthResponse> verifyEmail(
+    String accessToken,
+    VerifyEmailRequest request,
+  ) async {
     try {
-      final response = await _request<LogoutResponse>(
-        method: 'POST',
-        endpoint: ApiConfig.logoutEndpoint,
-        fromJson: LogoutResponse.fromJson,
+      debugPrint('Verifying email...');
+      
+      final response = await http.post(
+        Uri.parse('$_baseUrl/verify-email'),
+        headers: _getHeaders(token: accessToken),
+        body: jsonEncode(request.toJson()),
       );
-      return response;
+
+      debugPrint('Verify email response status: ${response.statusCode}');
+      debugPrint('Verify email response body: ${response.body}');
+      
+      final responseData = jsonDecode(response.body);
+      
+      return AuthResponse(
+        success: response.statusCode == 200,
+        message: responseData['message'] ?? 'Email verified',
+      );
     } catch (e) {
-      if (e is AuthException) rethrow;
-      throw AuthException('Gagal logout');
+      debugPrint('Verify email error: $e');
+      return AuthResponse(
+        success: false,
+        message: 'Network error: ${e.toString()}',
+      );
     }
   }
 
-  // Get current user profile
-  Future<ApiResponse<User>> getProfile() async {
+  // Get Current User
+  static Future<AuthResponse> getCurrentUser(String accessToken) async {
     try {
-      final response = await _request<User>(
-        method: 'GET',
-        endpoint: ApiConfig.profileEndpoint,
-        fromJson: User.fromJson,
+      debugPrint('Getting current user...');
+      
+      final response = await http.get(
+        Uri.parse('$_baseUrl/me'),
+        headers: _getHeaders(token: accessToken),
       );
-      return response;
+
+      debugPrint('Get current user response status: ${response.statusCode}');
+      debugPrint('Get current user response body: ${response.body}');
+      
+      final responseData = jsonDecode(response.body);
+      
+      if (response.statusCode == 200) {
+        return AuthResponse(
+          success: true,
+          message: 'User data retrieved',
+          user: User.fromJson(responseData),
+        );
+      } else {
+        return AuthResponse(
+          success: false,
+          message: responseData['message'] ?? 'Failed to get user data',
+        );
+      }
     } catch (e) {
-      if (e is AuthException) rethrow;
-      throw AuthException('Gagal mengambil profil');
+      debugPrint('Get current user error: $e');
+      return AuthResponse(
+        success: false,
+        message: 'Network error: ${e.toString()}',
+      );
     }
   }
 
-  // Refresh token
-  Future<ApiResponse<RefreshTokenResponse>> refreshToken(String refreshToken) async {
+  // Validate Token
+  static Future<AuthResponse> validateToken(String accessToken) async {
     try {
-      final response = await _request<RefreshTokenResponse>(
-        method: 'POST',
-        endpoint: ApiConfig.refreshTokenEndpoint,
-        body: {'refresh_token': refreshToken},
-        includeAuth: false,
-        fromJson: RefreshTokenResponse.fromJson,
+      debugPrint('Validating token...');
+      
+      final response = await http.post(
+        Uri.parse('$_baseUrl/validate-token'),
+        headers: _getHeaders(token: accessToken),
       );
-      return response;
-    } catch (e) {
-      if (e is AuthException) rethrow;
-      throw AuthException('Gagal refresh token');
-    }
-  }
 
-  // PASSWORD MANAGEMENT
-
-  // Forgot password
-  Future<ApiResponse<OtpResponse>> forgotPassword(ForgotPasswordRequest request) async {
-    try {
-      final response = await _request<OtpResponse>(
-        method: 'POST',
-        endpoint: ApiConfig.forgotPasswordEndpoint,
-        body: request.toJson(),
-        includeAuth: false,
-        fromJson: OtpResponse.fromJson,
+      debugPrint('Validate token response status: ${response.statusCode}');
+      debugPrint('Validate token response body: ${response.body}');
+      
+      final responseData = jsonDecode(response.body);
+      
+      return AuthResponse(
+        success: response.statusCode == 200,
+        message: responseData['message'] ?? 'Token validated',
       );
-      return response;
     } catch (e) {
-      if (e is AuthException) rethrow;
-      throw AuthException('Gagal mengirim email reset password');
-    }
-  }
-
-  // Reset password
-  Future<ApiResponse<PasswordResetResponse>> resetPassword(ResetPasswordRequest request) async {
-    try {
-      final response = await _request<PasswordResetResponse>(
-        method: 'POST',
-        endpoint: ApiConfig.resetPasswordEndpoint,
-        body: request.toJson(),
-        includeAuth: false,
-        fromJson: PasswordResetResponse.fromJson,
+      debugPrint('Validate token error: $e');
+      return AuthResponse(
+        success: false,
+        message: 'Network error: ${e.toString()}',
       );
-      return response;
-    } catch (e) {
-      if (e is AuthException) rethrow;
-      throw AuthException('Gagal reset password');
-    }
-  }
-
-  // Change password
-  Future<ApiResponse<Map<String, dynamic>>> changePassword(ChangePasswordRequest request) async {
-    try {
-      final response = await _request<Map<String, dynamic>>(
-        method: 'POST',
-        endpoint: ApiConfig.changePasswordEndpoint,
-        body: request.toJson(),
-        fromJson: (json) => json,
-      );
-      return response;
-    } catch (e) {
-      if (e is AuthException) rethrow;
-      throw AuthException('Gagal mengubah password');
-    }
-  }
-
-  // UTILITY METHODS
-
-  // Resend OTP
-  Future<ApiResponse<OtpResponse>> resendOtp(ResendOtpRequest request) async {
-    try {
-      final response = await _request<OtpResponse>(
-        method: 'POST',
-        endpoint: ApiConfig.verifyOtpEndpoint,
-        body: request.toJson(),
-        includeAuth: false,
-        fromJson: OtpResponse.fromJson,
-      );
-      return response;
-    } catch (e) {
-      if (e is AuthException) rethrow;
-      throw AuthException('Gagal mengirim ulang OTP');
-    }
-  }
-
-  // Check email availability
-  Future<ApiResponse<EmailCheckResponse>> checkEmailAvailability(String email) async {
-    try {
-      final response = await _request<EmailCheckResponse>(
-        method: 'GET',
-        endpoint: '${ApiConfig.checkEmailEndpoint}/$email',
-        includeAuth: false,
-        fromJson: EmailCheckResponse.fromJson,
-      );
-      return response;
-    } catch (e) {
-      if (e is AuthException) rethrow;
-      throw AuthException('Gagal memeriksa ketersediaan email');
-    }
-  }
-
-  // Verify OTP status
-  Future<ApiResponse<VerificationStatusResponse>> verifyOtpStatus(String email) async {
-    try {
-      final response = await _request<VerificationStatusResponse>(
-        method: 'GET',
-        endpoint: '/auth/verify-status/$email',
-        includeAuth: false,
-        fromJson: VerificationStatusResponse.fromJson,
-      );
-      return response;
-    } catch (e) {
-      if (e is AuthException) rethrow;
-      throw AuthException('Gagal memeriksa status verifikasi');
-    }
-  }
-
-  // Validate token
-  Future<ApiResponse<TokenValidationResponse>> validateToken(String token) async {
-    try {
-      final response = await _request<TokenValidationResponse>(
-        method: 'POST',
-        endpoint: '/auth/validate-token',
-        body: {'token': token},
-        includeAuth: false,
-        fromJson: TokenValidationResponse.fromJson,
-      );
-      return response;
-    } catch (e) {
-      if (e is AuthException) rethrow;
-      throw AuthException('Gagal validasi token');
-    }
-  }
-
-  // Update profile
-  Future<ApiResponse<ProfileUpdateResponse>> updateProfile(UpdateProfileRequest request) async {
-    try {
-      final response = await _request<ProfileUpdateResponse>(
-        method: 'PATCH',
-        endpoint: '/auth/profile',
-        body: request.toJson(),
-        fromJson: ProfileUpdateResponse.fromJson,
-      );
-      return response;
-    } catch (e) {
-      if (e is AuthException) rethrow;
-      throw AuthException('Gagal memperbarui profil');
-    }
-  }
-}
-
-// Custom exception for authentication errors
-class AuthException implements Exception {
-  final String message;
-  final int? statusCode;
-  final ErrorDetails? errors;
-
-  const AuthException(
-    this.message, {
-    this.statusCode,
-    this.errors,
-  });
-
-  @override
-  String toString() {
-    return 'AuthException: $message';
-  }
-
-  // Check if it's a specific type of error
-  bool get isNetworkError => statusCode == null;
-  bool get isClientError => statusCode != null && statusCode! >= 400 && statusCode! < 500;
-  bool get isServerError => statusCode != null && statusCode! >= 500;
-  bool get isUnauthorized => statusCode == 401;
-  bool get isForbidden => statusCode == 403;
-  bool get isNotFound => statusCode == 404;
-  bool get isValidationError => statusCode == 422 || statusCode == 400;
-
-  // Get user-friendly error message
-  String get userMessage {
-    switch (statusCode) {
-      case 401:
-        return 'Email atau password salah';
-      case 403:
-        return 'Akses ditolak';
-      case 404:
-        return 'Data tidak ditemukan';
-      case 422:
-      case 400:
-        return message;
-      case 429:
-        return 'Terlalu banyak percobaan, silakan coba lagi nanti';
-      case 500:
-        return 'Terjadi kesalahan server, silakan coba lagi';
-      case 502:
-        return 'Server sedang tidak tersedia';
-      case 503:
-        return 'Layanan sedang dalam pemeliharaan';
-      default:
-        return message.isNotEmpty ? message : 'Terjadi kesalahan tidak terduga';
     }
   }
 }

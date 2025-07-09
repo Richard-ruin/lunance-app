@@ -64,7 +64,6 @@ async def create_indexes():
         
         # User collection indexes
         await db.database.users.create_index("email", unique=True)
-        await db.database.users.create_index("username", unique=True)
         await db.database.users.create_index("created_at")
         
         # Transaction collection indexes

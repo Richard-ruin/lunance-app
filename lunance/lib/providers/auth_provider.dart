@@ -1,648 +1,521 @@
+// lib/providers/auth_provider.dart
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
-import '../models/base_model.dart';
-import '../models/auth/register_data.dart' hide RegisterStep1Data, RegisterStep2Data, RegisterStep3Data, RegisterStep4Data, RegisterStep5Data, ResendOtpRequest;
-import '../models/auth/register_data.dart' as RegisterData;
-import '../models/auth/auth_responses.dart';
+import '../models/auth_response_model.dart';
 import '../services/auth_service.dart';
-import '../services/storage_service.dart';
-import '../services/websocket_service.dart';
+import '../utils/constants.dart';
+import '../utils/routes.dart';
+import '../widgets/common/snackbar_helper.dart';
+import '../providers/university_provider.dart';
+import '../providers/category_provider.dart';
+import '../providers/transaction_provider.dart';
+import '../providers/university_request_provider.dart';
+import 'package:provider/provider.dart';
+
+enum AuthState { initial, loading, authenticated, unauthenticated }
 
 class AuthProvider extends ChangeNotifier {
+  AuthState _authState = AuthState.initial;
   User? _user;
-  bool _isLoading = false;
-  bool _isAuthenticated = false;
-  String? _errorMessage;
+  AuthTokens? _tokens;
+  String _errorMessage = '';
 
   // Getters
+  AuthState get authState => _authState;
   User? get user => _user;
-  bool get isLoading => _isLoading;
-  bool get isAuthenticated => _isAuthenticated;
-  String? get errorMessage => _errorMessage;
-  bool get hasError => _errorMessage != null;
-  bool get isAdmin => _user?.role == UserRole.admin;
-  bool get isStudent => _user?.role == UserRole.student;
+  AuthTokens? get tokens => _tokens;
+  String? get accessToken => _tokens?.accessToken;
+  String? get refreshToken => _tokens?.refreshToken;
+  String get errorMessage => _errorMessage;
+  bool get isAuthenticated => _authState == AuthState.authenticated;
+  bool get isLoading => _authState == AuthState.loading;
 
-  // Service instances
-  final AuthService _authService = AuthService();
-  final WebSocketService _wsService = WebSocketService();
-
-  // Multi-step registration data
-  final Map<String, dynamic> _registrationData = {};
-
-  // Registration step state
-  int _registrationStep = 1;
-  int get registrationStep => _registrationStep;
-
-  // OTP state
-  bool _isOtpSent = false;
-  bool _isOtpVerified = false;
-  int _otpResendCount = 0;
-  DateTime? _otpSentTime;
-  
-  bool get isOtpSent => _isOtpSent;
-  bool get isOtpVerified => _isOtpVerified;
-  int get otpResendCount => _otpResendCount;
-  DateTime? get otpSentTime => _otpSentTime;
-
-  // Clear error message
-  void clearError() {
-    _errorMessage = null;
-    notifyListeners();
+  AuthProvider() {
+    _initializeAuth();
   }
 
-  // Set loading state
-  void _setLoading(bool loading) {
-    _isLoading = loading;
-    notifyListeners();
-  }
-
-  // Set error message
-  void _setError(String? error) {
-    _errorMessage = error;
-    notifyListeners();
-  }
-
-  // Set user and authentication state
-  void _setUser(User? user) {
-    _user = user;
-    _isAuthenticated = user != null;
-    notifyListeners();
-  }
-
-  // Check authentication status on app start
-  Future<void> checkAuthStatus() async {
-    _setLoading(true);
-
-    try {
-      // Check if we have a stored token
-      final token = StorageService.getAuthToken();
-      if (token == null) {
-        _setUser(null);
-        _setLoading(false);
-        return;
-      }
-
-      // Check if we have stored user data
-      final storedUser = StorageService.getUser();
-      if (storedUser != null) {
-        _setUser(storedUser);
-      }
-
-      // Verify token with server by fetching current user profile
-      final response = await _authService.getProfile();
-      if (response.success && response.data != null) {
-        _setUser(response.data!);
-        await StorageService.saveUser(response.data!);
-        
-        // Connect to WebSocket if authenticated
-        if (_isAuthenticated) {
-          _wsService.connect().catchError((e) {
-            // WebSocket connection is optional, don't fail auth if it fails
-            debugPrint('WebSocket connection failed: $e');
-          });
-        }
-      } else {
-        // Token is invalid, clear auth data
-        await _clearAuthData();
-      }
-    } catch (e) {
-      // If verification fails, clear auth data
-      await _clearAuthData();
-      _setError('Gagal memverifikasi status login');
-    } finally {
-      _setLoading(false);
+  Future<void> _initializeAuth() async {
+    _setAuthState(AuthState.loading);
+    await _loadUserData();
+    
+    if (_tokens?.accessToken != null && _user != null) {
+      // Skip token validation during initialization to avoid 401 issues
+      // Just check if we have stored data
+      debugPrint('Found stored auth data, setting authenticated state');
+      debugPrint('Stored user role: ${_user?.role}');
+      _setAuthState(AuthState.authenticated);
+    } else {
+      debugPrint('No stored auth data found');
+      _setAuthState(AuthState.unauthenticated);
     }
   }
 
-  // Login user
-  Future<bool> login(String email, String password) async {
-    _setLoading(true);
-    _setError(null);
-
+  Future<void> _loadUserData() async {
     try {
-      final loginRequest = LoginRequest(
+      final prefs = await SharedPreferences.getInstance();
+      
+      final accessToken = prefs.getString(AppConstants.accessTokenKey);
+      final refreshToken = prefs.getString(AppConstants.refreshTokenKey);
+      
+      if (accessToken != null && refreshToken != null) {
+        _tokens = AuthTokens(
+          accessToken: accessToken,
+          refreshToken: refreshToken,
+          tokenType: 'bearer',
+          expiresIn: 3600,
+          refreshExpiresIn: 2592000,
+        );
+      }
+      
+      final userDataString = prefs.getString(AppConstants.userDataKey);
+      if (userDataString != null) {
+        final userData = jsonDecode(userDataString);
+        _user = User.fromJson(userData);
+        debugPrint('Loaded user data: ${_user?.toJson()}');
+      }
+    } catch (e) {
+      debugPrint('Error loading user data: $e');
+    }
+  }
+
+  Future<bool> _validateStoredToken() async {
+    if (_tokens?.accessToken == null) return false;
+    
+    try {
+      final response = await AuthService.validateToken(_tokens!.accessToken);
+      return response.success;
+    } catch (e) {
+      debugPrint('Error validating token: $e');
+      return false;
+    }
+  }
+
+  Future<void> _saveAuthData({
+    required User user,
+    required AuthTokens tokens,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      await prefs.setString(AppConstants.accessTokenKey, tokens.accessToken);
+      await prefs.setString(AppConstants.refreshTokenKey, tokens.refreshToken);
+      await prefs.setString(AppConstants.userDataKey, jsonEncode(user.toJson()));
+      
+      _user = user;
+      _tokens = tokens;
+      
+      debugPrint('Saved auth data for user: ${user.fullName}, role: ${user.role}');
+    } catch (e) {
+      debugPrint('Error saving auth data: $e');
+    }
+  }
+
+  Future<void> _clearAuthData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      await prefs.remove(AppConstants.accessTokenKey);
+      await prefs.remove(AppConstants.refreshTokenKey);
+      await prefs.remove(AppConstants.userDataKey);
+      
+      _user = null;
+      _tokens = null;
+      
+      debugPrint('Cleared auth data');
+    } catch (e) {
+      debugPrint('Error clearing auth data: $e');
+    }
+  }
+
+  void _setAuthState(AuthState state) {
+    _authState = state;
+    notifyListeners();
+  }
+
+  void _setError(String message) {
+    _errorMessage = message;
+    notifyListeners();
+  }
+
+  void clearError() {
+    _errorMessage = '';
+    notifyListeners();
+  }
+
+  // Helper method to normalize role for comparison
+  String _normalizeRole(String role) {
+    return role.toLowerCase().trim();
+  }
+
+  // Helper method to check if user is admin
+  bool get isAdmin {
+    if (_user?.role == null) return false;
+    return _normalizeRole(_user!.role) == 'admin';
+  }
+
+  // Helper method to check if user is student
+  bool get isStudent {
+    if (_user?.role == null) return false;
+    return _normalizeRole(_user!.role) == 'student';
+  }
+
+  Future<bool> login({
+    required String email,
+    required String password,
+    bool rememberMe = false,
+  }) async {
+    _setAuthState(AuthState.loading);
+    clearError();
+    
+    try {
+      final response = await AuthService.login(
         email: email,
         password: password,
+        rememberMe: rememberMe,
       );
-
-      final response = await _authService.login(loginRequest);
       
-      if (response.success && response.data != null) {
-        final loginResponse = response.data!;
+      debugPrint('Login response: ${response.toJson()}');
+      debugPrint('Response success: ${response.success}');
+      debugPrint('Response user: ${response.user?.toJson()}');
+      debugPrint('Response tokens: ${response.tokens?.toJson()}');
+      
+      if (response.success && response.user != null && response.tokens != null) {
+        await _saveAuthData(
+          user: response.user!,
+          tokens: response.tokens!,
+        );
         
-        // Store auth token and user data
-        await StorageService.saveAuthToken(loginResponse.accessToken);
-        await StorageService.saveUser(loginResponse.user);
+        _setAuthState(AuthState.authenticated);
         
-        _setUser(loginResponse.user);
+        debugPrint('User role after login: ${response.user!.role}');
+        debugPrint('Normalized role: ${_normalizeRole(response.user!.role)}');
+        debugPrint('Is admin: ${isAdmin}');
+        debugPrint('Is student: ${isStudent}');
         
-        // Connect to WebSocket
-        _wsService.connect().catchError((e) {
-          debugPrint('WebSocket connection failed: $e');
-        });
-        
-        _setLoading(false);
         return true;
       } else {
+        debugPrint('Login failed: ${response.message}');
         _setError(response.message);
-        _setLoading(false);
+        _setAuthState(AuthState.unauthenticated);
         return false;
       }
     } catch (e) {
-      if (e is AuthException) {
-        _setError(e.userMessage);
-      } else {
-        _setError('Gagal login, silakan coba lagi');
-      }
-      _setLoading(false);
+      debugPrint('Login error: $e');
+      _setError('Login gagal: ${e.toString()}');
+      _setAuthState(AuthState.unauthenticated);
       return false;
     }
   }
 
-  // Logout user
-  Future<void> logout() async {
-    _setLoading(true);
-
-    try {
-      // Call logout API
-      await _authService.logout();
-    } catch (e) {
-      // Even if logout API fails, we still clear local data
-      debugPrint('Logout API failed: $e');
-    } finally {
-      // Clear auth data regardless of API call result
-      await _clearAuthData();
-      _setLoading(false);
-    }
-  }
-
-  // Multi-step registration methods
-  Future<bool> registerStep1({
+  Future<bool> register({
     required String email,
-    required String namaLengkap,
-    required String noTelepon,
-  }) async {
-    _setLoading(true);
-    _setError(null);
-
-    try {
-      final data = RegisterData.RegisterStep1Data(
-        email: email,
-        namaLengkap: namaLengkap,
-        noTelepon: noTelepon,
-      );
-
-      final response = await _authService.registerStep1(data);
-
-      if (response.success) {
-        _registrationData.addAll(data.toJson());
-        _registrationStep = 2;
-        _isOtpSent = true;
-        _otpSentTime = DateTime.now();
-        _setLoading(false);
-        notifyListeners();
-        return true;
-      } else {
-        _setError(response.message);
-        _setLoading(false);
-        return false;
-      }
-    } catch (e) {
-      if (e is AuthException) {
-        _setError(e.userMessage);
-      } else {
-        _setError('Gagal mengirim data. Silakan coba lagi.');
-      }
-      _setLoading(false);
-      return false;
-    }
-  }
-
-  Future<bool> registerStep2({
-    required String universityId,
-    required String fakultasId,
-    required String prodiId,
-  }) async {
-    _setLoading(true);
-    _setError(null);
-
-    try {
-      final data = RegisterData.RegisterStep2Data(
-        email: _registrationData['email'],
-        universityId: universityId,
-        fakultasId: fakultasId,
-        prodiId: prodiId,
-      );
-
-      final response = await _authService.registerStep2(data);
-
-      if (response.success) {
-        _registrationData.addAll({
-          'university_id': universityId,
-          'fakultas_id': fakultasId,
-          'prodi_id': prodiId,
-        });
-        _registrationStep = 3;
-        _setLoading(false);
-        notifyListeners();
-        return true;
-      } else {
-        _setError(response.message);
-        _setLoading(false);
-        return false;
-      }
-    } catch (e) {
-      if (e is AuthException) {
-        _setError(e.userMessage);
-      } else {
-        _setError('Gagal menyimpan data akademik. Silakan coba lagi.');
-      }
-      _setLoading(false);
-      return false;
-    }
-  }
-
-  Future<bool> registerStep3({required String otpCode}) async {
-    _setLoading(true);
-    _setError(null);
-
-    try {
-      final data = RegisterData.RegisterStep3Data(
-        email: _registrationData['email'],
-        otpCode: otpCode,
-      );
-
-      final response = await _authService.registerStep3(data);
-
-      if (response.success) {
-        _isOtpVerified = true;
-        _registrationStep = 4;
-        _setLoading(false);
-        notifyListeners();
-        return true;
-      } else {
-        _setError(response.message);
-        _setLoading(false);
-        return false;
-      }
-    } catch (e) {
-      if (e is AuthException) {
-        _setError(e.userMessage);
-      } else {
-        _setError('Kode OTP tidak valid. Silakan coba lagi.');
-      }
-      _setLoading(false);
-      return false;
-    }
-  }
-
-  Future<bool> registerStep4({required double tabunganAwal}) async {
-    _setLoading(true);
-    _setError(null);
-
-    try {
-      final data = RegisterData.RegisterStep4Data(
-        email: _registrationData['email'],
-        tabunganAwal: tabunganAwal,
-      );
-
-      final response = await _authService.registerStep4(data);
-
-      if (response.success) {
-        _registrationData['tabungan_awal'] = tabunganAwal;
-        _registrationStep = 5;
-        _setLoading(false);
-        notifyListeners();
-        return true;
-      } else {
-        _setError(response.message);
-        _setLoading(false);
-        return false;
-      }
-    } catch (e) {
-      if (e is AuthException) {
-        _setError(e.userMessage);
-      } else {
-        _setError('Gagal menyimpan data tabungan. Silakan coba lagi.');
-      }
-      _setLoading(false);
-      return false;
-    }
-  }
-
-  Future<bool> registerStep5({
     required String password,
     required String confirmPassword,
+    required String fullName,
+    required String phoneNumber,
+    required String universityId,
+    required String facultyId,
+    required String majorId,
+    double? initialSavings,
+    required String otpCode,
   }) async {
-    _setLoading(true);
-    _setError(null);
-
+    _setAuthState(AuthState.loading);
+    clearError();
+    
     try {
-      final data = RegisterData.RegisterStep5Data(
-        email: _registrationData['email'],
+      final registerRequest = RegisterRequest(
+        email: email,
         password: password,
         confirmPassword: confirmPassword,
-        namaLengkap: _registrationData['nama_lengkap'],
-        noTelepon: _registrationData['no_telepon'],
-        universityId: _registrationData['university_id'],
-        fakultasId: _registrationData['fakultas_id'],
-        prodiId: _registrationData['prodi_id'],
-        tabunganAwal: _registrationData['tabungan_awal'],
+        fullName: fullName,
+        phoneNumber: phoneNumber,
+        universityId: universityId,
+        facultyId: facultyId,
+        majorId: majorId,
+        initialSavings: initialSavings,
+        otpCode: otpCode,
       );
-
-      final response = await _authService.registerStep5(data);
-
-      if (response.success && response.data != null) {
-        final registrationResponse = response.data!;
+      
+      final response = await AuthService.register(registerRequest);
+      
+      if (response.success && response.user != null && response.tokens != null) {
+        await _saveAuthData(
+          user: response.user!,
+          tokens: response.tokens!,
+        );
         
-        // Store auth data
-        await StorageService.saveAuthToken(registrationResponse.accessToken);
-        await StorageService.saveUser(registrationResponse.user);
-        
-        _setUser(registrationResponse.user);
-        _clearRegistrationData();
-        
-        // Connect to WebSocket
-        _wsService.connect().catchError((e) {
-          debugPrint('WebSocket connection failed: $e');
-        });
-        
-        _setLoading(false);
+        _setAuthState(AuthState.authenticated);
         return true;
       } else {
         _setError(response.message);
-        _setLoading(false);
+        _setAuthState(AuthState.unauthenticated);
         return false;
       }
     } catch (e) {
-      if (e is AuthException) {
-        _setError(e.userMessage);
-      } else {
-        _setError('Gagal menyelesaikan registrasi. Silakan coba lagi.');
-      }
-      _setLoading(false);
+      debugPrint('Registration error: $e');
+      _setError('Registrasi gagal: ${e.toString()}');
+      _setAuthState(AuthState.unauthenticated);
       return false;
     }
   }
 
-  // Resend OTP
-  Future<bool> resendOtp() async {
-    if (_otpResendCount >= 3) {
-      _setError('Batas pengiriman ulang OTP telah tercapai');
+  Future<bool> sendRegistrationOTP(String email) async {
+    clearError();
+    
+    try {
+      final response = await AuthService.sendRegistrationOTP(email);
+      
+      if (!response.success) {
+        _setError(response.message);
+      }
+      
+      return response.success;
+    } catch (e) {
+      debugPrint('Send registration OTP error: $e');
+      _setError('Gagal mengirim OTP: ${e.toString()}');
       return false;
     }
+  }
 
-    _setLoading(true);
-    _setError(null);
-
+  Future<bool> sendForgotPasswordOTP(String email) async {
+    clearError();
+    
     try {
-      final request = RegisterData.ResendOtpRequest(email: _registrationData['email']);
-      final response = await _authService.resendOtp(request);
+      final response = await AuthService.forgotPassword(email);
+      
+      if (!response.success) {
+        _setError(response.message);
+      }
+      
+      return response.success;
+    } catch (e) {
+      debugPrint('Send forgot password OTP error: $e');
+      _setError('Gagal mengirim OTP: ${e.toString()}');
+      return false;
+    }
+  }
 
+  Future<bool> resetPassword({
+    required String email,
+    required String otpCode,
+    required String newPassword,
+    required String confirmNewPassword,
+  }) async {
+    clearError();
+    
+    try {
+      final resetRequest = ResetPasswordRequest(
+        email: email,
+        otpCode: otpCode,
+        newPassword: newPassword,
+        confirmNewPassword: confirmNewPassword,
+      );
+      
+      final response = await AuthService.resetPassword(resetRequest);
+      
+      if (!response.success) {
+        _setError(response.message);
+      }
+      
+      return response.success;
+    } catch (e) {
+      debugPrint('Reset password error: $e');
+      _setError('Gagal reset password: ${e.toString()}');
+      return false;
+    }
+  }
+
+  Future<bool> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    required String confirmNewPassword,
+  }) async {
+    if (_tokens?.accessToken == null) {
+      _setError('Sesi telah berakhir');
+      return false;
+    }
+    
+    clearError();
+    
+    try {
+      final changeRequest = ChangePasswordRequest(
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+        confirmNewPassword: confirmNewPassword,
+      );
+      
+      final response = await AuthService.changePassword(
+        _tokens!.accessToken,
+        changeRequest,
+      );
+      
+      if (!response.success) {
+        _setError(response.message);
+      }
+      
+      return response.success;
+    } catch (e) {
+      debugPrint('Change password error: $e');
+      _setError('Gagal mengubah password: ${e.toString()}');
+      return false;
+    }
+  }
+
+  Future<bool> sendEmailVerification() async {
+    if (_tokens?.accessToken == null) {
+      _setError('Sesi telah berakhir');
+      return false;
+    }
+    
+    clearError();
+    
+    try {
+      final response = await AuthService.sendEmailVerification(_tokens!.accessToken);
+      
+      if (!response.success) {
+        _setError(response.message);
+      }
+      
+      return response.success;
+    } catch (e) {
+      debugPrint('Send email verification error: $e');
+      _setError('Gagal mengirim verifikasi email: ${e.toString()}');
+      return false;
+    }
+  }
+
+  Future<bool> verifyEmail({
+    required String email,
+    required String otpCode,
+  }) async {
+    if (_tokens?.accessToken == null) {
+      _setError('Sesi telah berakhir');
+      return false;
+    }
+    
+    clearError();
+    
+    try {
+      final verifyRequest = VerifyEmailRequest(
+        email: email,
+        otpCode: otpCode,
+      );
+      
+      final response = await AuthService.verifyEmail(
+        _tokens!.accessToken,
+        verifyRequest,
+      );
+      
       if (response.success) {
-        _otpResendCount++;
-        _otpSentTime = DateTime.now();
-        _setLoading(false);
+        // Update user verification status
+        if (_user != null) {
+          _user = _user!.copyWith(isVerified: true);
+          await _saveAuthData(user: _user!, tokens: _tokens!);
+        }
+      } else {
+        _setError(response.message);
+      }
+      
+      return response.success;
+    } catch (e) {
+      debugPrint('Verify email error: $e');
+      _setError('Gagal verifikasi email: ${e.toString()}');
+      return false;
+    }
+  }
+
+  Future<void> getCurrentUser() async {
+    if (_tokens?.accessToken == null) return;
+    
+    try {
+      final response = await AuthService.getCurrentUser(_tokens!.accessToken);
+      
+      if (response.success && response.user != null) {
+        _user = response.user;
+        
+        // Update stored user data
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(AppConstants.userDataKey, jsonEncode(_user!.toJson()));
+        
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Get current user error: $e');
+    }
+  }
+
+  
+Future<bool> logout({BuildContext? context}) async {
+  try {
+    // Optional: Call logout endpoint if tokens exist
+    if (_tokens?.accessToken != null && _tokens?.refreshToken != null) {
+      try {
+        await AuthService.logout(
+          accessToken: _tokens!.accessToken,
+          refreshToken: _tokens!.refreshToken,
+        );
+      } catch (e) {
+        debugPrint('Error during logout API call: $e');
+        // Continue with local logout even if API call fails
+      }
+    }
+
+    // Clear other providers if context is provided
+    if (context != null) {
+      try {
+        // Clear category provider
+        final categoryProvider = Provider.of<CategoryProvider>(context, listen: false);
+        categoryProvider.clearAllData();
+        
+        // Clear university provider
+        final universityProvider = Provider.of<UniversityProvider>(context, listen: false);
+        universityProvider.clearAllData();
+        
+        // Clear transaction provider
+        final transactionProvider = Provider.of<TransactionProvider>(context, listen: false);
+        transactionProvider.clearAllData();
+        
+        // Clear university request provider
+        final universityRequestProvider = Provider.of<UniversityRequestProvider>(context, listen: false);
+        universityRequestProvider.clearAllData();
+      } catch (e) {
+        debugPrint('Error clearing other providers: $e');
+      }
+    }
+  } catch (e) {
+    debugPrint('Error during logout: $e');
+  }
+  
+  await _clearAuthData();
+  _setAuthState(AuthState.unauthenticated);
+  return true;
+}
+
+  Future<bool> refreshAccessToken() async {
+    if (_tokens?.refreshToken == null) return false;
+    
+    try {
+      final response = await AuthService.refreshToken(_tokens!.refreshToken);
+      
+      if (response.success && response.tokens != null) {
+        _tokens = response.tokens!;
+        
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(AppConstants.accessTokenKey, _tokens!.accessToken);
+        await prefs.setString(AppConstants.refreshTokenKey, _tokens!.refreshToken);
+        
         notifyListeners();
         return true;
       } else {
-        _setError(response.message);
-        _setLoading(false);
+        await logout();
         return false;
       }
     } catch (e) {
-      if (e is AuthException) {
-        _setError(e.userMessage);
-      } else {
-        _setError('Gagal mengirim ulang OTP');
-      }
-      _setLoading(false);
+      debugPrint('Error refreshing token: $e');
+      await logout();
       return false;
     }
-  }
-
-  // Forgot password
-  Future<bool> forgotPassword(String email) async {
-    _setLoading(true);
-    _setError(null);
-
-    try {
-      final request = ForgotPasswordRequest(email: email);
-      final response = await _authService.forgotPassword(request);
-      
-      if (response.success) {
-        _setLoading(false);
-        return true;
-      } else {
-        _setError(response.message);
-        _setLoading(false);
-        return false;
-      }
-    } catch (e) {
-      if (e is AuthException) {
-        _setError(e.userMessage);
-      } else {
-        _setError('Gagal mengirim email reset password');
-      }
-      _setLoading(false);
-      return false;
-    }
-  }
-
-  // Update user profile
-  Future<bool> updateProfile(UpdateProfileRequest updateRequest) async {
-    _setLoading(true);
-    _setError(null);
-
-    try {
-      final response = await _authService.updateProfile(updateRequest);
-      
-      if (response.success && response.data != null) {
-        _setUser(response.data!.user);
-        await StorageService.saveUser(response.data!.user);
-        _setLoading(false);
-        return true;
-      } else {
-        _setError(response.message);
-        _setLoading(false);
-        return false;
-      }
-    } catch (e) {
-      if (e is AuthException) {
-        _setError(e.userMessage);
-      } else {
-        _setError('Gagal memperbarui profil');
-      }
-      _setLoading(false);
-      return false;
-    }
-  }
-
-  // Change password
-  Future<bool> changePassword(ChangePasswordRequest changeRequest) async {
-    _setLoading(true);
-    _setError(null);
-
-    try {
-      final response = await _authService.changePassword(changeRequest);
-      
-      if (response.success) {
-        _setLoading(false);
-        return true;
-      } else {
-        _setError(response.message);
-        _setLoading(false);
-        return false;
-      }
-    } catch (e) {
-      if (e is AuthException) {
-        _setError(e.userMessage);
-      } else {
-        _setError('Gagal mengubah password');
-      }
-      _setLoading(false);
-      return false;
-    }
-  }
-
-  // Refresh user profile from server
-  Future<void> refreshProfile() async {
-    if (!_isAuthenticated) return;
-
-    try {
-      final response = await _authService.getProfile();
-      if (response.success && response.data != null) {
-        _setUser(response.data!);
-        await StorageService.saveUser(response.data!);
-      }
-    } catch (e) {
-      debugPrint('Failed to refresh profile: $e');
-    }
-  }
-
-  // Clear authentication data
-  Future<void> _clearAuthData() async {
-    await StorageService.clearAuthData();
-    await _wsService.disconnect();
-    _setUser(null);
-  }
-
-  // Force logout (clear data without API call)
-  Future<void> forceLogout() async {
-    _setLoading(true);
-    await _clearAuthData();
-    _setLoading(false);
-  }
-
-  // Check if token is expired and refresh if needed
-  Future<bool> validateAndRefreshToken() async {
-    if (!_isAuthenticated) return false;
-
-    try {
-      final response = await _authService.getProfile();
-      if (response.success && response.data != null) {
-        return true;
-      } else {
-        // Token might be expired
-        await _clearAuthData();
-        return false;
-      }
-    } catch (e) {
-      if (e is AuthException && e.isUnauthorized) {
-        await _clearAuthData();
-        return false;
-      }
-      // Other errors don't necessarily mean token is invalid
-      return true;
-    }
-  }
-
-  // Get user display name
-  String get userDisplayName {
-    if (_user == null) return '';
-    return _user!.namaLengkap.isNotEmpty ? _user!.namaLengkap : _user!.email;
-  }
-
-  // Get user initials for avatar
-  String get userInitials {
-    if (_user == null) return '';
-    final name = _user!.namaLengkap.isNotEmpty ? _user!.namaLengkap : _user!.email;
-    final words = name.split(' ');
-    if (words.length >= 2) {
-      return '${words[0][0]}${words[1][0]}'.toUpperCase();
-    } else if (words.isNotEmpty) {
-      return words[0][0].toUpperCase();
-    }
-    return '';
-  }
-
-  // Check if user has completed profile
-  bool get hasCompletedProfile {
-    if (_user == null) return false;
-    return _user!.namaLengkap.isNotEmpty &&
-           _user!.nim.isNotEmpty &&
-           _user!.universityId != null &&
-           _user!.fakultasId != null &&
-           _user!.prodiId != null;
-  }
-
-  // Check OTP expiry
-  bool get isOtpExpired {
-    if (_otpSentTime == null) return true;
-    return DateTime.now().difference(_otpSentTime!).inMinutes >= 5;
-  }
-
-  // Get OTP remaining time
-  Duration get otpRemainingTime {
-    if (_otpSentTime == null) return Duration.zero;
-    final elapsed = DateTime.now().difference(_otpSentTime!);
-    final remaining = const Duration(minutes: 5) - elapsed;
-    return remaining.isNegative ? Duration.zero : remaining;
-  }
-
-  // Clear registration data
-  void _clearRegistrationData() {
-    _registrationData.clear();
-    _registrationStep = 1;
-    _isOtpSent = false;
-    _isOtpVerified = false;
-    _otpResendCount = 0;
-    _otpSentTime = null;
-    notifyListeners();
-  }
-
-  // Reset registration process
-  void resetRegistration() {
-    _clearRegistrationData();
-    clearError();
-  }
-
-  // Go to previous registration step
-  void goToPreviousStep() {
-    if (_registrationStep > 1) {
-      _registrationStep--;
-      notifyListeners();
-    }
-  }
-
-  // Get registration progress
-  double get registrationProgress {
-    return _registrationStep / 5.0;
-  }
-
-  // Get validation errors for display
-  Map<String, String> getValidationErrors(AuthException exception) {
-    final errors = <String, String>{};
-    
-    if (exception.errors != null) {
-      exception.errors!.fieldErrors.forEach((field, messages) {
-        if (messages.isNotEmpty) {
-          errors[field] = messages.first;
-        }
-      });
-    }
-    
-    return errors;
   }
 }

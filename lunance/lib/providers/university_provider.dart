@@ -1,527 +1,585 @@
+// lib/providers/university_provider.dart
 import 'package:flutter/material.dart';
 import '../models/university_model.dart';
-import '../models/base_model.dart';
-import '../services/api_service.dart';
-import '../config/app_config.dart';
+import '../services/university_service.dart';
 
 class UniversityProvider extends ChangeNotifier {
-  // Universities data
-  List<University> _universities = [];
-  PaginationMeta? _universitiesPagination;
-  
-  // University details
-  University? _selectedUniversity;
-  List<Fakultas> _fakultasList = [];
-  List<ProgramStudi> _prodiList = [];
-  
-  // Search results
-  List<University> _searchResults = [];
-  
-  // University requests (for admin)
-  List<UniversityRequest> _universityRequests = [];
-  PaginationMeta? _requestsPagination;
-  
-  // Loading states
+  List<UniversityListItem> _universities = [];
+  List<UniversityListItem> _searchResults = [];
+  UniversityStats? _stats;
   bool _isLoading = false;
-  bool _isLoadingMore = false;
-  bool _isSearching = false;
-  bool _isSubmittingRequest = false;
-  
-  // Error handling
   String? _errorMessage;
-  Map<String, String> _validationErrors = {};
-  
-  // Search query
-  String _searchQuery = '';
+  int _currentPage = 1;
+  bool _hasMore = true;
+
+  // Filters
+  String? _searchQuery;
+  bool? _isActiveFilter;
 
   // Getters
-  List<University> get universities => _universities;
-  PaginationMeta? get universitiesPagination => _universitiesPagination;
-  University? get selectedUniversity => _selectedUniversity;
-  List<Fakultas> get fakultasList => _fakultasList;
-  List<ProgramStudi> get prodiList => _prodiList;
-  List<University> get searchResults => _searchResults;
-  List<UniversityRequest> get universityRequests => _universityRequests;
-  PaginationMeta? get requestsPagination => _requestsPagination;
-  
+  List<UniversityListItem> get universities => _universities;
+  List<UniversityListItem> get searchResults => _searchResults;
+  UniversityStats? get stats => _stats;
   bool get isLoading => _isLoading;
-  bool get isLoadingMore => _isLoadingMore;
-  bool get isSearching => _isSearching;
-  bool get isSubmittingRequest => _isSubmittingRequest;
-  bool get hasError => _errorMessage != null;
   String? get errorMessage => _errorMessage;
-  Map<String, String> get validationErrors => _validationErrors;
-  String get searchQuery => _searchQuery;
-  
-  // Check if has more universities to load
-  bool get hasMoreUniversities {
-    if (_universitiesPagination == null) return false;
-    return _universitiesPagination!.hasNext;
-  }
-  
-  // Check if has more requests to load (for admin)
-  bool get hasMoreRequests {
-    if (_requestsPagination == null) return false;
-    return _requestsPagination!.hasNext;
+  bool get hasMore => _hasMore;
+  String? get searchQuery => _searchQuery;
+  bool? get isActiveFilter => _isActiveFilter;
+
+  void _setLoading(bool loading) {
+    if (_isLoading != loading) {
+      _isLoading = loading;
+      notifyListeners();
+    }
   }
 
-  // API service instance
-  final ApiService _apiService = ApiService();
+  void _setError(String? error) {
+    _errorMessage = error;
+    notifyListeners();
+  }
 
-  // Clear error message
   void clearError() {
     _errorMessage = null;
-    _validationErrors.clear();
     notifyListeners();
   }
 
-  // Set error message
-  void _setError(String? error, {Map<String, String>? validationErrors}) {
-    _errorMessage = error;
-    _validationErrors = validationErrors ?? {};
-    notifyListeners();
-  }
-
-  // Get universities with pagination
-  Future<void> getUniversities({
+  // Load universities with pagination and timeout
+  Future<void> loadUniversities({
+    String? token,
     bool refresh = false,
-    int? limit,
+    int perPage = 20,
   }) async {
-    if (_isLoading && !refresh) return;
-    
-    final isFirstLoad = _universities.isEmpty || refresh;
-    
-    if (isFirstLoad) {
-      _isLoading = true;
-      if (refresh) {
-        _universities.clear();
-        _universitiesPagination = null;
-      }
-    } else {
-      _isLoadingMore = true;
+    if (_isLoading) return; // Prevent multiple simultaneous calls
+
+    if (refresh) {
+      _currentPage = 1;
+      _hasMore = true;
+      _universities.clear();
     }
-    
-    clearError();
-    notifyListeners();
+
+    _setLoading(true);
+    _setError(null);
 
     try {
-      final page = isFirstLoad ? 1 : (_universitiesPagination?.page ?? 0) + 1;
-      final pageLimit = limit ?? AppConfig.defaultPageSize;
-      
-      final response = await _apiService.getUniversities(
-        page: page,
-        limit: pageLimit,
+      final response = await UniversityService.listUniversities(
+        token: token,
+        page: _currentPage,
+        perPage: perPage,
+        search: _searchQuery,
+        isActive: _isActiveFilter,
+        sortOrder: 'desc',
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception('Request timeout');
+        },
       );
-      
+
       if (response.success && response.data != null) {
-        final universitiesResponse = response.data!;
+        final paginatedData = response.data!;
         
-        if (isFirstLoad) {
-          _universities = universitiesResponse.universities;
+        if (refresh) {
+          _universities = paginatedData.items;
         } else {
-          _universities.addAll(universitiesResponse.universities);
+          _universities.addAll(paginatedData.items);
         }
         
-        _universitiesPagination = universitiesResponse.pagination;
+        _hasMore = paginatedData.hasNext;
+        _currentPage++;
+        _setError(null);
       } else {
         _setError(response.message);
       }
     } catch (e) {
-      if (e is ApiException) {
-        _setError(e.userMessage);
-      } else {
-        _setError('Gagal memuat data universitas');
-      }
+      debugPrint('Error loading universities: $e');
+      _setError('Gagal memuat universitas: ${e.toString()}');
     } finally {
-      _isLoading = false;
-      _isLoadingMore = false;
-      notifyListeners();
+      _setLoading(false);
     }
   }
 
-  // Load more universities (for pagination)
-  Future<void> loadMoreUniversities() async {
-    if (!hasMoreUniversities || _isLoadingMore) return;
-    await getUniversities();
+  // Load more universities
+  Future<void> loadMoreUniversities(String? token) async {
+    if (!_hasMore || _isLoading) return;
+    await loadUniversities(token: token, refresh: false);
   }
 
-  // Get university by ID
-  Future<University?> getUniversityById(String id) async {
-    // Check if already loaded
-    final existing = _universities.firstWhere(
-      (uni) => uni.id == id,
-      orElse: () => University(
-        id: '',
-        nama: '',
-        kode: '',
-        alamat: '',
-        statusAktif: false,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      ),
-    );
-    
-    if (existing.id.isNotEmpty) {
-      _selectedUniversity = existing;
+  // Search universities with timeout
+  Future<void> searchUniversities(String? token, String query) async {
+    if (query.isEmpty) {
+      _searchResults.clear();
       notifyListeners();
-      return existing;
+      return;
     }
-
-    _isLoading = true;
-    clearError();
-    notifyListeners();
 
     try {
-      final response = await _apiService.getUniversityById(id);
-      
+      final response = await UniversityService.searchUniversities(
+        token: token,
+        query: query,
+        limit: 20,
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Search timeout');
+        },
+      );
+
       if (response.success && response.data != null) {
-        _selectedUniversity = response.data!;
+        _searchResults = response.data!;
         notifyListeners();
+      } else {
+        debugPrint('Error searching universities: ${response.message}');
+      }
+    } catch (e) {
+      debugPrint('Error searching universities: $e');
+    }
+  }
+
+  // Get university detail with timeout - returns University object
+  Future<University?> getUniversityDetail(String? token, String universityId) async {
+    try {
+      final response = await UniversityService.getUniversityDetail(
+        token: token,
+        universityId: universityId,
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Request timeout');
+        },
+      );
+
+      if (response.success && response.data != null) {
         return response.data!;
       } else {
         _setError(response.message);
         return null;
       }
     } catch (e) {
-      if (e is ApiException) {
-        _setError(e.userMessage);
-      } else {
-        _setError('Gagal memuat detail universitas');
-      }
+      debugPrint('Error getting university detail: $e');
+      _setError('Gagal memuat detail universitas: ${e.toString()}');
       return null;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
     }
   }
 
-  // Get fakultas by university ID
-  Future<void> getFakultasByUniversityId(String universityId) async {
-    _isLoading = true;
-    clearError();
-    notifyListeners();
-
-    try {
-      final response = await _apiService.getUniversityFakultas(universityId);
-      
-      if (response.success && response.data != null) {
-        _fakultasList = response.data!;
-        // Clear prodi list when fakultas changes
-        _prodiList.clear();
-      } else {
-        _setError(response.message);
-      }
-    } catch (e) {
-      if (e is ApiException) {
-        _setError(e.userMessage);
-      } else {
-        _setError('Gagal memuat data fakultas');
-      }
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  // Get program studi by fakultas ID
-  Future<void> getProdiByfakultasId(String fakultasId) async {
-    _isLoading = true;
-    clearError();
-    notifyListeners();
-
-    try {
-      final response = await _apiService.getFakultasProdi(fakultasId);
-      
-      if (response.success && response.data != null) {
-        _prodiList = response.data!;
-      } else {
-        _setError(response.message);
-      }
-    } catch (e) {
-      if (e is ApiException) {
-        _setError(e.userMessage);
-      } else {
-        _setError('Gagal memuat data program studi');
-      }
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  // Search universities
-  Future<void> searchUniversities(String query) async {
-    if (query.isEmpty) {
-      _searchResults.clear();
-      _searchQuery = '';
-      notifyListeners();
-      return;
-    }
-
-    _isSearching = true;
-    _searchQuery = query;
-    clearError();
-    notifyListeners();
-
-    try {
-      final response = await _apiService.searchUniversities(query);
-      
-      if (response.success && response.data != null) {
-        _searchResults = response.data!;
-      } else {
-        _setError(response.message);
-        _searchResults.clear();
-      }
-    } catch (e) {
-      if (e is ApiException) {
-        _setError(e.userMessage);
-      } else {
-        _setError('Gagal mencari universitas');
-      }
-      _searchResults.clear();
-    } finally {
-      _isSearching = false;
-      notifyListeners();
-    }
-  }
-
-  // Clear search results
-  void clearSearchResults() {
-    _searchResults.clear();
-    _searchQuery = '';
-    notifyListeners();
-  }
-
-  // Create university request
-  Future<bool> createUniversityRequest(CreateUniversityRequest request) async {
-    _isSubmittingRequest = true;
-    clearError();
-    notifyListeners();
-
-    try {
-      final response = await _apiService.createUniversityRequest(request);
-      
-      if (response.success) {
-        _isSubmittingRequest = false;
-        notifyListeners();
-        return true;
-      } else {
-        _setError(response.message);
-        _isSubmittingRequest = false;
-        notifyListeners();
-        return false;
-      }
-    } catch (e) {
-      if (e is ApiException) {
-        _setError(e.userMessage, validationErrors: _getValidationErrors(e));
-      } else {
-        _setError('Gagal mengirim permintaan universitas');
-      }
-      _isSubmittingRequest = false;
-      notifyListeners();
-      return false;
-    }
-  }
-
-  // Get university requests (for admin)
-  Future<void> getUniversityRequests({
-    bool refresh = false,
-    RequestStatus? status,
-    int? limit,
-  }) async {
-    if (_isLoading && !refresh) return;
+  // Create university (admin only) with timeout - creates and updates local list
+  Future<bool> createUniversity(String token, UniversityCreate university) async {
+    if (_isLoading) return false;
     
-    final isFirstLoad = _universityRequests.isEmpty || refresh;
-    
-    if (isFirstLoad) {
-      _isLoading = true;
-      if (refresh) {
-        _universityRequests.clear();
-        _requestsPagination = null;
-      }
-    } else {
-      _isLoadingMore = true;
-    }
-    
-    clearError();
-    notifyListeners();
+    _setLoading(true);
+    _setError(null);
 
     try {
-      final page = isFirstLoad ? 1 : (_requestsPagination?.page ?? 0) + 1;
-      final pageLimit = limit ?? AppConfig.defaultPageSize;
-      
-      final response = await _apiService.getUniversityRequests(
-        page: page,
-        limit: pageLimit,
-        status: status,
+      final response = await UniversityService.createUniversity(
+        token: token,
+        university: university,
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception('Request timeout');
+        },
       );
-      
+
       if (response.success && response.data != null) {
-        if (isFirstLoad) {
-          _universityRequests = response.data!;
-        } else {
-          _universityRequests.addAll(response.data!);
-        }
-        
-        // Note: The API should return pagination meta, but it's not in the current implementation
-        // This is a placeholder for when pagination is added to admin endpoints
+        // Convert University to UniversityListItem for local list
+        final universityListItem = UniversityListItem(
+          id: response.data!.id,
+          name: response.data!.name,
+          isActive: response.data!.isActive,
+          facultyCount: response.data!.facultyCount,
+          majorCount: response.data!.majorCount,
+          createdAt: response.data!.createdAt,
+        );
+        _universities.insert(0, universityListItem);
+        notifyListeners();
+        return true;
       } else {
         _setError(response.message);
+        return false;
       }
     } catch (e) {
-      if (e is ApiException) {
-        _setError(e.userMessage);
-      } else {
-        _setError('Gagal memuat permintaan universitas');
-      }
+      debugPrint('Error creating university: $e');
+      _setError('Gagal membuat universitas: ${e.toString()}');
+      return false;
     } finally {
-      _isLoading = false;
-      _isLoadingMore = false;
-      notifyListeners();
+      _setLoading(false);
     }
   }
 
-  // Approve university request (admin)
-  Future<bool> approveUniversityRequest(String requestId, {String? note}) async {
-    _isLoading = true;
-    clearError();
-    notifyListeners();
+  // Update university (admin only) with optimistic updates
+  Future<bool> updateUniversity(String token, String universityId, Map<String, dynamic> updates) async {
+    if (_isLoading) return false;
+    
+    _setLoading(true);
+    _setError(null);
+
+    // Store original data for rollback
+    final originalIndex = _universities.indexWhere((u) => u.id == universityId);
+    final originalUniversity = originalIndex != -1 ? _universities[originalIndex] : null;
 
     try {
-      final response = await _apiService.approveUniversityRequest(requestId, note: note);
-      
+      final response = await UniversityService.updateUniversity(
+        token: token,
+        universityId: universityId,
+        updates: updates,
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception('Request timeout');
+        },
+      );
+
       if (response.success && response.data != null) {
-        // Update the request in the list
-        final index = _universityRequests.indexWhere((req) => req.id == requestId);
-        if (index != -1) {
-          _universityRequests[index] = response.data!;
+        // Convert University to UniversityListItem and update local list
+        if (originalIndex != -1) {
+          final updatedListItem = UniversityListItem(
+            id: response.data!.id,
+            name: response.data!.name,
+            isActive: response.data!.isActive,
+            facultyCount: response.data!.facultyCount,
+            majorCount: response.data!.majorCount,
+            createdAt: response.data!.createdAt,
+          );
+          _universities[originalIndex] = updatedListItem;
+          notifyListeners();
         }
-        _isLoading = false;
-        notifyListeners();
         return true;
       } else {
         _setError(response.message);
-        _isLoading = false;
-        notifyListeners();
         return false;
       }
     } catch (e) {
-      if (e is ApiException) {
-        _setError(e.userMessage);
-      } else {
-        _setError('Gagal menyetujui permintaan');
+      debugPrint('Error updating university: $e');
+      _setError('Gagal memperbarui universitas: ${e.toString()}');
+      
+      // Rollback if needed
+      if (originalUniversity != null && originalIndex != -1) {
+        _universities[originalIndex] = originalUniversity;
+        notifyListeners();
       }
-      _isLoading = false;
-      notifyListeners();
+      
       return false;
+    } finally {
+      _setLoading(false);
     }
   }
 
-  // Reject university request (admin)
-  Future<bool> rejectUniversityRequest(String requestId, {String? note}) async {
-    _isLoading = true;
-    clearError();
+  // Delete university (admin only) with optimistic updates
+  Future<bool> deleteUniversity(String token, String universityId) async {
+    if (_isLoading) return false;
+    
+    _setLoading(true);
+    _setError(null);
+
+    // Store original data for rollback
+    final originalUniversity = _universities.firstWhere((u) => u.id == universityId);
+
+    // Optimistic update
+    _universities.removeWhere((u) => u.id == universityId);
     notifyListeners();
 
     try {
-      final response = await _apiService.rejectUniversityRequest(requestId, note: note);
-      
-      if (response.success && response.data != null) {
-        // Update the request in the list
-        final index = _universityRequests.indexWhere((req) => req.id == requestId);
-        if (index != -1) {
-          _universityRequests[index] = response.data!;
-        }
-        _isLoading = false;
-        notifyListeners();
+      final response = await UniversityService.deleteUniversity(
+        token: token,
+        universityId: universityId,
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception('Request timeout');
+        },
+      );
+
+      if (response.success) {
         return true;
       } else {
-        _setError(response.message);
-        _isLoading = false;
+        // Rollback
+        _universities.add(originalUniversity);
         notifyListeners();
+        _setError(response.message);
         return false;
       }
     } catch (e) {
-      if (e is ApiException) {
-        _setError(e.userMessage);
-      } else {
-        _setError('Gagal menolak permintaan');
-      }
-      _isLoading = false;
+      debugPrint('Error deleting university: $e');
+      // Rollback
+      _universities.add(originalUniversity);
       notifyListeners();
+      _setError('Gagal menghapus universitas: ${e.toString()}');
       return false;
+    } finally {
+      _setLoading(false);
     }
   }
 
-  // Clear selected university and related data
-  void clearSelectedUniversity() {
-    _selectedUniversity = null;
-    _fakultasList.clear();
-    _prodiList.clear();
+  // Faculty management methods - these work with University objects from API
+  Future<bool> addFaculty(String token, String universityId, String facultyName, List<String> majorNames) async {
+    if (_isLoading) return false;
+    
+    _setLoading(true);
+    _setError(null);
+
+    try {
+      final response = await UniversityService.addFaculty(
+        token: token,
+        universityId: universityId,
+        facultyName: facultyName,
+        majorNames: majorNames,
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception('Request timeout');
+        },
+      );
+
+      if (response.success && response.data != null) {
+        // Update local list item
+        final index = _universities.indexWhere((u) => u.id == universityId);
+        if (index != -1) {
+          final updatedListItem = UniversityListItem(
+            id: response.data!.id,
+            name: response.data!.name,
+            isActive: response.data!.isActive,
+            facultyCount: response.data!.facultyCount,
+            majorCount: response.data!.majorCount,
+            createdAt: response.data!.createdAt,
+          );
+          _universities[index] = updatedListItem;
+          notifyListeners();
+        }
+        return true;
+      } else {
+        _setError(response.message);
+        return false;
+      }
+    } catch (e) {
+      debugPrint('Error adding faculty: $e');
+      _setError('Gagal menambahkan fakultas: ${e.toString()}');
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<bool> updateFaculty(String token, String universityId, String facultyId, String facultyName) async {
+    if (_isLoading) return false;
+    
+    _setLoading(true);
+    _setError(null);
+
+    try {
+      final response = await UniversityService.updateFaculty(
+        token: token,
+        universityId: universityId,
+        facultyId: facultyId,
+        facultyName: facultyName,
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception('Request timeout');
+        },
+      );
+
+      if (response.success && response.data != null) {
+        // Update local list item
+        final index = _universities.indexWhere((u) => u.id == universityId);
+        if (index != -1) {
+          final updatedListItem = UniversityListItem(
+            id: response.data!.id,
+            name: response.data!.name,
+            isActive: response.data!.isActive,
+            facultyCount: response.data!.facultyCount,
+            majorCount: response.data!.majorCount,
+            createdAt: response.data!.createdAt,
+          );
+          _universities[index] = updatedListItem;
+          notifyListeners();
+        }
+        return true;
+      } else {
+        _setError(response.message);
+        return false;
+      }
+    } catch (e) {
+      debugPrint('Error updating faculty: $e');
+      _setError('Gagal memperbarui fakultas: ${e.toString()}');
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<bool> deleteFaculty(String token, String universityId, String facultyId) async {
+    if (_isLoading) return false;
+    
+    _setLoading(true);
+    _setError(null);
+
+    try {
+      final response = await UniversityService.deleteFaculty(
+        token: token,
+        universityId: universityId,
+        facultyId: facultyId,
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception('Request timeout');
+        },
+      );
+
+      if (response.success && response.data != null) {
+        // Update local list item
+        final index = _universities.indexWhere((u) => u.id == universityId);
+        if (index != -1) {
+          final updatedListItem = UniversityListItem(
+            id: response.data!.id,
+            name: response.data!.name,
+            isActive: response.data!.isActive,
+            facultyCount: response.data!.facultyCount,
+            majorCount: response.data!.majorCount,
+            createdAt: response.data!.createdAt,
+          );
+          _universities[index] = updatedListItem;
+          notifyListeners();
+        }
+        return true;
+      } else {
+        _setError(response.message);
+        return false;
+      }
+    } catch (e) {
+      debugPrint('Error deleting faculty: $e');
+      _setError('Gagal menghapus fakultas: ${e.toString()}');
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // Major management with timeout
+  Future<bool> addMajor(String token, String universityId, String facultyId, String majorName) async {
+    if (_isLoading) return false;
+    
+    _setLoading(true);
+    _setError(null);
+
+    try {
+      final response = await UniversityService.addMajor(
+        token: token,
+        universityId: universityId,
+        facultyId: facultyId,
+        majorName: majorName,
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception('Request timeout');
+        },
+      );
+
+      if (response.success && response.data != null) {
+        // Update local list item
+        final index = _universities.indexWhere((u) => u.id == universityId);
+        if (index != -1) {
+          final updatedListItem = UniversityListItem(
+            id: response.data!.id,
+            name: response.data!.name,
+            isActive: response.data!.isActive,
+            facultyCount: response.data!.facultyCount,
+            majorCount: response.data!.majorCount,
+            createdAt: response.data!.createdAt,
+          );
+          _universities[index] = updatedListItem;
+          notifyListeners();
+        }
+        return true;
+      } else {
+        _setError(response.message);
+        return false;
+      }
+    } catch (e) {
+      debugPrint('Error adding major: $e');
+      _setError('Gagal menambahkan jurusan: ${e.toString()}');
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // Load statistics with timeout
+  Future<void> loadStats(String token) async {
+    try {
+      final response = await UniversityService.getUniversityStats(
+        token: token,
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Request timeout');
+        },
+      );
+
+      if (response.success && response.data != null) {
+        _stats = response.data!;
+        notifyListeners();
+      } else {
+        debugPrint('Error loading university stats: ${response.message}');
+      }
+    } catch (e) {
+      debugPrint('Error loading university stats: $e');
+    }
+  }
+
+  // Filter methods
+  void setSearchQuery(String? query) {
+    _searchQuery = query;
     notifyListeners();
   }
 
-  // Clear all data
+  void setActiveFilter(bool? isActive) {
+    _isActiveFilter = isActive;
+    notifyListeners();
+  }
+
+  void clearFilters() {
+    _searchQuery = null;
+    _isActiveFilter = null;
+    notifyListeners();
+  }
+
+  // Apply filters and refresh
+  Future<void> applyFilters(String? token) async {
+    await loadUniversities(token: token, refresh: true);
+  }
+
+  // Get university by ID
+  UniversityListItem? getUniversityById(String id) {
+    try {
+      return _universities.firstWhere((u) => u.id == id);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Force refresh all data
+  Future<void> refreshAllData(String? token) async {
+    _universities.clear();
+    _searchResults.clear();
+    _stats = null;
+    notifyListeners();
+    
+    await loadUniversities(token: token, refresh: true);
+    if (token != null) {
+      await loadStats(token);
+    }
+  }
+
+  // Clear all data on logout
   void clearAllData() {
     _universities.clear();
-    _universitiesPagination = null;
-    _selectedUniversity = null;
-    _fakultasList.clear();
-    _prodiList.clear();
     _searchResults.clear();
-    _universityRequests.clear();
-    _requestsPagination = null;
-    _searchQuery = '';
-    clearError();
+    _stats = null;
+    _errorMessage = null;
+    _isLoading = false;
+    _currentPage = 1;
+    _hasMore = true;
+    _searchQuery = null;
+    _isActiveFilter = null;
     notifyListeners();
-  }
-
-  // Get validation errors from API exception
-  Map<String, String> _getValidationErrors(ApiException exception) {
-    final errors = <String, String>{};
-    
-    if (exception.errors != null) {
-      exception.errors!.fieldErrors.forEach((field, messages) {
-        if (messages.isNotEmpty) {
-          errors[field] = messages.first;
-        }
-      });
-    }
-    
-    return errors;
-  }
-
-  // Get error message for specific field
-  String? getFieldError(String field) {
-    return _validationErrors[field];
-  }
-
-  // Check if field has error
-  bool hasFieldError(String field) {
-    return _validationErrors.containsKey(field);
-  }
-
-  // Get university by name (for search suggestions)
-  List<University> getUniversitiesByName(String name, {int limit = 5}) {
-    if (name.isEmpty) return [];
-    
-    final query = name.toLowerCase();
-    return _universities
-        .where((uni) => uni.nama.toLowerCase().contains(query))
-        .take(limit)
-        .toList();
-  }
-
-  // Get fakultas by university
-  List<Fakultas> getFakultasOptions(String universityId) {
-    if (_selectedUniversity?.id == universityId) {
-      return _fakultasList;
-    }
-    return [];
-  }
-
-  // Get prodi by fakultas
-  List<ProgramStudi> getProdiOptions(String fakultasId) {
-    return _prodiList.where((prodi) => prodi.fakultasId == fakultasId).toList();
   }
 }

@@ -1,26 +1,17 @@
-import 'base_model.dart';
-
-class University extends BaseModel {
+// lib/models/university_model.dart
+class University {
   final String id;
-  final String nama;
-  final String kode;
-  final String alamat;
-  final bool statusAktif;
-  final String? website;
-  final String? telepon;
-  final String? email;
+  final String name;
+  final bool isActive;
+  final List<Faculty> faculties;
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  const University({
+  University({
     required this.id,
-    required this.nama,
-    required this.kode,
-    required this.alamat,
-    required this.statusAktif,
-    this.website,
-    this.telepon,
-    this.email,
+    required this.name,
+    required this.isActive,
+    required this.faculties,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -28,29 +19,22 @@ class University extends BaseModel {
   factory University.fromJson(Map<String, dynamic> json) {
     return University(
       id: json['id'] ?? '',
-      nama: json['nama'] ?? '',
-      kode: json['kode'] ?? '',
-      alamat: json['alamat'] ?? '',
-      statusAktif: json['status_aktif'] ?? false,
-      website: json['website'],
-      telepon: json['telepon'],
-      email: json['email'],
+      name: json['name'] ?? '',
+      isActive: json['is_active'] ?? true,
+      faculties: (json['faculties'] as List<dynamic>?)
+          ?.map((item) => Faculty.fromJson(item))
+          .toList() ?? [],
       createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toIso8601String()),
       updatedAt: DateTime.parse(json['updated_at'] ?? DateTime.now().toIso8601String()),
     );
   }
 
-  @override
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'nama': nama,
-      'kode': kode,
-      'alamat': alamat,
-      'status_aktif': statusAktif,
-      'website': website,
-      'telepon': telepon,
-      'email': email,
+      'name': name,
+      'is_active': isActive,
+      'faculties': faculties.map((faculty) => faculty.toJson()).toList(),
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -58,415 +42,441 @@ class University extends BaseModel {
 
   University copyWith({
     String? id,
-    String? nama,
-    String? kode,
-    String? alamat,
-    bool? statusAktif,
-    String? website,
-    String? telepon,
-    String? email,
+    String? name,
+    bool? isActive,
+    List<Faculty>? faculties,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
     return University(
       id: id ?? this.id,
-      nama: nama ?? this.nama,
-      kode: kode ?? this.kode,
-      alamat: alamat ?? this.alamat,
-      statusAktif: statusAktif ?? this.statusAktif,
-      website: website ?? this.website,
-      telepon: telepon ?? this.telepon,
-      email: email ?? this.email,
+      name: name ?? this.name,
+      isActive: isActive ?? this.isActive,
+      faculties: faculties ?? this.faculties,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
-  @override
-  List<Object?> get props => [
-        id,
-        nama,
-        kode,
-        alamat,
-        statusAktif,
-        website,
-        telepon,
-        email,
-        createdAt,
-        updatedAt,
-      ];
+  int get facultyCount => faculties.length;
+  int get majorCount => faculties.fold(0, (total, faculty) => total + faculty.majors.length);
 }
 
-class Fakultas extends BaseModel {
+class UniversityListItem {
   final String id;
-  final String nama;
-  final String kode;
-  final String universityId;
-  final String? deskripsi;
+  final String name;
+  final bool isActive;
+  final int facultyCount;
+  final int majorCount;
   final DateTime createdAt;
-  final DateTime updatedAt;
 
-  const Fakultas({
+  UniversityListItem({
     required this.id,
-    required this.nama,
-    required this.kode,
-    required this.universityId,
-    this.deskripsi,
+    required this.name,
+    required this.isActive,
+    required this.facultyCount,
+    required this.majorCount,
     required this.createdAt,
-    required this.updatedAt,
   });
 
-  factory Fakultas.fromJson(Map<String, dynamic> json) {
-    return Fakultas(
+  factory UniversityListItem.fromJson(Map<String, dynamic> json) {
+    return UniversityListItem(
       id: json['id'] ?? '',
-      nama: json['nama'] ?? '',
-      kode: json['kode'] ?? '',
-      universityId: json['university_id'] ?? '',
-      deskripsi: json['deskripsi'],
+      name: json['name'] ?? '',
+      isActive: json['is_active'] ?? true,
+      facultyCount: json['faculty_count'] ?? 0,
+      majorCount: json['major_count'] ?? 0,
       createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toIso8601String()),
-      updatedAt: DateTime.parse(json['updated_at'] ?? DateTime.now().toIso8601String()),
     );
   }
 
-  @override
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'nama': nama,
-      'kode': kode,
-      'university_id': universityId,
-      'deskripsi': deskripsi,
+      'name': name,
+      'is_active': isActive,
+      'faculty_count': facultyCount,
+      'major_count': majorCount,
       'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
     };
   }
-
-  Fakultas copyWith({
-    String? id,
-    String? nama,
-    String? kode,
-    String? universityId,
-    String? deskripsi,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  }) {
-    return Fakultas(
-      id: id ?? this.id,
-      nama: nama ?? this.nama,
-      kode: kode ?? this.kode,
-      universityId: universityId ?? this.universityId,
-      deskripsi: deskripsi ?? this.deskripsi,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-    );
-  }
-
-  @override
-  List<Object?> get props => [
-        id,
-        nama,
-        kode,
-        universityId,
-        deskripsi,
-        createdAt,
-        updatedAt,
-      ];
 }
 
-class ProgramStudi extends BaseModel {
+class Faculty {
   final String id;
-  final String nama;
-  final String kode;
-  final String fakultasId;
-  final StudyLevel jenjang;
-  final AccreditationGrade? akreditasi;
-  final DateTime createdAt;
-  final DateTime updatedAt;
+  final String name;
+  final List<Major> majors;
 
-  const ProgramStudi({
+  Faculty({
     required this.id,
-    required this.nama,
-    required this.kode,
-    required this.fakultasId,
-    required this.jenjang,
-    this.akreditasi,
-    required this.createdAt,
-    required this.updatedAt,
+    required this.name,
+    required this.majors,
   });
 
-  factory ProgramStudi.fromJson(Map<String, dynamic> json) {
-    return ProgramStudi(
+  factory Faculty.fromJson(Map<String, dynamic> json) {
+    return Faculty(
       id: json['id'] ?? '',
-      nama: json['nama'] ?? '',
-      kode: json['kode'] ?? '',
-      fakultasId: json['fakultas_id'] ?? '',
-      jenjang: StudyLevel.fromString(json['jenjang'] ?? 'S1'),
-      akreditasi: AccreditationGrade.fromString(json['akreditasi']),
-      createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toIso8601String()),
-      updatedAt: DateTime.parse(json['updated_at'] ?? DateTime.now().toIso8601String()),
+      name: json['name'] ?? '',
+      majors: (json['majors'] as List<dynamic>?)
+          ?.map((item) => Major.fromJson(item))
+          .toList() ?? [],
     );
   }
 
-  @override
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'nama': nama,
-      'kode': kode,
-      'fakultas_id': fakultasId,
-      'jenjang': jenjang.value,
-      'akreditasi': akreditasi?.value,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'name': name,
+      'majors': majors.map((major) => major.toJson()).toList(),
     };
   }
 
-  ProgramStudi copyWith({
+  Faculty copyWith({
     String? id,
-    String? nama,
-    String? kode,
-    String? fakultasId,
-    StudyLevel? jenjang,
-    AccreditationGrade? akreditasi,
-    DateTime? createdAt,
-    DateTime? updatedAt,
+    String? name,
+    List<Major>? majors,
   }) {
-    return ProgramStudi(
+    return Faculty(
       id: id ?? this.id,
-      nama: nama ?? this.nama,
-      kode: kode ?? this.kode,
-      fakultasId: fakultasId ?? this.fakultasId,
-      jenjang: jenjang ?? this.jenjang,
-      akreditasi: akreditasi ?? this.akreditasi,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
+      name: name ?? this.name,
+      majors: majors ?? this.majors,
     );
   }
-
-  @override
-  List<Object?> get props => [
-        id,
-        nama,
-        kode,
-        fakultasId,
-        jenjang,
-        akreditasi,
-        createdAt,
-        updatedAt,
-      ];
 }
 
-class UniversityRequest extends BaseModel {
+class Major {
   final String id;
-  final String namaUniversity;
-  final String kodeUniversity;
-  final String alamatUniversity;
-  final String? websiteUniversity;
-  final String namaPemohon;
-  final String email;
-  final String nim;
-  final RequestStatus status;
-  final String? catatanAdmin;
-  final DateTime? processedAt;
-  final String? processedBy;
-  final DateTime createdAt;
-  final DateTime updatedAt;
+  final String name;
 
-  const UniversityRequest({
+  Major({
     required this.id,
-    required this.namaUniversity,
-    required this.kodeUniversity,
-    required this.alamatUniversity,
-    this.websiteUniversity,
-    required this.namaPemohon,
-    required this.email,
-    required this.nim,
-    required this.status,
-    this.catatanAdmin,
-    this.processedAt,
-    this.processedBy,
-    required this.createdAt,
-    required this.updatedAt,
+    required this.name,
   });
 
-  factory UniversityRequest.fromJson(Map<String, dynamic> json) {
-    return UniversityRequest(
+  factory Major.fromJson(Map<String, dynamic> json) {
+    return Major(
       id: json['id'] ?? '',
-      namaUniversity: json['nama_university'] ?? '',
-      kodeUniversity: json['kode_university'] ?? '',
-      alamatUniversity: json['alamat_university'] ?? '',
-      websiteUniversity: json['website_university'],
-      namaPemohon: json['nama_pemohon'] ?? '',
-      email: json['email'] ?? '',
-      nim: json['nim'] ?? '',
-      status: RequestStatus.fromString(json['status'] ?? 'pending'),
-      catatanAdmin: json['catatan_admin'],
-      processedAt: json['processed_at'] != null
-          ? DateTime.parse(json['processed_at'])
-          : null,
-      processedBy: json['processed_by'],
-      createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toIso8601String()),
-      updatedAt: DateTime.parse(json['updated_at'] ?? DateTime.now().toIso8601String()),
+      name: json['name'] ?? '',
     );
   }
 
-  @override
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'nama_university': namaUniversity,
-      'kode_university': kodeUniversity,
-      'alamat_university': alamatUniversity,
-      'website_university': websiteUniversity,
-      'nama_pemohon': namaPemohon,
-      'email': email,
-      'nim': nim,
-      'status': status.value,
-      'catatan_admin': catatanAdmin,
-      'processed_at': processedAt?.toIso8601String(),
-      'processed_by': processedBy,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'name': name,
     };
   }
 
-  UniversityRequest copyWith({
+  Major copyWith({
     String? id,
-    String? namaUniversity,
-    String? kodeUniversity,
-    String? alamatUniversity,
-    String? websiteUniversity,
-    String? namaPemohon,
-    String? email,
-    String? nim,
-    RequestStatus? status,
-    String? catatanAdmin,
-    DateTime? processedAt,
-    String? processedBy,
-    DateTime? createdAt,
-    DateTime? updatedAt,
+    String? name,
   }) {
-    return UniversityRequest(
+    return Major(
       id: id ?? this.id,
-      namaUniversity: namaUniversity ?? this.namaUniversity,
-      kodeUniversity: kodeUniversity ?? this.kodeUniversity,
-      alamatUniversity: alamatUniversity ?? this.alamatUniversity,
-      websiteUniversity: websiteUniversity ?? this.websiteUniversity,
-      namaPemohon: namaPemohon ?? this.namaPemohon,
-      email: email ?? this.email,
-      nim: nim ?? this.nim,
-      status: status ?? this.status,
-      catatanAdmin: catatanAdmin ?? this.catatanAdmin,
-      processedAt: processedAt ?? this.processedAt,
-      processedBy: processedBy ?? this.processedBy,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
+      name: name ?? this.name,
     );
   }
-
-  @override
-  List<Object?> get props => [
-        id,
-        namaUniversity,
-        kodeUniversity,
-        alamatUniversity,
-        websiteUniversity,
-        namaPemohon,
-        email,
-        nim,
-        status,
-        catatanAdmin,
-        processedAt,
-        processedBy,
-        createdAt,
-        updatedAt,
-      ];
 }
 
-// Request DTO for creating university request
-class CreateUniversityRequest extends BaseModel {
-  final String namaUniversity;
-  final String kodeUniversity;
-  final String alamatUniversity;
-  final String? websiteUniversity;
-  final String namaPemohon;
-  final String email;
-  final String nim;
+class UniversityCreate {
+  final String name;
+  final bool isActive;
+  final List<FacultyCreate> faculties;
 
-  const CreateUniversityRequest({
-    required this.namaUniversity,
-    required this.kodeUniversity,
-    required this.alamatUniversity,
-    this.websiteUniversity,
-    required this.namaPemohon,
-    required this.email,
-    required this.nim,
+  UniversityCreate({
+    required this.name,
+    this.isActive = true,
+    required this.faculties,
   });
 
-  factory CreateUniversityRequest.fromJson(Map<String, dynamic> json) {
-    return CreateUniversityRequest(
-      namaUniversity: json['nama_university'] ?? '',
-      kodeUniversity: json['kode_university'] ?? '',
-      alamatUniversity: json['alamat_university'] ?? '',
-      websiteUniversity: json['website_university'],
-      namaPemohon: json['nama_pemohon'] ?? '',
-      email: json['email'] ?? '',
-      nim: json['nim'] ?? '',
-    );
-  }
-
-  @override
   Map<String, dynamic> toJson() {
     return {
-      'nama_university': namaUniversity,
-      'kode_university': kodeUniversity,
-      'alamat_university': alamatUniversity,
-      'website_university': websiteUniversity,
-      'nama_pemohon': namaPemohon,
-      'email': email,
-      'nim': nim,
+      'name': name,
+      'is_active': isActive,
+      'faculties': faculties.map((faculty) => faculty.toJson()).toList(),
     };
   }
-
-  @override
-  List<Object?> get props => [
-        namaUniversity,
-        kodeUniversity,
-        alamatUniversity,
-        websiteUniversity,
-        namaPemohon,
-        email,
-        nim,
-      ];
 }
 
-// Universities with pagination response
-class UniversitiesResponse extends BaseModel {
-  final List<University> universities;
-  final PaginationMeta pagination;
+class FacultyCreate {
+  final String name;
+  final List<MajorCreate> majors;
 
-  const UniversitiesResponse({
-    required this.universities,
-    required this.pagination,
+  FacultyCreate({
+    required this.name,
+    required this.majors,
   });
 
-  factory UniversitiesResponse.fromJson(Map<String, dynamic> json) {
-    return UniversitiesResponse(
-      universities: (json['universities'] as List? ?? [])
-          .map((item) => University.fromJson(item as Map<String, dynamic>))
-          .toList(),
-      pagination: PaginationMeta.fromJson(json['pagination'] ?? {}),
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'majors': majors.map((major) => major.toJson()).toList(),
+    };
+  }
+}
+
+class MajorCreate {
+  final String name;
+
+  MajorCreate({
+    required this.name,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+    };
+  }
+}
+
+class UniversityUpdate {
+  final String? name;
+  final bool? isActive;
+
+  UniversityUpdate({
+    this.name,
+    this.isActive,
+  });
+
+  Map<String, dynamic> toJson() {
+    final map = <String, dynamic>{};
+    if (name != null) map['name'] = name;
+    if (isActive != null) map['is_active'] = isActive;
+    return map;
+  }
+}
+
+class UniversityStats {
+  final int totalUniversities;
+  final int activeUniversities;
+  final int totalFaculties;
+  final int totalMajors;
+  final List<StudentPerUniversity> studentsPerUniversity;
+
+  UniversityStats({
+    required this.totalUniversities,
+    required this.activeUniversities,
+    required this.totalFaculties,
+    required this.totalMajors,
+    required this.studentsPerUniversity,
+  });
+
+  factory UniversityStats.fromJson(Map<String, dynamic> json) {
+    return UniversityStats(
+      totalUniversities: json['total_universities'] ?? 0,
+      activeUniversities: json['active_universities'] ?? 0,
+      totalFaculties: json['total_faculties'] ?? 0,
+      totalMajors: json['total_majors'] ?? 0,
+      studentsPerUniversity: (json['students_per_university'] as List<dynamic>?)
+          ?.map((item) => StudentPerUniversity.fromJson(item))
+          .toList() ?? [],
     );
   }
 
-  @override
   Map<String, dynamic> toJson() {
     return {
-      'universities': universities.map((u) => u.toJson()).toList(),
-      'pagination': pagination.toJson(),
+      'total_universities': totalUniversities,
+      'active_universities': activeUniversities,
+      'total_faculties': totalFaculties,
+      'total_majors': totalMajors,
+      'students_per_university': studentsPerUniversity.map((item) => item.toJson()).toList(),
     };
   }
+}
 
-  @override
-  List<Object?> get props => [universities, pagination];
+class UniversityDashboardStats {
+  final int totalUniversities;
+  final int activeUniversities;
+  final int inactiveUniversities;
+  final int totalFaculties;
+  final int totalMajors;
+  final int recentAdditions;
+  final int emptyUniversities;
+  final int universitiesNoFaculties;
+  final double avgFacultiesPerUniversity;
+  final double avgMajorsPerUniversity;
+  final List<StudentPerUniversity> studentsPerUniversity;
+  final double activityRate;
+
+  UniversityDashboardStats({
+    required this.totalUniversities,
+    required this.activeUniversities,
+    required this.inactiveUniversities,
+    required this.totalFaculties,
+    required this.totalMajors,
+    required this.recentAdditions,
+    required this.emptyUniversities,
+    required this.universitiesNoFaculties,
+    required this.avgFacultiesPerUniversity,
+    required this.avgMajorsPerUniversity,
+    required this.studentsPerUniversity,
+    required this.activityRate,
+  });
+
+  factory UniversityDashboardStats.fromJson(Map<String, dynamic> json) {
+    return UniversityDashboardStats(
+      totalUniversities: json['total_universities'] ?? 0,
+      activeUniversities: json['active_universities'] ?? 0,
+      inactiveUniversities: json['inactive_universities'] ?? 0,
+      totalFaculties: json['total_faculties'] ?? 0,
+      totalMajors: json['total_majors'] ?? 0,
+      recentAdditions: json['recent_additions'] ?? 0,
+      emptyUniversities: json['empty_universities'] ?? 0,
+      universitiesNoFaculties: json['universities_no_faculties'] ?? 0,
+      avgFacultiesPerUniversity: (json['avg_faculties_per_university'] ?? 0.0).toDouble(),
+      avgMajorsPerUniversity: (json['avg_majors_per_university'] ?? 0.0).toDouble(),
+      studentsPerUniversity: (json['students_per_university'] as List<dynamic>?)
+          ?.map((item) => StudentPerUniversity.fromJson(item))
+          .toList() ?? [],
+      activityRate: (json['activity_rate'] ?? 0.0).toDouble(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'total_universities': totalUniversities,
+      'active_universities': activeUniversities,
+      'inactive_universities': inactiveUniversities,
+      'total_faculties': totalFaculties,
+      'total_majors': totalMajors,
+      'recent_additions': recentAdditions,
+      'empty_universities': emptyUniversities,
+      'universities_no_faculties': universitiesNoFaculties,
+      'avg_faculties_per_university': avgFacultiesPerUniversity,
+      'avg_majors_per_university': avgMajorsPerUniversity,
+      'students_per_university': studentsPerUniversity.map((item) => item.toJson()).toList(),
+      'activity_rate': activityRate,
+    };
+  }
+}
+
+class StudentPerUniversity {
+  final String universityName;
+  final int studentCount;
+
+  StudentPerUniversity({
+    required this.universityName,
+    required this.studentCount,
+  });
+
+  factory StudentPerUniversity.fromJson(Map<String, dynamic> json) {
+    return StudentPerUniversity(
+      universityName: json['university_name'] ?? '',
+      studentCount: json['student_count'] ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'university_name': universityName,
+      'student_count': studentCount,
+    };
+  }
+}
+
+class PaginatedUniversities {
+  final List<UniversityListItem> items;
+  final int total;
+  final int page;
+  final int perPage;
+  final int totalPages;
+  final bool hasNext;
+  final bool hasPrev;
+
+  PaginatedUniversities({
+    required this.items,
+    required this.total,
+    required this.page,
+    required this.perPage,
+    required this.totalPages,
+    required this.hasNext,
+    required this.hasPrev,
+  });
+
+  factory PaginatedUniversities.fromJson(Map<String, dynamic> json) {
+    return PaginatedUniversities(
+      items: (json['items'] as List<dynamic>?)
+          ?.map((item) => UniversityListItem.fromJson(item))
+          .toList() ?? [],
+      total: json['total'] ?? 0,
+      page: json['page'] ?? 1,
+      perPage: json['per_page'] ?? 20,
+      totalPages: json['total_pages'] ?? 0,
+      hasNext: json['has_next'] ?? false,
+      hasPrev: json['has_prev'] ?? false,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'items': items.map((item) => item.toJson()).toList(),
+      'total': total,
+      'page': page,
+      'per_page': perPage,
+      'total_pages': totalPages,
+      'has_next': hasNext,
+      'has_prev': hasPrev,
+    };
+  }
+}
+
+// Response models
+class UniversityResponse {
+  final bool success;
+  final String message;
+  final PaginatedUniversities? data;
+
+  UniversityResponse({
+    required this.success,
+    required this.message,
+    this.data,
+  });
+}
+
+class UniversitySearchResponse {
+  final bool success;
+  final String message;
+  final List<UniversityListItem>? data;
+
+  UniversitySearchResponse({
+    required this.success,
+    required this.message,
+    this.data,
+  });
+}
+
+class UniversityDetailResponse {
+  final bool success;
+  final String message;
+  final University? data;
+
+  UniversityDetailResponse({
+    required this.success,
+    required this.message,
+    this.data,
+  });
+}
+
+class UniversityStatsResponse {
+  final bool success;
+  final String message;
+  final UniversityStats? data;
+
+  UniversityStatsResponse({
+    required this.success,
+    required this.message,
+    this.data,
+  });
+}
+
+class UniversityDashboardStatsResponse {
+  final bool success;
+  final String message;
+  final UniversityDashboardStats? data;
+
+  UniversityDashboardStatsResponse({
+    required this.success,
+    required this.message,
+    this.data,
+  });
 }
