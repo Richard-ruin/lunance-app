@@ -1,48 +1,44 @@
 name: lunance
-description: A student finance management application built with Flutter.
+description: "Lunance - Personal Finance AI Chatbot"
 publish_to: "none"
 
 version: 1.0.0+1
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
-  flutter: ">=3.10.0"
 
 dependencies:
   flutter:
     sdk: flutter
 
   # State Management
-  provider: ^6.0.5
+  provider: ^6.1.1
 
-  # HTTP & WebSocket
+  # HTTP & API
   http: ^1.1.0
-  web_socket_channel: ^2.4.0
+
+  # Secure Storage
+  flutter_secure_storage: ^9.0.0
 
   # UI Components
-  google_nav_bar: ^5.0.6
   cupertino_icons: ^1.0.2
 
   # Utilities
-  intl: ^0.18.1
   shared_preferences: ^2.2.2
+  intl: ^0.18.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^2.0.0
+  flutter_lints: ^3.0.0
 
 flutter:
   uses-material-design: true
 
-  # Assets
   assets:
     - assets/images/
     - assets/icons/
-    - assets/animations/
-    - assets/fonts/
 
-  # Fonts
   fonts:
     - family: Inter
       fonts:

@@ -1,170 +1,78 @@
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
-from pymongo.errors import ServerSelectionTimeoutError
-import asyncio
-import logging
-from .settings import settings
+from pymongo import MongoClient
+from pymongo.database import Database
+import os
+from dotenv import load_dotenv
 
-logger = logging.getLogger(__name__)
+load_dotenv()
 
-
-class Database:
-    """Database connection manager using Motor (async MongoDB driver)."""
+class DatabaseManager:
+    _instance = None
+    _client = None
+    _database = None
     
-    client: AsyncIOMotorClient = None
-    database: AsyncIOMotorDatabase = None
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(DatabaseManager, cls).__new__(cls)
+        return cls._instance
+    
+    def connect(self):
+        """Membuat koneksi ke MongoDB"""
+        if self._client is None:
+            mongodb_url = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
+            self._client = MongoClient(mongodb_url)
+            
+            database_name = os.getenv("DATABASE_NAME", "lunance_db")
+            self._database = self._client[database_name]
+            
+            # Test koneksi
+            try:
+                self._client.admin.command('ping')
+                print(f"✅ Berhasil terhubung ke MongoDB: {database_name}")
+            except Exception as e:
+                print(f"❌ Gagal terhubung ke MongoDB: {e}")
+                raise
+    
+    def get_database(self) -> Database:
+        """Mendapatkan instance database"""
+        if self._database is None:
+            self.connect()
+        return self._database
+    
+    def close(self):
+        """Menutup koneksi database"""
+        if self._client:
+            self._client.close()
+            self._client = None
+            self._database = None
+            print("🔐 Koneksi MongoDB ditutup")
 
+# Instance global untuk database
+db_manager = DatabaseManager()
 
-# Database instance
-db = Database()
+def get_database():
+    """Helper function untuk mendapatkan database instance"""
+    return db_manager.get_database()
 
-
-async def connect_to_mongo():
-    """Create database connection."""
-    try:
-        logger.info("Connecting to MongoDB...")
-        
-        # Create MongoDB client
-        db.client = AsyncIOMotorClient(
-            settings.mongodb_url,
-            serverSelectionTimeoutMS=5000,  # 5 second timeout
-            connectTimeoutMS=10000,  # 10 second timeout
-            socketTimeoutMS=10000,   # 10 second timeout
-        )
-        
-        # Select database
-        db.database = db.client[settings.mongodb_db_name]
-        
-        # Test connection
-        await db.client.admin.command('ping')
-        logger.info("Successfully connected to MongoDB!")
-        
-        # Create indexes
-        await create_indexes()
-        
-    except ServerSelectionTimeoutError as e:
-        logger.error(f"Could not connect to MongoDB: {e}")
-        raise
-    except Exception as e:
-        logger.error(f"Unexpected error connecting to MongoDB: {e}")
-        raise
-
-
-async def close_mongo_connection():
-    """Close database connection."""
-    if db.client:
-        logger.info("Closing MongoDB connection...")
-        db.client.close()
-        logger.info("MongoDB connection closed.")
-
-
-async def create_indexes():
-    """Create database indexes for better performance."""
-    try:
-        logger.info("Creating database indexes...")
-        
-        # User collection indexes
-        await db.database.users.create_index("email", unique=True)
-        await db.database.users.create_index("created_at")
-        
-        # Transaction collection indexes
-        await db.database.transactions.create_index("user_id")
-        await db.database.transactions.create_index("created_at")
-        await db.database.transactions.create_index("category")
-        await db.database.transactions.create_index([("user_id", 1), ("created_at", -1)])
-        
-        # Budget collection indexes
-        await db.database.budgets.create_index("user_id")
-        await db.database.budgets.create_index("category")
-        await db.database.budgets.create_index([("user_id", 1), ("category", 1)], unique=True)
-        
-        # Goal collection indexes
-        await db.database.goals.create_index("user_id")
-        await db.database.goals.create_index("created_at")
-        await db.database.goals.create_index("target_date")
-        
-        # Notification collection indexes
-        await db.database.notifications.create_index("user_id")
-        await db.database.notifications.create_index("created_at")
-        await db.database.notifications.create_index("is_read")
-        
-        logger.info("Database indexes created successfully!")
-        
-    except Exception as e:
-        logger.error(f"Error creating indexes: {e}")
-        # Don't raise here, indexes are not critical for startup
-
-
-async def get_database() -> AsyncIOMotorDatabase:
-    """Get database instance."""
-    return db.database
-
-
-async def ping_database():
-    """Ping database to check connection."""
-    try:
-        await db.client.admin.command('ping')
-        return True
-    except Exception as e:
-        logger.error(f"Database ping failed: {e}")
-        return False
-
-
-# Database dependency for FastAPI
-async def get_db():
-    """FastAPI dependency to get database instance."""
-    return await get_database()
-
-
-# Health check function
-async def check_database_health():
-    """Check database health status."""
-    try:
-        # Check connection
-        await db.client.admin.command('ping')
-        
-        # Check database stats
-        stats = await db.database.command("dbStats")
-        
-        return {
-            "status": "healthy",
-            "database": settings.mongodb_db_name,
-            "collections": stats.get("collections", 0),
-            "objects": stats.get("objects", 0),
-            "dataSize": stats.get("dataSize", 0)
-        }
-    except Exception as e:
-        return {
-            "status": "unhealthy",
-            "error": str(e)
-        }
-
-
-# Collection getter functions
-def get_users_collection():
-    """Get users collection."""
-    return db.database.users
-
-
-def get_transactions_collection():
-    """Get transactions collection."""
-    return db.database.transactions
-
-
-def get_budgets_collection():
-    """Get budgets collection."""
-    return db.database.budgets
-
-
-def get_goals_collection():
-    """Get goals collection."""
-    return db.database.goals
-
-
-def get_notifications_collection():
-    """Get notifications collection."""
-    return db.database.notifications
-
-
-def get_categories_collection():
-    """Get categories collection."""
-    return db.database.categories
+def create_indexes():
+    """Membuat indexes untuk performa yang lebih baik"""
+    db = get_database()
+    
+    # Index untuk users collection
+    db.users.create_index("email", unique=True)
+    db.users.create_index("username", unique=True)
+    db.users.create_index("created_at")
+    
+    # Index untuk conversations collection
+    db.conversations.create_index([("user_id", 1), ("created_at", -1)])
+    
+    # Index untuk messages collection
+    db.messages.create_index([("conversation_id", 1), ("timestamp", 1)])
+    
+    # Index untuk transactions collection
+    db.transactions.create_index([("user_id", 1), ("date", -1)])
+    db.transactions.create_index([("user_id", 1), ("category", 1)])
+    
+    # Index untuk savings_goals collection
+    db.savings_goals.create_index([("user_id", 1), ("status", 1)])
+    
+    print("✅ Database indexes berhasil dibuat")

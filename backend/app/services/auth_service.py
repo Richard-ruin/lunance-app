@@ -1,727 +1,437 @@
-# app/services/auth_service.py
-"""Complete Authentication service for user management."""
-
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, Tuple
-import logging
+from typing import Optional
+from fastapi import HTTPException, status
 from bson import ObjectId
 
 from ..config.database import get_database
-from ..models.user import UserCreate, UserInDB, UserRole
-from ..models.auth import (
-    RegisterRequest, LoginRequest, PasswordResetRequest, 
-    PasswordResetConfirm, TokenResponse, LoginResponse
+from ..models.user import User, UserProfile, UserPreferences, FinancialSettings
+from ..utils.security import (
+    verify_password, 
+    get_password_hash, 
+    create_access_token, 
+    create_refresh_token,
+    verify_token,
+    ACCESS_TOKEN_EXPIRE_MINUTES
 )
-from ..models.otp_verification import OTPType
-from ..utils.password import hash_password, verify_password, validate_password_strength
-from ..utils.jwt import create_token_pair, verify_token, TokenExpiredError, InvalidTokenError
-from ..utils.otp import create_otp_verification, verify_otp
-from ..utils.email_templates import get_otp_email_template
-from ..services.email_service import EmailService
-
-logger = logging.getLogger(__name__)
-
-
-class AuthenticationError(Exception):
-    """Authentication related error."""
-    pass
-
+from ..schemas.auth_schemas import (
+    UserRegister, 
+    UserLogin, 
+    ProfileSetup, 
+    FinancialSetup,
+    ChangePassword,
+    UpdateProfile
+)
 
 class AuthService:
-    """Authentication service class."""
-    
     def __init__(self):
-        self.email_service = EmailService()
+        self.db = get_database()
+        self.users_collection = self.db.users
     
-    async def register_user(self, register_data: RegisterRequest) -> Dict[str, Any]:
-        """
-        Register new user with OTP verification.
+    async def register_user(self, user_data: UserRegister) -> User:
+        """Registrasi user baru"""
         
-        Args:
-            register_data: Registration data
-            
-        Returns:
-            Registration result
-            
-        Raises:
-            AuthenticationError: If registration fails
-        """
+        # Cek apakah email sudah terdaftar
+        existing_user = self.users_collection.find_one({"email": user_data.email})
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email sudah terdaftar"
+            )
+        
+        # Cek apakah username sudah digunakan
+        existing_username = self.users_collection.find_one({"username": user_data.username})
+        if existing_username:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username sudah digunakan"
+            )
+        
+        # Hash password
+        hashed_password = get_password_hash(user_data.password)
+        
+        # Buat user baru - tanpa menyetting id karena akan di-generate oleh MongoDB
+        new_user = User(
+            username=user_data.username,
+            email=user_data.email,
+            hashed_password=hashed_password,
+            preferences=UserPreferences(),  # Default preferences
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        
+        # Simpan ke database
+        user_dict = new_user.to_mongo()
+        
         try:
-            db = await get_database()
-            users_collection = db.users
+            result = self.users_collection.insert_one(user_dict)
             
-            # Check if user already exists
-            existing_user = await users_collection.find_one(
-                {"email": register_data.email}
-            )
+            # Ambil user yang baru dibuat
+            created_user = self.users_collection.find_one({"_id": result.inserted_id})
             
-            if existing_user:
-                raise AuthenticationError("User with this email already exists")
+            if not created_user:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Gagal membuat user baru"
+                )
+                
+            return User.from_mongo(created_user)
             
-            # Verify OTP first
-            otp_result = await verify_otp(
-                email=register_data.email,
-                otp_code=register_data.otp_code,
-                otp_type=OTPType.REGISTER
-            )
-            
-            if not otp_result["success"]:
-                raise AuthenticationError(otp_result["message"])
-            
-            # Validate password strength
-            is_strong, password_errors = validate_password_strength(register_data.password)
-            if not is_strong:
-                raise AuthenticationError(f"Password not strong enough: {', '.join(password_errors)}")
-            
-            # Create user data
-            user_data = UserCreate(
-                email=register_data.email,
-                password=register_data.password,
-                full_name=register_data.full_name,
-                phone_number=register_data.phone_number or "",
-                university_id=str(register_data.university_id) if register_data.university_id else None,
-                faculty_id=str(register_data.faculty_id) if register_data.faculty_id else None,
-                major_id=str(register_data.major_id) if register_data.major_id else None,
-                initial_savings=register_data.initial_savings,
-                role=UserRole.STUDENT
-            )
-            
-            # Hash password
-            password_hash = hash_password(user_data.password)
-            
-            # Create user document
-            user_doc = UserInDB(
-                **user_data.model_dump(exclude={"password"}),
-                password_hash=password_hash,
-                is_active=True,
-                is_verified=True,  # Verified via OTP
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow()
-            )
-            
-            # Insert user
-            result = await users_collection.insert_one(
-                user_doc.model_dump(by_alias=True, exclude={"id"})
-            )
-            
-            user_id = str(result.inserted_id)
-            
-            # Create tokens
-            tokens = create_token_pair(
-                user_id=user_id,
-                email=user_data.email,
-                role=user_data.role
-            )
-            
-            logger.info(f"User registered successfully: {user_data.email}")
-            
-            return {
-                "success": True,
-                "message": "User registered successfully",
-                "user_id": user_id,
-                "tokens": tokens
-            }
-            
-        except AuthenticationError:
-            raise
         except Exception as e:
-            logger.error(f"Registration error: {e}")
-            raise AuthenticationError("Registration failed")
+            # Log error for debugging
+            print(f"Error creating user: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Gagal menyimpan user: {str(e)}"
+            )
     
-    async def send_registration_otp(self, email: str) -> Dict[str, Any]:
-        """
-        Send OTP for registration.
+    async def authenticate_user(self, login_data: UserLogin) -> Optional[User]:
+        """Autentikasi user dengan email dan password"""
         
-        Args:
-            email: User email
-            
-        Returns:
-            OTP send result
-        """
         try:
-            # Check if user already exists
-            db = await get_database()
-            users_collection = db.users
-            
-            existing_user = await users_collection.find_one({"email": email})
-            if existing_user:
-                raise AuthenticationError("User with this email already exists")
-            
-            # Create OTP
-            otp_data = await create_otp_verification(
-                email=email,
-                otp_type=OTPType.REGISTER,
-                expires_minutes=5
-            )
-            
-            # Get email template
-            template = get_otp_email_template(
-                otp_code=otp_data["otp_code"],
-                otp_type="register",
-                user_name="New User",
-                expires_minutes=5
-            )
-            
-            # Send email
-            email_sent = await self.email_service.send_email_with_retry(
-                to_email=email,
-                subject=template["subject"],
-                html_content=template["html_content"],
-                text_content=template["text_content"]
-            )
-            
-            if not email_sent:
-                raise AuthenticationError("Failed to send verification email")
-            
-            logger.info(f"Registration OTP sent to: {email}")
-            
-            return {
-                "success": True,
-                "message": "Registration OTP sent successfully",
-                "expires_in_seconds": 300  # 5 minutes
-            }
-            
-        except AuthenticationError:
-            raise
-        except Exception as e:
-            logger.error(f"Send registration OTP error: {e}")
-            raise AuthenticationError("Failed to send registration OTP")
-    
-    async def login_user(self, login_data: LoginRequest) -> LoginResponse:
-        """
-        Authenticate user login.
-        
-        Args:
-            login_data: Login credentials
-            
-        Returns:
-            Login response with tokens and user data
-            
-        Raises:
-            AuthenticationError: If login fails
-        """
-        try:
-            db = await get_database()
-            users_collection = db.users
-            
-            # Find user by email
-            user_doc = await users_collection.find_one({"email": login_data.email})
-            
+            user_doc = self.users_collection.find_one({"email": login_data.email})
             if not user_doc:
-                raise AuthenticationError("Invalid email or password")
+                return None
             
-            user = UserInDB(**user_doc)
+            user = User.from_mongo(user_doc)
             
-            # Check if user is active
+            # Verifikasi password
+            if not verify_password(login_data.password, user.hashed_password):
+                return None
+            
+            # Cek apakah akun aktif
             if not user.is_active:
-                raise AuthenticationError("Account is deactivated")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Akun tidak aktif"
+                )
             
-            # Verify password
-            if not verify_password(login_data.password, user.password_hash):
-                logger.warning(f"Failed login attempt for: {login_data.email}")
-                raise AuthenticationError("Invalid email or password")
+            return user
             
-            # Create tokens
-            tokens_data = create_token_pair(
-                user_id=str(user.id),
-                email=user.email,
-                role=user.role
-            )
-            
-            tokens = TokenResponse(**tokens_data)
-            
-            # Update last login
-            await users_collection.update_one(
-                {"_id": ObjectId(str(user.id))},
-                {"$set": {"updated_at": datetime.utcnow()}}
-            )
-            
-            # Prepare user response data
-            user_response = {
-                "id": str(user.id),
-                "email": user.email,
-                "full_name": user.full_name,
-                "phone_number": user.phone_number,
-                "role": user.role.value,
-                "is_active": user.is_active,
-                "is_verified": user.is_verified,
-                "created_at": user.created_at,
-                "updated_at": user.updated_at
-            }
-            
-            logger.info(f"User logged in successfully: {user.email}")
-            
-            return LoginResponse(
-                user=user_response,
-                tokens=tokens,
-                message="Login successful"
-            )
-            
-        except AuthenticationError:
+        except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Login error: {e}")
-            raise AuthenticationError("Login failed")
+            print(f"Error authenticating user: {e}")
+            return None
     
-    async def refresh_token(self, refresh_token: str) -> TokenResponse:
-        """
-        Refresh access token.
+    async def create_tokens(self, user: User) -> dict:
+        """Membuat access token dan refresh token"""
         
-        Args:
-            refresh_token: Valid refresh token
-            
-        Returns:
-            New token response
-            
-        Raises:
-            AuthenticationError: If refresh fails
-        """
         try:
-            # Verify refresh token
-            payload = verify_token(refresh_token)
+            # Data untuk token
+            token_data = {"sub": str(user.id), "email": user.email}
             
-            if payload.token_type != "refresh":
-                raise AuthenticationError("Invalid token type")
+            # Buat tokens
+            access_token = create_access_token(token_data)
+            refresh_token = create_refresh_token(token_data)
             
-            # Check if user still exists and is active
-            db = await get_database()
-            users_collection = db.users
-            
-            user_doc = await users_collection.find_one({
-                "_id": ObjectId(payload.sub),
-                "is_active": True
-            })
-            
-            if not user_doc:
-                raise AuthenticationError("User not found or inactive")
-            
-            # Create new token pair
-            tokens_data = create_token_pair(
-                user_id=payload.sub,
-                email=payload.email,
-                role=payload.role
-            )
-            
-            logger.info(f"Token refreshed for user: {payload.email}")
-            
-            return TokenResponse(**tokens_data)
-            
-        except (TokenExpiredError, InvalidTokenError) as e:
-            raise AuthenticationError(str(e))
-        except Exception as e:
-            logger.error(f"Token refresh error: {e}")
-            raise AuthenticationError("Token refresh failed")
-    
-    async def send_password_reset_otp(self, reset_data: PasswordResetRequest) -> Dict[str, Any]:
-        """
-        Send password reset OTP.
-        
-        Args:
-            reset_data: Password reset request
-            
-        Returns:
-            OTP send result
-        """
-        try:
-            db = await get_database()
-            users_collection = db.users
-            
-            # Check if user exists
-            user_doc = await users_collection.find_one({"email": reset_data.email})
-            if not user_doc:
-                # Don't reveal if email exists or not for security
-                return {
-                    "success": True,
-                    "message": "If this email exists, a password reset code has been sent",
-                    "expires_in_seconds": 300
-                }
-            
-            user = UserInDB(**user_doc)
-            
-            # Create OTP
-            otp_data = await create_otp_verification(
-                email=reset_data.email,
-                otp_type=OTPType.RESET_PASSWORD,
-                expires_minutes=5
-            )
-            
-            # Get email template
-            template = get_otp_email_template(
-                otp_code=otp_data["otp_code"],
-                otp_type="reset_password",
-                user_name=user.full_name,
-                expires_minutes=5
-            )
-            
-            # Send email
-            email_sent = await self.email_service.send_email_with_retry(
-                to_email=reset_data.email,
-                subject=template["subject"],
-                html_content=template["html_content"],
-                text_content=template["text_content"]
-            )
-            
-            if not email_sent:
-                logger.error(f"Failed to send password reset email to: {reset_data.email}")
-            
-            logger.info(f"Password reset OTP sent to: {reset_data.email}")
-            
-            return {
-                "success": True,
-                "message": "If this email exists, a password reset code has been sent",
-                "expires_in_seconds": 300
-            }
-            
-        except Exception as e:
-            logger.error(f"Send password reset OTP error: {e}")
-            # Don't reveal internal errors for security
-            return {
-                "success": True,
-                "message": "If this email exists, a password reset code has been sent",
-                "expires_in_seconds": 300
-            }
-    
-    async def reset_password(self, reset_data: PasswordResetConfirm) -> Dict[str, Any]:
-        """
-        Reset user password with OTP verification.
-        
-        Args:
-            reset_data: Password reset confirmation data
-            
-        Returns:
-            Reset result
-            
-        Raises:
-            AuthenticationError: If reset fails
-        """
-        try:
-            db = await get_database()
-            users_collection = db.users
-            
-            # Check if user exists
-            user_doc = await users_collection.find_one({"email": reset_data.email})
-            if not user_doc:
-                raise AuthenticationError("Invalid request")
-            
-            # Verify OTP
-            otp_result = await verify_otp(
-                email=reset_data.email,
-                otp_code=reset_data.otp_code,
-                otp_type=OTPType.RESET_PASSWORD
-            )
-            
-            if not otp_result["success"]:
-                raise AuthenticationError(otp_result["message"])
-            
-            # Validate new password strength
-            is_strong, password_errors = validate_password_strength(reset_data.new_password)
-            if not is_strong:
-                raise AuthenticationError(f"Password not strong enough: {', '.join(password_errors)}")
-            
-            # Hash new password
-            new_password_hash = hash_password(reset_data.new_password)
-            
-            # Update password
-            result = await users_collection.update_one(
-                {"email": reset_data.email},
+            # Update refresh token di database
+            self.users_collection.update_one(
+                {"_id": ObjectId(user.id)},
                 {
                     "$set": {
-                        "password_hash": new_password_hash,
+                        "refresh_token": refresh_token,
+                        "last_login": datetime.utcnow(),
                         "updated_at": datetime.utcnow()
                     }
                 }
             )
             
-            if result.modified_count == 0:
-                raise AuthenticationError("Failed to update password")
-            
-            logger.info(f"Password reset successfully for: {reset_data.email}")
-            
             return {
-                "success": True,
-                "message": "Password reset successfully"
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "token_type": "bearer",
+                "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60  # dalam detik
             }
             
-        except AuthenticationError:
+        except Exception as e:
+            print(f"Error creating tokens: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Gagal membuat token"
+            )
+    
+    async def refresh_access_token(self, refresh_token: str) -> dict:
+        """Refresh access token menggunakan refresh token"""
+        
+        # Verifikasi refresh token
+        payload = verify_token(refresh_token, "refresh")
+        if not payload:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh token tidak valid"
+            )
+        
+        user_id = payload.get("sub")
+        
+        try:
+            user_doc = self.users_collection.find_one({"_id": ObjectId(user_id)})
+            
+            if not user_doc:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="User tidak ditemukan"
+                )
+            
+            user = User.from_mongo(user_doc)
+            
+            # Cek apakah refresh token masih valid
+            if user.refresh_token != refresh_token:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Refresh token sudah tidak berlaku"
+                )
+            
+            # Buat access token baru
+            token_data = {"sub": str(user.id), "email": user.email}
+            new_access_token = create_access_token(token_data)
+            
+            return {
+                "access_token": new_access_token,
+                "token_type": "bearer",
+                "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60
+            }
+            
+        except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Password reset error: {e}")
-            raise AuthenticationError("Password reset failed")
+            print(f"Error refreshing token: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Gagal refresh token"
+            )
     
-    async def change_password(
-        self, 
-        user_id: str, 
-        current_password: str, 
-        new_password: str
-    ) -> Dict[str, Any]:
-        """
-        Change user password.
+    async def setup_profile(self, user_id: str, profile_data: ProfileSetup) -> User:
+        """Setup profil user setelah registrasi"""
         
-        Args:
-            user_id: User ID
-            current_password: Current password
-            new_password: New password
-            
-        Returns:
-            Change result
-            
-        Raises:
-            AuthenticationError: If change fails
-        """
         try:
-            db = await get_database()
-            users_collection = db.users
+            # Buat profile object
+            profile = UserProfile(
+                full_name=profile_data.full_name,
+                phone_number=profile_data.phone_number,
+                date_of_birth=profile_data.date_of_birth,
+                occupation=profile_data.occupation,
+                city=profile_data.city
+            )
             
-            # Get user
-            user_doc = await users_collection.find_one({"_id": ObjectId(user_id)})
+            # Update preferences
+            preferences = UserPreferences(
+                language=profile_data.language,
+                currency=profile_data.currency,
+                notifications_enabled=profile_data.notifications_enabled,
+                voice_enabled=profile_data.voice_enabled,
+                dark_mode=profile_data.dark_mode
+            )
+            
+            # Update user di database
+            update_data = {
+                "profile": profile.dict(),
+                "preferences": preferences.dict(),
+                "profile_setup_completed": True,
+                "updated_at": datetime.utcnow()
+            }
+            
+            result = self.users_collection.update_one(
+                {"_id": ObjectId(user_id)},
+                {"$set": update_data}
+            )
+            
+            if result.modified_count == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="User tidak ditemukan"
+                )
+            
+            # Ambil user yang sudah diupdate
+            updated_user = self.users_collection.find_one({"_id": ObjectId(user_id)})
+            return User.from_mongo(updated_user)
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"Error setting up profile: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Gagal setup profil"
+            )
+    
+    async def setup_financial(self, user_id: str, financial_data: FinancialSetup) -> User:
+        """Setup keuangan awal user"""
+        
+        try:
+            # Buat financial settings object
+            financial_settings = FinancialSettings(
+                monthly_income=financial_data.monthly_income,
+                monthly_budget=financial_data.monthly_budget,
+                savings_goal_percentage=financial_data.savings_goal_percentage,
+                emergency_fund_target=financial_data.emergency_fund_target,
+                primary_bank=financial_data.primary_bank
+            )
+            
+            # Update user di database
+            update_data = {
+                "financial_settings": financial_settings.dict(),
+                "financial_setup_completed": True,
+                "updated_at": datetime.utcnow()
+            }
+            
+            # Cek apakah profile setup sudah selesai untuk menentukan onboarding
+            user_doc = self.users_collection.find_one({"_id": ObjectId(user_id)})
+            if user_doc and user_doc.get("profile_setup_completed", False):
+                update_data["onboarding_completed"] = True
+            
+            result = self.users_collection.update_one(
+                {"_id": ObjectId(user_id)},
+                {"$set": update_data}
+            )
+            
+            if result.modified_count == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="User tidak ditemukan"
+                )
+            
+            # Ambil user yang sudah diupdate
+            updated_user = self.users_collection.find_one({"_id": ObjectId(user_id)})
+            return User.from_mongo(updated_user)
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"Error setting up financial: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Gagal setup keuangan"
+            )
+    
+    async def get_user_by_id(self, user_id: str) -> Optional[User]:
+        """Mendapatkan user berdasarkan ID"""
+        try:
+            user_doc = self.users_collection.find_one({"_id": ObjectId(user_id)})
+            if user_doc:
+                return User.from_mongo(user_doc)
+            return None
+        except Exception as e:
+            print(f"Error getting user by id: {e}")
+            return None
+    
+    async def logout_user(self, user_id: str) -> bool:
+        """Logout user dengan menghapus refresh token"""
+        try:
+            result = self.users_collection.update_one(
+                {"_id": ObjectId(user_id)},
+                {
+                    "$unset": {"refresh_token": ""},
+                    "$set": {"updated_at": datetime.utcnow()}
+                }
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            print(f"Error logging out user: {e}")
+            return False
+    
+    async def change_password(self, user_id: str, password_data: ChangePassword) -> bool:
+        """Ganti password user"""
+        
+        try:
+            # Ambil user saat ini
+            user_doc = self.users_collection.find_one({"_id": ObjectId(user_id)})
             if not user_doc:
-                raise AuthenticationError("User not found")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="User tidak ditemukan"
+                )
             
-            user = UserInDB(**user_doc)
+            user = User.from_mongo(user_doc)
             
-            # Verify current password
-            if not verify_password(current_password, user.password_hash):
-                raise AuthenticationError("Current password is incorrect")
+            # Verifikasi password lama
+            if not verify_password(password_data.current_password, user.hashed_password):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Password lama tidak sesuai"
+                )
             
-            # Validate new password strength
-            is_strong, password_errors = validate_password_strength(new_password)
-            if not is_strong:
-                raise AuthenticationError(f"New password not strong enough: {', '.join(password_errors)}")
+            # Hash password baru
+            new_hashed_password = get_password_hash(password_data.new_password)
             
-            # Check if new password is different from current
-            if verify_password(new_password, user.password_hash):
-                raise AuthenticationError("New password must be different from current password")
-            
-            # Hash new password
-            new_password_hash = hash_password(new_password)
-            
-            # Update password
-            result = await users_collection.update_one(
+            # Update password di database
+            result = self.users_collection.update_one(
                 {"_id": ObjectId(user_id)},
                 {
                     "$set": {
-                        "password_hash": new_password_hash,
+                        "hashed_password": new_hashed_password,
                         "updated_at": datetime.utcnow()
-                    }
+                    },
+                    "$unset": {"refresh_token": ""}  # Logout dari semua device
                 }
             )
             
-            if result.modified_count == 0:
-                raise AuthenticationError("Failed to update password")
+            return result.modified_count > 0
             
-            logger.info(f"Password changed successfully for user: {user_id}")
-            
-            return {
-                "success": True,
-                "message": "Password changed successfully"
-            }
-            
-        except AuthenticationError:
+        except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Change password error: {e}")
-            raise AuthenticationError("Password change failed")
+            print(f"Error changing password: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Gagal mengubah password"
+            )
     
-    async def verify_user_email(self, email: str, otp_code: str) -> Dict[str, Any]:
-        """
-        Verify user email with OTP.
+    async def update_profile(self, user_id: str, update_data: UpdateProfile) -> User:
+        """Update profil user"""
         
-        Args:
-            email: User email
-            otp_code: OTP code
-            
-        Returns:
-            Verification result
-            
-        Raises:
-            AuthenticationError: If verification fails
-        """
         try:
-            # Verify OTP
-            otp_result = await verify_otp(
-                email=email,
-                otp_code=otp_code,
-                otp_type=OTPType.EMAIL_VERIFICATION
-            )
+            update_dict = {}
             
-            if not otp_result["success"]:
-                raise AuthenticationError(otp_result["message"])
+            # Update profile fields
+            profile_updates = {}
+            if update_data.full_name is not None:
+                profile_updates["profile.full_name"] = update_data.full_name
+            if update_data.phone_number is not None:
+                profile_updates["profile.phone_number"] = update_data.phone_number
+            if update_data.date_of_birth is not None:
+                profile_updates["profile.date_of_birth"] = update_data.date_of_birth
+            if update_data.occupation is not None:
+                profile_updates["profile.occupation"] = update_data.occupation
+            if update_data.city is not None:
+                profile_updates["profile.city"] = update_data.city
             
-            # Update user verification status
-            db = await get_database()
-            users_collection = db.users
+            # Update preferences
+            if update_data.language is not None:
+                profile_updates["preferences.language"] = update_data.language
+            if update_data.currency is not None:
+                profile_updates["preferences.currency"] = update_data.currency
+            if update_data.notifications_enabled is not None:
+                profile_updates["preferences.notifications_enabled"] = update_data.notifications_enabled
+            if update_data.voice_enabled is not None:
+                profile_updates["preferences.voice_enabled"] = update_data.voice_enabled
+            if update_data.dark_mode is not None:
+                profile_updates["preferences.dark_mode"] = update_data.dark_mode
+            if update_data.auto_categorization is not None:
+                profile_updates["preferences.auto_categorization"] = update_data.auto_categorization
             
-            result = await users_collection.update_one(
-                {"email": email},
-                {
-                    "$set": {
-                        "is_verified": True,
-                        "updated_at": datetime.utcnow()
-                    }
-                }
-            )
+            if profile_updates:
+                profile_updates["updated_at"] = datetime.utcnow()
+                
+                result = self.users_collection.update_one(
+                    {"_id": ObjectId(user_id)},
+                    {"$set": profile_updates}
+                )
+                
+                if result.modified_count == 0:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="User tidak ditemukan atau tidak ada perubahan"
+                    )
             
-            if result.modified_count == 0:
-                raise AuthenticationError("User not found")
+            # Ambil user yang sudah diupdate
+            updated_user = self.users_collection.find_one({"_id": ObjectId(user_id)})
+            return User.from_mongo(updated_user)
             
-            logger.info(f"Email verified successfully for: {email}")
-            
-            return {
-                "success": True,
-                "message": "Email verified successfully"
-            }
-            
-        except AuthenticationError:
+        except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Email verification error: {e}")
-            raise AuthenticationError("Email verification failed")
-    
-    async def send_email_verification_otp(self, email: str) -> Dict[str, Any]:
-        """
-        Send email verification OTP.
-        
-        Args:
-            email: User email
-            
-        Returns:
-            OTP send result
-        """
-        try:
-            db = await get_database()
-            users_collection = db.users
-            
-            # Check if user exists
-            user_doc = await users_collection.find_one({"email": email})
-            if not user_doc:
-                raise AuthenticationError("User not found")
-            
-            user = UserInDB(**user_doc)
-            
-            if user.is_verified:
-                return {
-                    "success": True,
-                    "message": "Email is already verified"
-                }
-            
-            # Create OTP
-            otp_data = await create_otp_verification(
-                email=email,
-                otp_type=OTPType.EMAIL_VERIFICATION,
-                expires_minutes=5
+            print(f"Error updating profile: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Gagal update profil"
             )
-            
-            # Get email template
-            template = get_otp_email_template(
-                otp_code=otp_data["otp_code"],
-                otp_type="email_verification",
-                user_name=user.full_name,
-                expires_minutes=5
-            )
-            
-            # Send email
-            email_sent = await self.email_service.send_email_with_retry(
-                to_email=email,
-                subject=template["subject"],
-                html_content=template["html_content"],
-                text_content=template["text_content"]
-            )
-            
-            if not email_sent:
-                raise AuthenticationError("Failed to send verification email")
-            
-            logger.info(f"Email verification OTP sent to: {email}")
-            
-            return {
-                "success": True,
-                "message": "Email verification code sent successfully",
-                "expires_in_seconds": 300
-            }
-            
-        except AuthenticationError:
-            raise
-        except Exception as e:
-            logger.error(f"Send email verification OTP error: {e}")
-            raise AuthenticationError("Failed to send email verification code")
-    
-    async def get_user_by_id(self, user_id: str) -> Optional[UserInDB]:
-        """
-        Get user by ID.
-        
-        Args:
-            user_id: User ID
-            
-        Returns:
-            User object or None if not found
-        """
-        try:
-            db = await get_database()
-            users_collection = db.users
-            
-            user_doc = await users_collection.find_one({"_id": ObjectId(user_id)})
-            if user_doc:
-                return UserInDB(**user_doc)
-            return None
-            
-        except Exception as e:
-            logger.error(f"Get user by ID error: {e}")
-            return None
-    
-    async def get_user_by_email(self, email: str) -> Optional[UserInDB]:
-        """
-        Get user by email.
-        
-        Args:
-            email: User email
-            
-        Returns:
-            User object or None if not found
-        """
-        try:
-            db = await get_database()
-            users_collection = db.users
-            
-            user_doc = await users_collection.find_one({"email": email})
-            if user_doc:
-                return UserInDB(**user_doc)
-            return None
-            
-        except Exception as e:
-            logger.error(f"Get user by email error: {e}")
-            return None
-    
-    async def validate_token(self, token: str) -> Dict[str, Any]:
-        """
-        Validate JWT token and return user data.
-        
-        Args:
-            token: JWT token
-            
-        Returns:
-            Validation result with user data
-            
-        Raises:
-            AuthenticationError: If token is invalid
-        """
-        try:
-            # Verify token
-            payload = verify_token(token)
-            
-            # Get user to ensure they still exist and are active
-            user = await self.get_user_by_id(payload.sub)
-            if not user or not user.is_active:
-                raise AuthenticationError("User not found or inactive")
-            
-            return {
-                "valid": True,
-                "user_id": payload.sub,
-                "email": payload.email,
-                "role": payload.role.value,
-                "token_type": payload.token_type
-            }
-            
-        except (TokenExpiredError, InvalidTokenError) as e:
-            raise AuthenticationError(str(e))
-        except Exception as e:
-            logger.error(f"Token validation error: {e}")
-            raise AuthenticationError("Token validation failed")
