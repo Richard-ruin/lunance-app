@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
-import '../utils/app_colors.dart';
 import '../utils/app_text_styles.dart';
 import 'auth/login_screen.dart';
 import 'onboarding/profile_setup_screen.dart';
@@ -20,6 +19,12 @@ class _SplashScreenState extends State<SplashScreen>
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
+
+  // Standalone colors - no dependency on AppColors
+  static const Color _primary = Color(0xFF87CEEB); // Sky Blue
+  static const Color _primaryDark = Color(0xFF5BB3D9);
+  static const Color _white = Color(0xFFFFFFFF);
+  static const Color _shadow = Color(0x1A000000);
 
   @override
   void initState() {
@@ -109,7 +114,14 @@ class _SplashScreenState extends State<SplashScreen>
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: AppGradients.primaryGradient,
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              _primary,
+              _primaryDark,
+            ],
+          ),
         ),
         child: Center(
           child: AnimatedBuilder(
@@ -127,11 +139,11 @@ class _SplashScreenState extends State<SplashScreen>
                         width: 120,
                         height: 120,
                         decoration: BoxDecoration(
-                          color: AppColors.white,
+                          color: _white,
                           borderRadius: BorderRadius.circular(30),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.shadow,
+                              color: _shadow,
                               blurRadius: 20,
                               offset: const Offset(0, 10),
                             ),
@@ -140,7 +152,7 @@ class _SplashScreenState extends State<SplashScreen>
                         child: const Icon(
                           Icons.account_balance_wallet_rounded,
                           size: 60,
-                          color: AppColors.primary,
+                          color: _primary,
                         ),
                       ),
                       
@@ -149,9 +161,10 @@ class _SplashScreenState extends State<SplashScreen>
                       // App Name
                       Text(
                         'Lunance',
-                        style: AppTextStyles.h1.copyWith(
-                          color: AppColors.white,
+                        style: const TextStyle(
+                          fontSize: 36,
                           fontWeight: FontWeight.w700,
+                          color: _white,
                         ),
                       ),
                       
@@ -160,8 +173,9 @@ class _SplashScreenState extends State<SplashScreen>
                       // Tagline
                       Text(
                         'Personal Finance AI Assistant',
-                        style: AppTextStyles.bodyLarge.copyWith(
-                          color: AppColors.white.withOpacity(0.9),
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: _white.withOpacity(0.9),
                         ),
                       ),
                       
@@ -174,7 +188,7 @@ class _SplashScreenState extends State<SplashScreen>
                         child: CircularProgressIndicator(
                           strokeWidth: 3,
                           valueColor: AlwaysStoppedAnimation<Color>(
-                            AppColors.white.withOpacity(0.8),
+                            _white.withOpacity(0.8),
                           ),
                         ),
                       ),
@@ -184,8 +198,9 @@ class _SplashScreenState extends State<SplashScreen>
                       // Loading text
                       Text(
                         'Memuat aplikasi...',
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: AppColors.white.withOpacity(0.8),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: _white.withOpacity(0.8),
                         ),
                       ),
                     ],

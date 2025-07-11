@@ -4,13 +4,14 @@ import '../../providers/auth_provider.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/app_text_styles.dart';
 import '../../widgets/custom_widgets.dart';
+import '../../widgets/common_widgets.dart' as common;
 import 'register_screen.dart';
 import '../onboarding/profile_setup_screen.dart';
 import '../onboarding/financial_setup_screen.dart';
 import '../dashboard/dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({Key? key}) : super(key: key);
+  const LoginScreen({super.key});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -59,6 +60,19 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  void _showForgotPasswordDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => common.CustomAlertDialog(
+        title: 'Lupa Password',
+        message: 'Fitur reset password akan segera tersedia dalam update mendatang.',
+        icon: Icons.lock_reset,
+        iconColor: AppColors.primary,
+        primaryButtonText: 'OK',
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -66,7 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
       body: SafeArea(
         child: Consumer<AuthProvider>(
           builder: (context, authProvider, child) {
-            return LoadingOverlay(
+            return common.LoadingOverlay(
               isLoading: authProvider.isLoading,
               message: 'Masuk ke akun...',
               child: SingleChildScrollView(
@@ -120,13 +134,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 48),
                       
                       // Error message
-                      if (authProvider.errorMessage != null)
-                        ErrorMessage(
+                      if (authProvider.errorMessage != null) ...[
+                        common.ErrorMessage(
                           message: authProvider.errorMessage!,
                           onRetry: () => authProvider.clearError(),
                         ),
-                      
-                      const SizedBox(height: 8),
+                        const SizedBox(height: 16),
+                      ],
                       
                       // Email field
                       CustomTextField(
@@ -172,14 +186,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       Align(
                         alignment: Alignment.centerRight,
                         child: TextButton(
-                          onPressed: () {
-                            // TODO: Implement forgot password
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Fitur lupa password akan segera tersedia'),
-                              ),
-                            );
-                          },
+                          onPressed: _showForgotPasswordDialog,
                           child: Text(
                             'Lupa Password?',
                             style: AppTextStyles.labelMedium.copyWith(
@@ -204,7 +211,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       // Divider
                       Row(
                         children: [
-                          Expanded(child: Divider(color: AppColors.border)),
+                          const Expanded(child: Divider(color: AppColors.border)),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
                             child: Text(
@@ -214,7 +221,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                           ),
-                          Expanded(child: Divider(color: AppColors.border)),
+                          const Expanded(child: Divider(color: AppColors.border)),
                         ],
                       ),
                       

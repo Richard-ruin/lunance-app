@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // Primary Colors
-  static const Color primary = Color(0xFF87CEEB); // Sky Blue
-  static const Color primaryLight = Color(0xFFB8E0F5);
-  static const Color primaryDark = Color(0xFF5BB3D9);
+  // Primary Colors (Changed from blue to gray)
+  static const Color primary = Color(0xFF6B7280); // Gray 500
+  static const Color primaryLight = Color(0xFF9CA3AF); // Gray 400
+  static const Color primaryDark = Color(0xFF374151); // Gray 700
   
   // Neutral Colors
   static const Color white = Color(0xFFFFFFFF);
@@ -46,6 +46,10 @@ class AppColors {
   // Chat Colors
   static const Color chatUser = primary;
   static const Color chatBot = gray100;
+  
+  // Overlay Colors
+  static const Color overlay = Color(0x80000000);
+  static const Color overlayLight = Color(0x40000000);
 }
 
 class AppGradients {
@@ -65,5 +69,16 @@ class AppGradients {
       AppColors.white,
       AppColors.background,
     ],
+  );
+  
+  static const LinearGradient shimmerGradient = LinearGradient(
+    begin: Alignment(-1.0, -0.3),
+    end: Alignment(1.0, 0.3),
+    colors: [
+      Color(0xFFE0E0E0),
+      Color(0xFFF5F5F5),
+      Color(0xFFE0E0E0),
+    ],
+    stops: [0.0, 0.5, 1.0],
   );
 }

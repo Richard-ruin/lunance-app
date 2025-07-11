@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../providers/auth_provider.dart';
 import '../../utils/app_colors.dart';
-import 'widgets/dashboard_top_bar.dart';
-import 'widgets/left_sidebar.dart';
-import 'widgets/right_sidebar.dart';
-import 'widgets/animated_overlay.dart';
-import 'views/chat_view.dart';
-import 'views/explore_finance_view.dart';
-import 'views/chat_history_view.dart';
+import 'left_sidebar.dart';
+import 'right_sidebar.dart';
+import 'chat_view.dart';
+import 'explore_finance_view.dart';
+import 'chat_history_view.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({Key? key}) : super(key: key);
@@ -17,10 +13,7 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> 
-    with TickerProviderStateMixin {
-  
-  // Current view index
+class _DashboardScreenState extends State<DashboardScreen> with TickerProviderStateMixin {
   int _selectedIndex = 0; // 0: Chat, 1: Explore Finance, 2: Chat History
   
   // Sidebar states
@@ -31,8 +24,6 @@ class _DashboardScreenState extends State<DashboardScreen>
   late AnimationController _leftSidebarController;
   late AnimationController _rightSidebarController;
   late AnimationController _overlayController;
-  
-  // Animations
   late Animation<double> _leftSidebarAnimation;
   late Animation<double> _rightSidebarAnimation;
   late Animation<double> _overlayAnimation;
@@ -40,10 +31,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   @override
   void initState() {
     super.initState();
-    _initializeAnimations();
-  }
-
-  void _initializeAnimations() {
+    
     // Initialize animation controllers
     _leftSidebarController = AnimationController(
       duration: const Duration(milliseconds: 300),
@@ -58,7 +46,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       vsync: this,
     );
     
-    // Initialize sidebar animations
+    // Initialize animations
     _leftSidebarAnimation = Tween<double>(
       begin: 0.0,
       end: 280.0,
@@ -74,8 +62,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       parent: _rightSidebarController,
       curve: Curves.easeInOut,
     ));
-    
-    // Initialize overlay animation
+
     _overlayAnimation = Tween<double>(
       begin: 0.0,
       end: 1.0,
@@ -97,7 +84,8 @@ class _DashboardScreenState extends State<DashboardScreen>
     setState(() {
       // Close right sidebar if open
       if (_isRightSidebarOpen) {
-        _closeRightSidebar();
+        _isRightSidebarOpen = false;
+        _rightSidebarController.reverse();
       }
       
       _isLeftSidebarOpen = !_isLeftSidebarOpen;
@@ -105,7 +93,8 @@ class _DashboardScreenState extends State<DashboardScreen>
         _leftSidebarController.forward();
         _overlayController.forward();
       } else {
-        _closeLeftSidebar();
+        _leftSidebarController.reverse();
+        _overlayController.reverse();
       }
     });
   }
@@ -114,7 +103,8 @@ class _DashboardScreenState extends State<DashboardScreen>
     setState(() {
       // Close left sidebar if open
       if (_isLeftSidebarOpen) {
-        _closeLeftSidebar();
+        _isLeftSidebarOpen = false;
+        _leftSidebarController.reverse();
       }
       
       _isRightSidebarOpen = !_isRightSidebarOpen;
@@ -122,37 +112,29 @@ class _DashboardScreenState extends State<DashboardScreen>
         _rightSidebarController.forward();
         _overlayController.forward();
       } else {
-        _closeRightSidebar();
+        _rightSidebarController.reverse();
+        _overlayController.reverse();
       }
     });
-  }
-
-  void _closeLeftSidebar() {
-    _isLeftSidebarOpen = false;
-    _leftSidebarController.reverse();
-    if (!_isRightSidebarOpen) {
-      _overlayController.reverse();
-    }
-  }
-
-  void _closeRightSidebar() {
-    _isRightSidebarOpen = false;
-    _rightSidebarController.reverse();
-    if (!_isLeftSidebarOpen) {
-      _overlayController.reverse();
-    }
   }
 
   void _closeSidebars() {
     if (_isLeftSidebarOpen || _isRightSidebarOpen) {
       setState(() {
-        if (_isLeftSidebarOpen) _closeLeftSidebar();
-        if (_isRightSidebarOpen) _closeRightSidebar();
+        if (_isLeftSidebarOpen) {
+          _isLeftSidebarOpen = false;
+          _leftSidebarController.reverse();
+        }
+        if (_isRightSidebarOpen) {
+          _isRightSidebarOpen = false;
+          _rightSidebarController.reverse();
+        }
+        _overlayController.reverse();
       });
     }
   }
 
-  void _onNavigationChanged(int index) {
+  void _onNavigationItemSelected(int index) {
     setState(() {
       _selectedIndex = index;
     });
@@ -171,7 +153,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
-  Widget _getCurrentView() {
+  Widget _getMainContentView() {
     switch (_selectedIndex) {
       case 0:
         return const ChatView();
@@ -188,48 +170,36 @@ class _DashboardScreenState extends State<DashboardScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      resizeToAvoidBottomInset: false, // Important: Let us handle keyboard manually
       body: SafeArea(
         child: Stack(
           children: [
-            // Main Content with translation animation
+            // Main Content
             AnimatedBuilder(
-              animation: Listenable.merge([
-                _leftSidebarAnimation,
-                _rightSidebarAnimation,
-              ]),
+              animation: Listenable.merge([_leftSidebarAnimation, _rightSidebarAnimation]),
               builder: (context, child) {
-                double translateX = 0.0;
-                if (_isLeftSidebarOpen) {
-                  translateX = _leftSidebarAnimation.value;
-                } else if (_isRightSidebarOpen) {
-                  translateX = -_rightSidebarAnimation.value;
-                }
-                
                 return Transform.translate(
-                  offset: Offset(translateX, 0.0),
+                  offset: Offset(
+                    _isLeftSidebarOpen 
+                        ? _leftSidebarAnimation.value 
+                        : (_isRightSidebarOpen ? -_rightSidebarAnimation.value : 0.0),
+                    0.0,
+                  ),
                   child: GestureDetector(
                     onTap: _closeSidebars,
                     child: Container(
                       width: MediaQuery.of(context).size.width,
                       height: MediaQuery.of(context).size.height,
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         color: AppColors.white,
                       ),
                       child: Column(
                         children: [
                           // Top Bar
-                          DashboardTopBar(
-                            title: _getPageTitle(),
-                            isLeftSidebarOpen: _isLeftSidebarOpen,
-                            isRightSidebarOpen: _isRightSidebarOpen,
-                            onLeftToggle: _toggleLeftSidebar,
-                            onRightToggle: _toggleRightSidebar,
-                          ),
+                          _buildTopBar(),
                           
                           // Main Content
                           Expanded(
-                            child: _getCurrentView(),
+                            child: _getMainContentView(),
                           ),
                         ],
                       ),
@@ -237,16 +207,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                   ),
                 );
               },
-            ),
-            
-            // Animated Overlay
-            AnimatedOverlay(
-              animation: _overlayAnimation,
-              isLeftSidebarOpen: _isLeftSidebarOpen,
-              isRightSidebarOpen: _isRightSidebarOpen,
-              leftSidebarAnimation: _leftSidebarAnimation,
-              rightSidebarAnimation: _rightSidebarAnimation,
-              onTap: _closeSidebars,
             ),
             
             // Left Sidebar
@@ -260,8 +220,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                   child: _leftSidebarAnimation.value > 0
                       ? LeftSidebar(
                           selectedIndex: _selectedIndex,
-                          onNavigationChanged: _onNavigationChanged,
-                          onToggle: _toggleLeftSidebar,
+                          onNavigationItemSelected: _onNavigationItemSelected,
+                          onToggleSidebar: _toggleLeftSidebar,
                         )
                       : Container(),
                 );
@@ -278,14 +238,116 @@ class _DashboardScreenState extends State<DashboardScreen>
                   bottom: 0,
                   child: _rightSidebarAnimation.value > 0
                       ? RightSidebar(
-                          onToggle: _toggleRightSidebar,
+                          onToggleSidebar: _toggleRightSidebar,
                         )
                       : Container(),
                 );
               },
             ),
+            
+            // Animated Overlay
+            AnimatedBuilder(
+              animation: _overlayAnimation,
+              builder: (context, child) {
+                if (_overlayAnimation.value == 0) return Container();
+                
+                return Positioned.fill(
+                  child: Transform.translate(
+                    offset: Offset(
+                      _isLeftSidebarOpen 
+                          ? _leftSidebarAnimation.value 
+                          : (_isRightSidebarOpen ? -_rightSidebarAnimation.value : 0.0),
+                      0.0,
+                    ),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      color: AppColors.overlayLight.withOpacity(_overlayAnimation.value * 0.5),
+                      child: GestureDetector(
+                        onTap: _closeSidebars,
+                        child: Container(
+                          color: Colors.transparent,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildTopBar() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        border: Border(
+          bottom: BorderSide(color: AppColors.border, width: 1),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.shadow,
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Left Menu Toggle (when sidebar is closed)
+          if (!_isLeftSidebarOpen)
+            InkWell(
+              onTap: _toggleLeftSidebar,
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.gray100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.menu,
+                  size: 20,
+                  color: AppColors.gray600,
+                ),
+              ),
+            ),
+          
+          if (!_isLeftSidebarOpen) const SizedBox(width: 16),
+          
+          // Title
+          Expanded(
+            child: Text(
+              _getPageTitle(),
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+          
+          // Right Profile Toggle (when sidebar is closed)
+          if (!_isRightSidebarOpen)
+            InkWell(
+              onTap: _toggleRightSidebar,
+              borderRadius: BorderRadius.circular(20),
+              child: CircleAvatar(
+                radius: 20,
+                backgroundColor: AppColors.gray200,
+                child: Text(
+                  'U',
+                  style: const TextStyle(
+                    color: AppColors.gray700,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

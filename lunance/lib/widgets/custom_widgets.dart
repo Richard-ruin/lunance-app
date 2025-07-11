@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
 import '../utils/app_text_styles.dart';
 
+// Merge with existing custom widgets from your original file
 class CustomButton extends StatelessWidget {
   final String text;
   final VoidCallback? onPressed;
@@ -12,6 +13,7 @@ class CustomButton extends StatelessWidget {
   final double? width;
   final double height;
   final EdgeInsets padding;
+  final IconData? icon;
 
   const CustomButton({
     Key? key,
@@ -24,6 +26,7 @@ class CustomButton extends StatelessWidget {
     this.width,
     this.height = 52,
     this.padding = const EdgeInsets.symmetric(horizontal: 24),
+    this.icon,
   }) : super(key: key);
 
   @override
@@ -61,13 +64,23 @@ class CustomButton extends StatelessWidget {
                   ),
                 ),
               )
-            : Text(
-                text,
-                style: AppTextStyles.buttonMedium.copyWith(
-                  color: isOutlined 
-                      ? (textColor ?? AppColors.primary)
-                      : (textColor ?? AppColors.white),
-                ),
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, size: 18),
+                    const SizedBox(width: 8),
+                  ],
+                  Text(
+                    text,
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: isOutlined 
+                          ? (textColor ?? AppColors.primary)
+                          : (textColor ?? AppColors.white),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
       ),
     );
@@ -86,6 +99,7 @@ class CustomTextField extends StatefulWidget {
   final Widget? suffixIcon;
   final bool enabled;
   final int maxLines;
+  final int? minLines;
 
   const CustomTextField({
     Key? key,
@@ -100,6 +114,7 @@ class CustomTextField extends StatefulWidget {
     this.suffixIcon,
     this.enabled = true,
     this.maxLines = 1,
+    this.minLines,
   }) : super(key: key);
 
   @override
@@ -108,6 +123,7 @@ class CustomTextField extends StatefulWidget {
 
 class _CustomTextFieldState extends State<CustomTextField> {
   bool _isObscured = true;
+  bool _isFocused = false;
 
   @override
   Widget build(BuildContext context) {
@@ -117,66 +133,83 @@ class _CustomTextFieldState extends State<CustomTextField> {
         Text(
           widget.label,
           style: AppTextStyles.labelMedium.copyWith(
-            color: AppColors.textSecondary,
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w600,
           ),
         ),
         const SizedBox(height: 8),
-        TextFormField(
-          controller: widget.controller,
-          obscureText: widget.isPassword ? _isObscured : false,
-          keyboardType: widget.keyboardType,
-          validator: widget.validator,
-          onChanged: widget.onChanged,
-          enabled: widget.enabled,
-          maxLines: widget.maxLines,
-          style: AppTextStyles.bodyMedium,
-          decoration: InputDecoration(
-            hintText: widget.hintText ?? widget.label,
-            hintStyle: AppTextStyles.bodyMedium.copyWith(
-              color: AppColors.textTertiary,
+        Focus(
+          onFocusChange: (hasFocus) {
+            setState(() {
+              _isFocused = hasFocus;
+            });
+          },
+          child: TextFormField(
+            controller: widget.controller,
+            obscureText: widget.isPassword ? _isObscured : false,
+            keyboardType: widget.keyboardType,
+            validator: widget.validator,
+            onChanged: widget.onChanged,
+            enabled: widget.enabled,
+            maxLines: widget.isPassword ? 1 : widget.maxLines,
+            minLines: widget.minLines,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: AppColors.textPrimary,
             ),
-            prefixIcon: widget.prefixIcon != null
-                ? Icon(
-                    widget.prefixIcon,
-                    color: AppColors.textTertiary,
-                    size: 20,
-                  )
-                : null,
-            suffixIcon: widget.isPassword
-                ? IconButton(
-                    icon: Icon(
-                      _isObscured ? Icons.visibility_off : Icons.visibility,
-                      color: AppColors.textTertiary,
+            decoration: InputDecoration(
+              hintText: widget.hintText ?? widget.label,
+              hintStyle: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textTertiary,
+              ),
+              prefixIcon: widget.prefixIcon != null
+                  ? Icon(
+                      widget.prefixIcon,
+                      color: _isFocused ? AppColors.primary : AppColors.textTertiary,
                       size: 20,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _isObscured = !_isObscured;
-                      });
-                    },
-                  )
-                : widget.suffixIcon,
-            filled: true,
-            fillColor: AppColors.gray50,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppColors.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppColors.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppColors.primary, width: 2),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppColors.error),
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 16,
+                    )
+                  : null,
+              suffixIcon: widget.isPassword
+                  ? IconButton(
+                      icon: Icon(
+                        _isObscured ? Icons.visibility_off : Icons.visibility,
+                        color: AppColors.textTertiary,
+                        size: 20,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _isObscured = !_isObscured;
+                        });
+                      },
+                    )
+                  : widget.suffixIcon,
+              filled: true,
+              fillColor: widget.enabled 
+                  ? (_isFocused ? AppColors.white : AppColors.gray50)
+                  : AppColors.gray100,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: AppColors.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: AppColors.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: AppColors.primary, width: 2),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: AppColors.error),
+              ),
+              focusedErrorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: AppColors.error, width: 2),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 16,
+              ),
             ),
           ),
         ),
@@ -204,25 +237,44 @@ class LoadingOverlay extends StatelessWidget {
         child,
         if (isLoading)
           Container(
-            color: Colors.black54,
+            color: AppColors.overlay,
             child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-                  ),
-                  if (message != null) ...[
-                    const SizedBox(height: 16),
-                    Text(
-                      message!,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.white,
-                      ),
-                      textAlign: TextAlign.center,
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: AppColors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.shadow,
+                      blurRadius: 20,
+                      offset: const Offset(0, 4),
                     ),
                   ],
-                ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(
+                      width: 32,
+                      height: 32,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                      ),
+                    ),
+                    if (message != null) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        message!,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -253,22 +305,38 @@ class CustomCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final card = Container(
       margin: margin,
-      child: Material(
+      decoration: BoxDecoration(
         color: backgroundColor ?? AppColors.white,
-        elevation: elevation ?? 2,
-        borderRadius: borderRadius ?? BorderRadius.circular(12),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: borderRadius ?? BorderRadius.circular(12),
-          child: Padding(
-            padding: padding ?? const EdgeInsets.all(16),
-            child: child,
+        borderRadius: borderRadius ?? BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.shadow,
+            blurRadius: elevation ?? 4,
+            offset: const Offset(0, 2),
           ),
-        ),
+        ],
+      ),
+      child: Padding(
+        padding: padding ?? const EdgeInsets.all(20),
+        child: child,
       ),
     );
+
+    if (onTap != null) {
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: borderRadius ?? BorderRadius.circular(16),
+          child: card,
+        ),
+      );
+    }
+
+    return card;
   }
 }
 

@@ -4,9 +4,10 @@ import '../../providers/auth_provider.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/app_text_styles.dart';
 import '../../widgets/custom_widgets.dart';
+import '../../widgets/common_widgets.dart' as common;
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({Key? key}) : super(key: key);
+  const RegisterScreen({super.key});
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -35,12 +36,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     context.read<AuthProvider>().clearError();
     
     if (!_acceptTerms) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Anda harus menyetujui syarat dan ketentuan'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      _showWarningDialog('Syarat & Ketentuan', 'Anda harus menyetujui syarat dan ketentuan untuk melanjutkan.');
       return;
     }
 
@@ -55,19 +51,40 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
 
       if (success && mounted) {
-        // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Registrasi berhasil! Silakan login dengan akun Anda.'),
-            backgroundColor: AppColors.success,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-        
-        // Go back to login screen
-        Navigator.of(context).pop();
+        // Show success message and go back
+        _showSuccessDialog();
       }
     }
+  }
+
+  void _showSuccessDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => common.CustomAlertDialog(
+        title: 'Registrasi Berhasil',
+        message: 'Akun Anda telah berhasil dibuat. Silakan login dengan akun yang baru dibuat.',
+        icon: Icons.check_circle_outline,
+        iconColor: AppColors.success,
+        primaryButtonText: 'Login Sekarang',
+        onPrimaryPressed: () {
+          Navigator.pop(context); // Close dialog
+          Navigator.pop(context); // Go back to login
+        },
+      ),
+    );
+  }
+
+  void _showWarningDialog(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => common.CustomAlertDialog(
+        title: title,
+        message: message,
+        icon: Icons.warning_amber_outlined,
+        iconColor: AppColors.warning,
+        primaryButtonText: 'OK',
+      ),
+    );
   }
 
   String? _validateUsername(String? value) {
@@ -137,7 +154,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       body: SafeArea(
         child: Consumer<AuthProvider>(
           builder: (context, authProvider, child) {
-            return LoadingOverlay(
+            return common.LoadingOverlay(
               isLoading: authProvider.isLoading,
               message: 'Membuat akun...',
               child: SingleChildScrollView(
@@ -189,13 +206,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       const SizedBox(height: 32),
                       
                       // Error message
-                      if (authProvider.errorMessage != null)
-                        ErrorMessage(
+                      if (authProvider.errorMessage != null) ...[
+                        common.ErrorMessage(
                           message: authProvider.errorMessage!,
                           onRetry: () => authProvider.clearError(),
                         ),
-                      
-                      const SizedBox(height: 8),
+                        const SizedBox(height: 16),
+                      ],
                       
                       // Username field
                       CustomTextField(
@@ -205,7 +222,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         prefixIcon: Icons.person_outlined,
                         validator: _validateUsername,
                         onChanged: (value) {
-                          // Clear errors when user starts typing
                           if (authProvider.errorMessage != null) {
                             authProvider.clearError();
                           }
@@ -393,7 +409,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       
                       const SizedBox(height: 32),
                       
-                      // Additional info
+                      // Security info
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -403,18 +419,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             color: AppColors.primary.withOpacity(0.2),
                           ),
                         ),
-                        child: Row(
+                        child: const Row(
                           children: [
                             Icon(
-                              Icons.info_outline,
+                              Icons.security,
                               color: AppColors.primary,
                               size: 20,
                             ),
-                            const SizedBox(width: 12),
+                            SizedBox(width: 12),
                             Expanded(
                               child: Text(
                                 'Akun Anda akan aman dengan enkripsi end-to-end dan data keuangan tidak akan dibagikan kepada pihak ketiga.',
-                                style: AppTextStyles.bodySmall.copyWith(
+                                style: TextStyle(
+                                  fontSize: 12,
                                   color: AppColors.primary,
                                 ),
                               ),
@@ -438,7 +455,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       padding: const EdgeInsets.only(bottom: 2),
       child: Row(
         children: [
-          Icon(
+          const Icon(
             Icons.check_circle_outline,
             size: 14,
             color: AppColors.textTertiary,
