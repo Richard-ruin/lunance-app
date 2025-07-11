@@ -6,7 +6,7 @@ import socket
 from dotenv import load_dotenv
 
 from .config.database import db_manager, create_indexes
-from .routers import auth
+from .routers import auth, chat
 
 load_dotenv()
 
@@ -24,7 +24,7 @@ def get_local_ip():
 app = FastAPI(
     title=os.getenv("APP_NAME", "Lunance API"),
     version=os.getenv("APP_VERSION", "1.0.0"),
-    description="Backend API untuk Lunance - Personal Finance AI Chatbot",
+    description="Backend API untuk Lunance - Personal Finance AI Chatbot dengan Luna AI",
     docs_url="/docs",
     redoc_url="/redoc"
 )
@@ -59,6 +59,7 @@ async def startup_event():
         
         print("=" * 60)
         print("🚀 Lunance Backend API berhasil dimulai!")
+        print(f"🤖 Luna AI Chatbot: Ready")
         print(f"🌐 Server berjalan di:")
         print(f"   • Local:   http://localhost:{port}")
         print(f"   • Network: http://{local_ip}:{port}")
@@ -66,6 +67,7 @@ async def startup_event():
         print(f"   • Swagger UI: http://{local_ip}:{port}/docs")
         print(f"   • ReDoc:      http://{local_ip}:{port}/redoc")
         print(f"🔍 Health Check: http://{local_ip}:{port}/health")
+        print(f"💬 WebSocket Chat: ws://{local_ip}:{port}/api/v1/chat/ws/{{user_id}}")
         print("=" * 60)
         
     except Exception as e:
@@ -93,6 +95,7 @@ async def global_exception_handler(request, exc):
 
 # Include routers
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(chat.router, prefix="/api/v1")
 
 # Root endpoint
 @app.get("/")
@@ -100,10 +103,11 @@ async def root():
     """Root endpoint untuk health check"""
     return {
         "success": True,
-        "message": "Lunance Backend API berjalan dengan baik!",
+        "message": "Lunance Backend API dengan Luna AI berjalan dengan baik!",
         "data": {
             "app_name": os.getenv("APP_NAME", "Lunance API"),
             "version": os.getenv("APP_VERSION", "1.0.0"),
+            "features": ["Luna AI Chatbot", "WebSocket Support", "Real-time Chat"],
             "docs": "/docs",
             "redoc": "/redoc"
         }
@@ -124,6 +128,8 @@ async def health_check():
             "message": "Aplikasi sehat",
             "data": {
                 "database": "connected",
+                "luna_ai": "ready",
+                "websocket": "available",
                 "status": "healthy"
             }
         }
@@ -133,6 +139,8 @@ async def health_check():
             "message": "Aplikasi tidak sehat",
             "data": {
                 "database": "disconnected",
+                "luna_ai": "unavailable",
+                "websocket": "unavailable",
                 "status": "unhealthy",
                 "error": str(e)
             }
@@ -148,18 +156,34 @@ async def api_info():
         "data": {
             "name": "Lunance Backend API",
             "version": "1.0.0",
-            "description": "Backend API untuk aplikasi personal finance AI chatbot",
+            "description": "Backend API untuk aplikasi personal finance AI chatbot dengan Luna AI",
             "features": [
                 "User Authentication & Authorization",
                 "Profile & Financial Setup",
                 "JWT Token Management",
                 "MongoDB Integration",
-                "AI-Ready Architecture"
+                "Luna AI Chatbot",
+                "Real-time WebSocket Chat",
+                "Chat History Management",
+                "Financial AI Assistant"
             ],
             "endpoints": {
                 "auth": "/api/v1/auth",
+                "chat": "/api/v1/chat",
+                "websocket": "/api/v1/chat/ws/{user_id}",
                 "docs": "/docs",
                 "health": "/health"
+            },
+            "luna_ai": {
+                "name": "Luna",
+                "description": "Personal Finance AI Assistant",
+                "capabilities": [
+                    "Financial advice and tips",
+                    "Budget planning assistance",
+                    "Expense tracking guidance",
+                    "Investment basics",
+                    "Savings recommendations"
+                ]
             }
         }
     }

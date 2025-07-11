@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../utils/app_colors.dart';
+import '../../providers/chat_provider.dart';
 import 'left_sidebar.dart';
 import 'right_sidebar.dart';
 import 'chat_view.dart';
@@ -70,6 +72,16 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       parent: _overlayController,
       curve: Curves.easeInOut,
     ));
+
+    // Initialize chat provider
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeChatProvider();
+    });
+  }
+
+  void _initializeChatProvider() {
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+    // The chat provider will be initialized in ChatView
   }
 
   @override
@@ -138,19 +150,23 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     setState(() {
       _selectedIndex = index;
     });
+    // Close sidebars when navigating
+    _closeSidebars();
   }
 
-  String _getPageTitle() {
-    switch (_selectedIndex) {
-      case 0:
-        return 'Chat dengan Luna AI';
-      case 1:
-        return 'Explore Finance';
-      case 2:
-        return 'Chat History';
-      default:
-        return 'Lunance';
-    }
+  void _onConversationSelected(String conversationId) {
+    // Handle conversation selection from sidebar
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+    final conversation = chatProvider.conversations.firstWhere(
+      (conv) => conv.id == conversationId,
+      orElse: () => chatProvider.conversations.first,
+    );
+    chatProvider.setActiveConversation(conversation);
+    
+    // Navigate to chat view
+    setState(() {
+      _selectedIndex = 0;
+    });
   }
 
   Widget _getMainContentView() {
@@ -222,6 +238,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                           selectedIndex: _selectedIndex,
                           onNavigationItemSelected: _onNavigationItemSelected,
                           onToggleSidebar: _toggleLeftSidebar,
+                          onConversationSelected: _onConversationSelected,
                         )
                       : Container(),
                 );
@@ -320,15 +337,66 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
           
           // Title
           Expanded(
-            child: Text(
-              _getPageTitle(),
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
-              ),
-            ),
+            child: _selectedIndex == 0
+                ? Consumer<ChatProvider>(
+                    builder: (context, chatProvider, child) {
+                      return Text(
+                        chatProvider.hasActiveConversation 
+                            ? chatProvider.activeConversation!.displayTitle
+                            : 'Chat dengan Luna AI',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      );
+                    },
+                  )
+                : Text(
+                    _getPageTitleString(),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
           ),
+          
+          // Connection Status Indicator (only for chat view)
+          if (_selectedIndex == 0)
+            Consumer<ChatProvider>(
+              builder: (context, chatProvider, child) {
+                return Container(
+                  margin: const EdgeInsets.only(right: 12),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: chatProvider.isConnected 
+                              ? AppColors.success 
+                              : AppColors.error,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        chatProvider.isConnected ? 'Online' : 'Offline',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: chatProvider.isConnected 
+                              ? AppColors.success 
+                              : AppColors.error,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
           
           // Right Profile Toggle (when sidebar is closed)
           if (!_isRightSidebarOpen)
@@ -350,5 +418,16 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         ],
       ),
     );
+  }
+
+  String _getPageTitleString() {
+    switch (_selectedIndex) {
+      case 1:
+        return 'Explore Finance';
+      case 2:
+        return 'Chat History';
+      default:
+        return 'Chat dengan Luna AI';
+    }
   }
 }
