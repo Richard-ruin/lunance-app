@@ -56,7 +56,7 @@ chat_service = ChatService()
 
 @router.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
-    """WebSocket endpoint untuk real-time chat dengan timezone Indonesia"""
+    """WebSocket endpoint untuk real-time chat dengan Enhanced Luna AI"""
     await manager.connect(websocket, user_id)
     
     try:
@@ -88,7 +88,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                     "timestamp": IndonesiaDatetime.now().isoformat()
                 }, user_id)
                 
-                # Process message
+                # Process message dengan Enhanced Luna
                 result = await chat_service.send_message(user_id, conversation_id, user_message)
                 
                 # Stop typing indicator
@@ -119,8 +119,8 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                     "timestamp": IndonesiaDatetime.now().isoformat()
                 }, user_id)
                 
-                # Send Luna response
-                await manager.send_personal_message({
+                # Send Luna response dengan metadata financial jika ada
+                luna_response_data = {
                     "type": WSMessageType.CHAT_MESSAGE,
                     "data": {
                         "message": {
@@ -130,11 +130,19 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                             "content": result["luna_response"].content,
                             "timestamp": luna_timestamp_wib.isoformat(),
                             "status": "delivered",
-                            "timezone": "WIB"
+                            "timezone": "WIB",
+                            "message_type": result["luna_response"].message_type,
                         }
                     },
                     "timestamp": IndonesiaDatetime.now().isoformat()
-                }, user_id)
+                }
+                
+                # Add financial metadata if available
+                if result.get("financial_data"):
+                    luna_response_data["data"]["financial_data"] = result["financial_data"]
+                    luna_response_data["data"]["response_type"] = result.get("response_type")
+                
+                await manager.send_personal_message(luna_response_data, user_id)
                 
             elif message_type == WSMessageType.TYPING_START:
                 # Handle typing indicator (could be sent to other users in group chat)
@@ -270,7 +278,7 @@ async def get_conversation_messages(
             # Convert timestamp ke Indonesia timezone
             timestamp_wib = IndonesiaDatetime.from_utc(msg.timestamp)
             
-            message_list.append({
+            message_data = {
                 "id": msg.id,
                 "conversation_id": msg.conversation_id,
                 "sender_type": msg.sender_type,
@@ -281,7 +289,13 @@ async def get_conversation_messages(
                 "timezone": "WIB",
                 "formatted_time": IndonesiaDatetime.format_time_only(msg.timestamp),
                 "relative_time": IndonesiaDatetime.format_relative(msg.timestamp)
-            })
+            }
+            
+            # Add metadata if available (financial data)
+            if msg.metadata:
+                message_data["metadata"] = msg.metadata
+            
+            message_list.append(message_data)
         
         # Convert conversation timestamps
         created_time_wib = IndonesiaDatetime.from_utc(conversation.created_at)
@@ -318,45 +332,56 @@ async def send_message_http(
     request: ChatMessageRequest,
     current_user: User = Depends(get_current_user)
 ):
-    """Mengirim pesan melalui HTTP dengan timezone Indonesia yang benar"""
+    """Mengirim pesan melalui HTTP dengan Enhanced Luna AI"""
     try:
         # Verify conversation belongs to user
         conversation = await chat_service.get_conversation_by_id(conversation_id)
         if not conversation or conversation.user_id != current_user.id:
             raise HTTPException(status_code=404, detail="Percakapan tidak ditemukan")
         
+        # Enhanced send_message dengan financial parsing
         result = await chat_service.send_message(current_user.id, conversation_id, request.message)
         
         # Convert timestamps ke Indonesia timezone
         user_timestamp_wib = IndonesiaDatetime.from_utc(result["user_message"].timestamp)
         luna_timestamp_wib = IndonesiaDatetime.from_utc(result["luna_response"].timestamp)
         
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "message": "Pesan berhasil dikirim",
-                "data": {
-                    "user_message": {
-                        "id": result["user_message"].id,
-                        "content": result["user_message"].content,
-                        "timestamp": user_timestamp_wib.isoformat(),
-                        "sender_type": "user",
-                        "timezone": "WIB",
-                        "formatted_time": IndonesiaDatetime.format_time_only(result["user_message"].timestamp)
-                    },
-                    "luna_response": {
-                        "id": result["luna_response"].id,
-                        "content": result["luna_response"].content,
-                        "timestamp": luna_timestamp_wib.isoformat(),
-                        "sender_type": "luna",
-                        "timezone": "WIB",
-                        "formatted_time": IndonesiaDatetime.format_time_only(result["luna_response"].timestamp)
-                    },
-                    "current_time_wib": IndonesiaDatetime.format(IndonesiaDatetime.now())
-                }
+        response_data = {
+            "success": True,
+            "message": "Pesan berhasil dikirim",
+            "data": {
+                "user_message": {
+                    "id": result["user_message"].id,
+                    "content": result["user_message"].content,
+                    "timestamp": user_timestamp_wib.isoformat(),
+                    "sender_type": "user",
+                    "timezone": "WIB",
+                    "formatted_time": IndonesiaDatetime.format_time_only(result["user_message"].timestamp)
+                },
+                "luna_response": {
+                    "id": result["luna_response"].id,
+                    "content": result["luna_response"].content,
+                    "timestamp": luna_timestamp_wib.isoformat(),
+                    "sender_type": "luna",
+                    "timezone": "WIB",
+                    "formatted_time": IndonesiaDatetime.format_time_only(result["luna_response"].timestamp),
+                    "message_type": result["luna_response"].message_type
+                },
+                "current_time_wib": IndonesiaDatetime.format(IndonesiaDatetime.now())
             }
-        )
+        }
+        
+        # Add financial data if available
+        if result.get("financial_data"):
+            response_data["data"]["financial_data"] = result["financial_data"]
+            response_data["data"]["response_type"] = result.get("response_type")
+        
+        # Add metadata if available
+        if result["luna_response"].metadata:
+            response_data["data"]["luna_response"]["metadata"] = result["luna_response"].metadata
+        
+        return JSONResponse(status_code=200, content=response_data)
+        
     except HTTPException:
         raise
     except Exception as e:
@@ -483,3 +508,44 @@ async def get_chat_statistics(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gagal mengambil statistik: {str(e)}")
+
+# Endpoint untuk testing financial parsing (development only)
+@router.post("/test-financial-parsing")
+async def test_financial_parsing(
+    message: dict,
+    current_user: User = Depends(get_current_user)
+):
+    """Test endpoint untuk financial parsing (development only)"""
+    import os
+    if os.getenv("DEBUG", "False").lower() != "true":
+        raise HTTPException(status_code=404, detail="Endpoint tidak tersedia")
+    
+    try:
+        from ..services.finance_service import FinanceService
+        finance_service = FinanceService()
+        
+        user_message = message.get("message", "")
+        if not user_message:
+            raise HTTPException(status_code=400, detail="Message required")
+        
+        result = finance_service.parse_financial_message(user_message)
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "message": "Parsing test berhasil",
+                "data": {
+                    "original_message": user_message,
+                    "parse_result": result,
+                    "examples": [
+                        "Dapat gaji 5 juta",
+                        "Bayar listrik 200 ribu", 
+                        "Belanja groceries 150rb",
+                        "Mau nabung buat beli laptop 10 juta"
+                    ]
+                }
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error parsing: {str(e)}")

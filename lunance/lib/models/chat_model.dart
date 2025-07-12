@@ -8,6 +8,7 @@ class ChatMessage {
   final String messageType;
   final String status;
   final DateTime timestamp;
+  final Map<String, dynamic>? metadata; // Support for financial data
 
   ChatMessage({
     required this.id,
@@ -17,10 +18,22 @@ class ChatMessage {
     this.messageType = 'text',
     this.status = 'sent',
     required this.timestamp,
+    this.metadata,
   });
 
   bool get isUser => senderType == 'user';
   bool get isLuna => senderType == 'luna';
+  
+  // Check if this is a financial confirmation message
+  bool get isFinancialConfirmation => 
+      messageType == 'financial_data' || 
+      (metadata != null && metadata!['response_type'] == 'financial_confirmation');
+  
+  // Get pending data ID if this is a financial confirmation
+  String? get pendingDataId => metadata?['pending_data_id'];
+  
+  // Get parsed financial data
+  Map<String, dynamic>? get financialData => metadata?['parsed_data'];
 
   /// Get timestamp in Indonesia timezone
   DateTime get indonesiaTimestamp => IndonesiaTimeHelper.fromUtc(timestamp);
@@ -42,8 +55,8 @@ class ChatMessage {
       content: json['content'] ?? '',
       messageType: json['message_type'] ?? 'text',
       status: json['status'] ?? 'sent',
-      // Parse timestamp from backend (UTC) and keep as UTC for internal use
       timestamp: DateTime.parse(json['timestamp'] ?? DateTime.now().toIso8601String()).toUtc(),
+      metadata: json['metadata'] as Map<String, dynamic>?,
     );
   }
 
@@ -56,6 +69,7 @@ class ChatMessage {
       'message_type': messageType,
       'status': status,
       'timestamp': timestamp.toIso8601String(),
+      'metadata': metadata,
     };
   }
 
@@ -211,6 +225,169 @@ class Conversation {
 
   @override
   int get hashCode => id.hashCode;
+}
+
+// Financial data classes for better type safety
+class PendingFinancialData {
+  final String id;
+  final String dataType; // "transaction" or "savings_goal"
+  final Map<String, dynamic> parsedData;
+  final String originalMessage;
+  final String lunaResponse;
+  final DateTime expiresAt;
+  final DateTime createdAt;
+
+  PendingFinancialData({
+    required this.id,
+    required this.dataType,
+    required this.parsedData,
+    required this.originalMessage,
+    required this.lunaResponse,
+    required this.expiresAt,
+    required this.createdAt,
+  });
+
+  bool get isExpired => DateTime.now().isAfter(expiresAt);
+  
+  Duration get timeRemaining => expiresAt.difference(DateTime.now());
+  
+  String get formattedTimeRemaining {
+    final remaining = timeRemaining;
+    if (remaining.isNegative) return 'Expired';
+    
+    final hours = remaining.inHours;
+    final minutes = remaining.inMinutes % 60;
+    
+    if (hours > 0) {
+      return '${hours}h ${minutes}m';
+    } else {
+      return '${minutes}m';
+    }
+  }
+
+  factory PendingFinancialData.fromJson(Map<String, dynamic> json) {
+    return PendingFinancialData(
+      id: json['id'] ?? '',
+      dataType: json['data_type'] ?? '',
+      parsedData: json['parsed_data'] as Map<String, dynamic>? ?? {},
+      originalMessage: json['original_message'] ?? '',
+      lunaResponse: json['luna_response'] ?? '',
+      expiresAt: DateTime.parse(json['expires_at'] ?? DateTime.now().toIso8601String()).toUtc(),
+      createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toIso8601String()).toUtc(),
+    );
+  }
+}
+
+class FinancialTransaction {
+  final String id;
+  final String type; // "income" or "expense"
+  final double amount;
+  final String category;
+  final String? description;
+  final DateTime date;
+  final String status;
+  final DateTime createdAt;
+
+  FinancialTransaction({
+    required this.id,
+    required this.type,
+    required this.amount,
+    required this.category,
+    this.description,
+    required this.date,
+    required this.status,
+    required this.createdAt,
+  });
+
+  bool get isIncome => type == 'income';
+  bool get isExpense => type == 'expense';
+  
+  String get formattedAmount {
+    return 'Rp ${amount.toStringAsFixed(0).replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), 
+      (Match m) => '${m[1]}.'
+    )}';
+  }
+
+  factory FinancialTransaction.fromJson(Map<String, dynamic> json) {
+    return FinancialTransaction(
+      id: json['id'] ?? '',
+      type: json['type'] ?? '',
+      amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
+      category: json['category'] ?? '',
+      description: json['description'],
+      date: DateTime.parse(json['date'] ?? DateTime.now().toIso8601String()).toUtc(),
+      status: json['status'] ?? '',
+      createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toIso8601String()).toUtc(),
+    );
+  }
+}
+
+class SavingsGoal {
+  final String id;
+  final String itemName;
+  final double targetAmount;
+  final double currentAmount;
+  final String? description;
+  final DateTime? targetDate;
+  final String status;
+  final DateTime createdAt;
+
+  SavingsGoal({
+    required this.id,
+    required this.itemName,
+    required this.targetAmount,
+    required this.currentAmount,
+    this.description,
+    this.targetDate,
+    required this.status,
+    required this.createdAt,
+  });
+
+  double get progressPercentage {
+    if (targetAmount <= 0) return 0.0;
+    return (currentAmount / targetAmount * 100).clamp(0.0, 100.0);
+  }
+
+  double get remainingAmount => (targetAmount - currentAmount).clamp(0.0, double.infinity);
+
+  bool get isCompleted => currentAmount >= targetAmount;
+
+  String get formattedTargetAmount {
+    return 'Rp ${targetAmount.toStringAsFixed(0).replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), 
+      (Match m) => '${m[1]}.'
+    )}';
+  }
+
+  String get formattedCurrentAmount {
+    return 'Rp ${currentAmount.toStringAsFixed(0).replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), 
+      (Match m) => '${m[1]}.'
+    )}';
+  }
+
+  String get formattedRemainingAmount {
+    return 'Rp ${remainingAmount.toStringAsFixed(0).replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), 
+      (Match m) => '${m[1]}.'
+    )}';
+  }
+
+  factory SavingsGoal.fromJson(Map<String, dynamic> json) {
+    return SavingsGoal(
+      id: json['id'] ?? '',
+      itemName: json['item_name'] ?? '',
+      targetAmount: (json['target_amount'] as num?)?.toDouble() ?? 0.0,
+      currentAmount: (json['current_amount'] as num?)?.toDouble() ?? 0.0,
+      description: json['description'],
+      targetDate: json['target_date'] != null 
+          ? DateTime.parse(json['target_date']).toUtc()
+          : null,
+      status: json['status'] ?? '',
+      createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toIso8601String()).toUtc(),
+    );
+  }
 }
 
 // WebSocket message types

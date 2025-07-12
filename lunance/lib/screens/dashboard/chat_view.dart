@@ -125,6 +125,25 @@ class _ChatViewState extends State<ChatView> with WidgetsBindingObserver {
     return IndonesiaTimeHelper.formatTimeOnly(timestamp);
   }
 
+  // Format currency for financial data
+  String _formatCurrency(double amount) {
+    return 'Rp ${amount.toStringAsFixed(0).replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), 
+      (Match m) => '${m[1]}.'
+    )}';
+  }
+
+  // Handle financial confirmation
+  void _handleFinancialConfirmation(ChatMessage message, bool confirmed) {
+    if (message.pendingDataId != null) {
+      final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+      
+      // Send confirmation message
+      final confirmationText = confirmed ? 'ya' : 'tidak';
+      chatProvider.sendMessageViaWebSocket(confirmationText);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<ChatProvider>(
@@ -341,7 +360,7 @@ class _ChatViewState extends State<ChatView> with WidgetsBindingObserver {
                   child: Column(
                     children: [
                       Text(
-                        'Contoh pertanyaan:',
+                        'Contoh yang bisa dicoba:',
                         style: AppTextStyles.labelMedium.copyWith(
                           color: AppColors.textSecondary,
                           fontWeight: FontWeight.w600,
@@ -349,9 +368,10 @@ class _ChatViewState extends State<ChatView> with WidgetsBindingObserver {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '• "Bagaimana cara mengatur budget bulanan?"\n'
-                        '• "Tips menabung untuk dana darurat"\n'
-                        '• "Strategi investasi untuk pemula"',
+                        '• "Dapat gaji 5 juta"\n'
+                        '• "Bayar listrik 200 ribu"\n'
+                        '• "Mau nabung buat beli laptop 10 juta"\n'
+                        '• "Tips mengatur budget bulanan"',
                         style: AppTextStyles.bodySmall.copyWith(
                           color: AppColors.textTertiary,
                         ),
@@ -425,56 +445,68 @@ class _ChatViewState extends State<ChatView> with WidgetsBindingObserver {
               constraints: BoxConstraints(
                 maxWidth: MediaQuery.of(context).size.width * 0.75,
               ),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
-              ),
-              decoration: BoxDecoration(
-                color: message.isUser 
-                    ? AppColors.primary 
-                    : AppColors.gray100,
-                borderRadius: BorderRadius.circular(18).copyWith(
-                  bottomRight: message.isUser 
-                      ? const Radius.circular(4)
-                      : const Radius.circular(18),
-                  bottomLeft: message.isUser 
-                      ? const Radius.circular(18)
-                      : const Radius.circular(4),
-                ),
-              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    message.content,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: message.isUser 
-                          ? AppColors.white 
-                          : AppColors.gray800,
+                  // Main message bubble
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _formatTime(message.timestamp),
-                        style: AppTextStyles.caption.copyWith(
-                          color: message.isUser 
-                              ? AppColors.white.withOpacity(0.7)
-                              : AppColors.gray500,
-                        ),
+                    decoration: BoxDecoration(
+                      color: message.isUser 
+                          ? AppColors.primary 
+                          : AppColors.gray100,
+                      borderRadius: BorderRadius.circular(18).copyWith(
+                        bottomRight: message.isUser 
+                            ? const Radius.circular(4)
+                            : const Radius.circular(18),
+                        bottomLeft: message.isUser 
+                            ? const Radius.circular(18)
+                            : const Radius.circular(4),
                       ),
-                      if (message.isUser) ...[
-                        const SizedBox(width: 4),
-                        Icon(
-                          _getStatusIcon(message.status),
-                          size: 12,
-                          color: AppColors.white.withOpacity(0.7),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          message.content,
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: message.isUser 
+                                ? AppColors.white 
+                                : AppColors.gray800,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _formatTime(message.timestamp),
+                              style: AppTextStyles.caption.copyWith(
+                                color: message.isUser 
+                                    ? AppColors.white.withOpacity(0.7)
+                                    : AppColors.gray500,
+                              ),
+                            ),
+                            if (message.isUser) ...[
+                              const SizedBox(width: 4),
+                              Icon(
+                                _getStatusIcon(message.status),
+                                size: 12,
+                                color: AppColors.white.withOpacity(0.7),
+                              ),
+                            ],
+                          ],
                         ),
                       ],
-                    ],
+                    ),
                   ),
+                  
+                  // Financial confirmation buttons (for Luna's financial confirmation messages)
+                  if (message.isLuna && message.isFinancialConfirmation)
+                    _buildFinancialConfirmationButtons(message),
                 ],
               ),
             ),
@@ -504,6 +536,125 @@ class _ChatViewState extends State<ChatView> with WidgetsBindingObserver {
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildFinancialConfirmationButtons(ChatMessage message) {
+    // Show financial data summary if available
+    Widget financialSummary = Container();
+    
+    if (message.financialData != null) {
+      final data = message.financialData!;
+      final dataType = data['data_type'] as String?;
+      final parsedData = data['parsed_data'] as Map<String, dynamic>?;
+      
+      if (parsedData != null) {
+        financialSummary = Container(
+          margin: const EdgeInsets.only(top: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.primary),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (dataType == 'transaction') ...[
+                Text(
+                  'Transaksi ${parsedData['type'] == 'income' ? 'Pemasukan' : 'Pengeluaran'}',
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Jumlah: ${_formatCurrency(parsedData['amount']?.toDouble() ?? 0)}',
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary),
+                ),
+                Text(
+                  'Kategori: ${parsedData['category'] ?? 'Lainnya'}',
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary),
+                ),
+              ] else if (dataType == 'savings_goal') ...[
+                Text(
+                  'Target Tabungan',
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Item: ${parsedData['item_name'] ?? 'Target baru'}',
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary),
+                ),
+                Text(
+                  'Target: ${_formatCurrency(parsedData['target_amount']?.toDouble() ?? 0)}',
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary),
+                ),
+              ],
+            ],
+          ),
+        );
+      }
+    }
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        financialSummary,
+        Container(
+          margin: const EdgeInsets.only(top: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Confirm button
+              ElevatedButton(
+                onPressed: () => _handleFinancialConfirmation(message, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.success,
+                  foregroundColor: AppColors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  minimumSize: const Size(60, 32),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: Text(
+                  'Ya',
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: AppColors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Cancel button
+              OutlinedButton(
+                onPressed: () => _handleFinancialConfirmation(message, false),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.error,
+                  side: BorderSide(color: AppColors.error),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  minimumSize: const Size(60, 32),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: Text(
+                  'Tidak',
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: AppColors.error,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
