@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../models/chat_model.dart';
 import '../services/chat_service.dart';
 import '../services/websocket_service.dart';
+import '../utils/timezone_utils.dart';
 
 enum ChatState {
   initial,
@@ -58,6 +59,9 @@ class ChatProvider with ChangeNotifier {
         _isConnected = true;
         _clearError(); // Clear any previous errors
         notifyListeners();
+        
+        // Auto-cleanup setelah connect
+        await _performAutoCleanup();
       }
       return success;
     } catch (e) {
@@ -72,12 +76,28 @@ class ChatProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Create new conversation
-  Future<bool> createNewConversation() async {
-    if (_state == ChatState.loading || _state == ChatState.sending) {
-      return false; // Prevent multiple simultaneous operations
+  // Auto-cleanup empty conversations
+  Future<void> _performAutoCleanup() async {
+    try {
+      final response = await _chatService.manualCleanup();
+      if (response['success'] == true && response['data'] != null) {
+        final cleanupStats = response['data']['cleanup_stats'];
+        final totalCleaned = cleanupStats['total_cleaned'] ?? 0;
+        
+        if (totalCleaned > 0) {
+          debugPrint('🧹 Auto-cleanup: $totalCleaned conversations cleaned');
+          // Reload conversations setelah cleanup
+          await loadConversations(limit: 20);
+        }
+      }
+    } catch (e) {
+      debugPrint('Auto-cleanup error: $e');
+      // Don't show error to user, ini background process
     }
+  }
 
+  // Create new conversation - TANPA VALIDASI untuk user baru
+  Future<bool> createNewConversation() async {
     _setState(ChatState.loading);
     
     try {
@@ -95,6 +115,13 @@ class ChatProvider with ChangeNotifier {
         _currentMessages.clear();
         
         _setState(ChatState.loaded);
+        
+        // Log cleanup stats jika ada
+        if (response['data']['cleanup_stats'] != null) {
+          final cleanupStats = response['data']['cleanup_stats'];
+          debugPrint('🧹 Cleanup during new conversation: $cleanupStats');
+        }
+        
         return true;
       } else {
         _setError(response['message'] ?? 'Failed to create conversation');
@@ -106,15 +133,18 @@ class ChatProvider with ChangeNotifier {
     }
   }
 
-  // Load conversations
-  Future<void> loadConversations({int limit = 20}) async {
+  // Load conversations dengan auto-cleanup
+  Future<void> loadConversations({int limit = 20, bool autoCleanup = true}) async {
     // Don't reload if already loading or sending
     if (_state == ChatState.loading || _state == ChatState.sending) return;
     
     _setState(ChatState.loading);
     
     try {
-      final response = await _chatService.getConversations(limit: limit);
+      final response = await _chatService.getConversations(
+        limit: limit,
+        autoCleanup: autoCleanup,
+      );
       
       if (response['success'] == true) {
         final newConversations = _chatService.parseConversations(response);
@@ -122,8 +152,18 @@ class ChatProvider with ChangeNotifier {
         // Update conversations list
         _conversations = newConversations;
         
-        // If there's no active conversation but we have conversations, don't auto-select
-        // Let user choose which conversation to open
+        // Log cleanup stats jika ada
+        if (response['data']['cleanup_stats'] != null) {
+          final cleanupStats = response['data']['cleanup_stats'];
+          debugPrint('🧹 Auto-cleanup stats: $cleanupStats');
+        }
+        
+        // Auto-create conversation untuk user baru jika tidak ada conversations
+        if (_conversations.isEmpty && autoCleanup) {
+          debugPrint('📝 No conversations found, creating first conversation for new user');
+          await createNewConversation();
+          return; // createNewConversation will set state to loaded
+        }
         
         _setState(ChatState.loaded);
       } else {
@@ -153,13 +193,20 @@ class ChatProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Load conversation messages
+  // Load conversation messages dengan timezone yang benar
   Future<void> _loadConversationMessages(String conversationId) async {
     try {
       final response = await _chatService.getConversationMessages(conversationId);
       
       if (response['success'] == true) {
         _currentMessages = _chatService.parseMessages(response);
+        
+        // Debug: Show timezone info
+        debugPrint('📱 Loaded ${_currentMessages.length} messages');
+        if (_currentMessages.isNotEmpty) {
+          final lastMessage = _currentMessages.last;
+          debugPrint('📱 Last message time: ${lastMessage.formattedTime} WIB');
+        }
       } else {
         _currentMessages = [];
         throw Exception(response['message'] ?? 'Failed to load messages');
@@ -170,11 +217,15 @@ class ChatProvider with ChangeNotifier {
     }
   }
 
-  // Send message via WebSocket
+  // Send message via WebSocket dengan timezone yang benar
   Future<void> sendMessageViaWebSocket(String message) async {
     if (_activeConversation == null) {
-      _setError('No active conversation');
-      return;
+      // Auto-create conversation jika belum ada
+      final success = await createNewConversation();
+      if (!success) {
+        _setError('Failed to create conversation');
+        return;
+      }
     }
 
     if (message.trim().isEmpty) {
@@ -202,11 +253,15 @@ class ChatProvider with ChangeNotifier {
     }
   }
 
-  // Send message via HTTP (fallback)
+  // Send message via HTTP (fallback) dengan timezone yang benar
   Future<void> sendMessageViaHttp(String message) async {
     if (_activeConversation == null) {
-      _setError('No active conversation');
-      return;
+      // Auto-create conversation jika belum ada
+      final success = await createNewConversation();
+      if (!success) {
+        _setError('Failed to create conversation');
+        return;
+      }
     }
 
     if (message.trim().isEmpty) {
@@ -229,6 +284,10 @@ class ChatProvider with ChangeNotifier {
         // Update conversation in list
         _updateConversationInList(_activeConversation!.id, message.trim());
         
+        // Debug: Show timezone info
+        debugPrint('📤 Message sent at ${userMessage.formattedTime} WIB');
+        debugPrint('🤖 Luna replied at ${lunaResponse.formattedTime} WIB');
+        
         _setState(ChatState.loaded);
       } else {
         _setError(response['message'] ?? 'Failed to send message');
@@ -238,16 +297,20 @@ class ChatProvider with ChangeNotifier {
     }
   }
 
-  // Update conversation in list
+  // Update conversation in list dengan timezone yang benar
   void _updateConversationInList(String conversationId, String lastMessage) {
     final index = _conversations.indexWhere((conv) => conv.id == conversationId);
     if (index != -1) {
       final conversation = _conversations[index];
+      
+      // Gunakan waktu Indonesia untuk update
+      final now = IndonesiaTimeHelper.now();
+      
       final updatedConversation = conversation.copyWith(
         lastMessage: lastMessage,
-        lastMessageAt: DateTime.now(),
+        lastMessageAt: now,
         messageCount: conversation.messageCount + 1,
-        updatedAt: DateTime.now(),
+        updatedAt: now,
         title: conversation.title ?? (lastMessage.length > 30 
             ? '${lastMessage.substring(0, 30)}...' 
             : lastMessage),
@@ -257,6 +320,8 @@ class ChatProvider with ChangeNotifier {
       _conversations.removeAt(index);
       _conversations.insert(0, updatedConversation);
       _activeConversation = updatedConversation;
+      
+      debugPrint('📝 Updated conversation at ${IndonesiaTimeHelper.formatTimeOnly(now)} WIB');
     }
   }
 
@@ -303,6 +368,77 @@ class ChatProvider with ChangeNotifier {
     }
   }
 
+  // Manual cleanup conversations
+  Future<Map<String, dynamic>> performManualCleanup() async {
+    try {
+      final response = await _chatService.manualCleanup();
+      
+      if (response['success'] == true) {
+        final cleanupStats = response['data']['cleanup_stats'];
+        
+        // Reload conversations setelah cleanup
+        await loadConversations(limit: 20, autoCleanup: false);
+        
+        return {
+          'success': true,
+          'stats': cleanupStats,
+          'message': 'Cleanup berhasil dilakukan'
+        };
+      } else {
+        return {
+          'success': false,
+          'message': response['message'] ?? 'Failed to perform cleanup'
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to perform cleanup: ${e.toString()}'
+      };
+    }
+  }
+
+  // Initialize untuk user baru - TANPA VALIDASI
+  Future<void> initializeForNewUser() async {
+    debugPrint('🚀 Initializing chat for new user');
+    
+    try {
+      // Load existing conversations
+      await loadConversations(limit: 20, autoCleanup: true);
+      
+      // Jika tidak ada conversations, otomatis buat yang pertama
+      // Ini akan ditangani di loadConversations()
+      
+    } catch (e) {
+      debugPrint('Failed to initialize for new user: $e');
+      _setError('Failed to initialize chat: ${e.toString()}');
+    }
+  }
+
+  // Get atau create conversation untuk user baru
+  Future<Conversation?> getOrCreateFirstConversation() async {
+    // Jika sudah ada active conversation, return itu
+    if (_activeConversation != null) {
+      return _activeConversation;
+    }
+    
+    // Jika ada conversations, ambil yang pertama
+    if (_conversations.isNotEmpty) {
+      _activeConversation = _conversations.first;
+      await _loadConversationMessages(_activeConversation!.id);
+      notifyListeners();
+      return _activeConversation;
+    }
+    
+    // Jika tidak ada conversations, buat yang baru
+    final success = await createNewConversation();
+    if (success) {
+      return _activeConversation;
+    }
+    
+    return null;
+  }
+
   // Typing indicators
   void startTyping() {
     if (_activeConversation != null && _isConnected) {
@@ -316,10 +452,13 @@ class ChatProvider with ChangeNotifier {
     }
   }
 
-  // WebSocket event handlers
+  // WebSocket event handlers dengan timezone yang benar
   void _handleNewMessage(ChatMessage message) {
     if (_activeConversation?.id == message.conversationId) {
       _currentMessages.add(message);
+      
+      // Debug: Show timezone info
+      debugPrint('📥 Received message at ${message.formattedTime} WIB');
       
       // Update conversation in list if it's a user message
       if (message.isUser) {
@@ -348,6 +487,8 @@ class ChatProvider with ChangeNotifier {
     // Clear error when successfully connected
     if (_isConnected && !wasConnected) {
       _clearError();
+      // Perform auto-cleanup when reconnected
+      _performAutoCleanup();
     }
     
     notifyListeners();
@@ -412,7 +553,7 @@ class ChatProvider with ChangeNotifier {
     }
   }
 
-  // Get connection info for debugging
+  // Get connection info for debugging dengan timezone info
   Map<String, dynamic> getConnectionInfo() {
     return {
       'isConnected': _isConnected,
@@ -421,7 +562,42 @@ class ChatProvider with ChangeNotifier {
       'conversationCount': _conversations.length,
       'messageCount': _currentMessages.length,
       'webSocketInfo': _webSocketService.getConnectionInfo(),
+      'timezone': 'Asia/Jakarta (WIB/GMT+7)',
+      'currentTimeWIB': IndonesiaTimeHelper.format(IndonesiaTimeHelper.now()),
     };
+  }
+
+  // Get chat statistics
+  Future<Map<String, dynamic>> getChatStatistics() async {
+    try {
+      final response = await _chatService.getChatStatistics();
+      
+      if (response['success'] == true) {
+        final stats = response['data'];
+        
+        // Add timezone info untuk debugging
+        stats['timezone_info'] = {
+          'timezone': 'Asia/Jakarta (WIB/GMT+7)',
+          'current_time_wib': IndonesiaTimeHelper.format(IndonesiaTimeHelper.now()),
+          'offset': '+7'
+        };
+        
+        return {
+          'success': true,
+          'data': stats
+        };
+      } else {
+        return {
+          'success': false,
+          'message': response['message'] ?? 'Failed to get statistics'
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to get statistics: ${e.toString()}'
+      };
+    }
   }
 
   @override

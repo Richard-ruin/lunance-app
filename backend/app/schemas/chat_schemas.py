@@ -1,3 +1,4 @@
+# app/schemas/chat_schemas.py - Updated dengan timezone info
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
@@ -15,6 +16,10 @@ class ChatMessageResponse(BaseModel):
     message_type: str = "text"
     status: str = "sent"
     timestamp: datetime
+    # Tambahan fields untuk timezone info
+    timezone: str = "WIB"
+    formatted_time: Optional[str] = None
+    relative_time: Optional[str] = None
 
 class ConversationResponse(BaseModel):
     """Response model untuk percakapan"""
@@ -27,6 +32,9 @@ class ConversationResponse(BaseModel):
     message_count: int
     created_at: datetime
     updated_at: datetime
+    # Tambahan fields untuk timezone info
+    timezone: str = "WIB"
+    relative_time: Optional[str] = None
 
 class CreateConversationRequest(BaseModel):
     """Request model untuk membuat percakapan baru"""
@@ -36,17 +44,25 @@ class ConversationListResponse(BaseModel):
     """Response model untuk daftar percakapan"""
     conversations: List[ConversationResponse]
     total: int
+    # Tambahan info
+    timezone: str = "Asia/Jakarta (WIB/GMT+7)"
+    current_time_wib: Optional[str] = None
 
 class MessageListResponse(BaseModel):
     """Response model untuk daftar pesan"""
     messages: List[ChatMessageResponse]
     conversation: ConversationResponse
+    # Tambahan info
+    timezone: str = "Asia/Jakarta (WIB/GMT+7)"
+    current_time_wib: Optional[str] = None
 
 class WebSocketMessage(BaseModel):
     """Model untuk pesan WebSocket"""
     type: str  # "chat_message", "typing_start", "typing_stop", "error", "success"
     data: Dict[str, Any]
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+    # Tambahan timezone info
+    timezone: str = "WIB"
 
 class TypingIndicator(BaseModel):
     """Model untuk indikator mengetik"""
@@ -60,6 +76,12 @@ class ChatStatisticsResponse(BaseModel):
     today_messages: int
     weekly_messages: int
     last_activity: Optional[datetime]
+    # Tambahan timezone fields
+    timezone: str = "Asia/Jakarta (WIB/GMT+7)"
+    current_time_wib: Optional[str] = None
+    last_activity_wib: Optional[str] = None
+    last_activity_formatted: Optional[str] = None
+    last_activity_relative: Optional[str] = None
 
 class SearchConversationsRequest(BaseModel):
     """Request model untuk mencari percakapan"""
@@ -71,6 +93,9 @@ class DeleteConversationResponse(BaseModel):
     success: bool
     message: str
     deleted_conversation_id: str
+    # Tambahan timezone info
+    deleted_at: Optional[str] = None
+    timezone: str = "WIB"
 
 class WebSocketConnectionInfo(BaseModel):
     """Model untuk informasi koneksi WebSocket"""
@@ -130,6 +155,9 @@ class BaseResponse(BaseModel):
     message: str
     data: Optional[Dict[str, Any]] = None
     errors: Optional[List[str]] = None
+    # Tambahan timezone info untuk semua response
+    timezone: Optional[str] = "Asia/Jakarta (WIB/GMT+7)"
+    server_time: Optional[str] = None
 
 class PaginatedResponse(BaseModel):
     """Paginated response model"""
@@ -137,6 +165,23 @@ class PaginatedResponse(BaseModel):
     message: str
     data: Dict[str, Any]
     pagination: Dict[str, Any]  # Contains page, limit, total, has_next, has_prev
+    # Tambahan timezone info
+    timezone: str = "Asia/Jakarta (WIB/GMT+7)"
+    server_time: Optional[str] = None
+
+# Cleanup schemas - TAMBAHAN BARU
+class CleanupStatsResponse(BaseModel):
+    """Response model untuk statistik cleanup"""
+    empty_conversations_deleted: int
+    conversations_updated: int
+    total_cleaned: int
+    cleanup_time: Optional[str] = None
+    timezone: str = "WIB"
+
+class ManualCleanupRequest(BaseModel):
+    """Request model untuk manual cleanup"""
+    force: bool = Field(False, description="Force cleanup even if recent activity")
+    user_id_filter: Optional[str] = Field(None, description="Clean only specific user (admin only)")
 
 # Error response models
 class ValidationErrorResponse(BaseModel):
@@ -144,6 +189,8 @@ class ValidationErrorResponse(BaseModel):
     success: bool = False
     message: str = "Validation error"
     errors: List[Dict[str, Any]]
+    timezone: str = "Asia/Jakarta (WIB/GMT+7)"
+    error_time: Optional[str] = None
 
 class NotFoundErrorResponse(BaseModel):
     """Response model untuk not found error"""
@@ -151,19 +198,69 @@ class NotFoundErrorResponse(BaseModel):
     message: str = "Resource not found"
     resource: str
     resource_id: str
+    timezone: str = "Asia/Jakarta (WIB/GMT+7)"
+    error_time: Optional[str] = None
 
 class UnauthorizedErrorResponse(BaseModel):
     """Response model untuk unauthorized error"""
     success: bool = False
     message: str = "Unauthorized access"
+    timezone: str = "Asia/Jakarta (WIB/GMT+7)"
+    error_time: Optional[str] = None
     
 class ForbiddenErrorResponse(BaseModel):
     """Response model untuk forbidden error"""
     success: bool = False
     message: str = "Access forbidden"
+    timezone: str = "Asia/Jakarta (WIB/GMT+7)"
+    error_time: Optional[str] = None
 
 class InternalServerErrorResponse(BaseModel):
     """Response model untuk internal server error"""
     success: bool = False
     message: str = "Internal server error"
     error_id: Optional[str] = None
+    timezone: str = "Asia/Jakarta (WIB/GMT+7)"
+    error_time: Optional[str] = None
+
+# Health check schema - TAMBAHAN BARU
+class HealthCheckResponse(BaseModel):
+    """Response schema untuk health check"""
+    status: str = "healthy"
+    version: str
+    timestamp: str
+    timezone: str = "Asia/Jakarta (WIB/GMT+7)"
+    database_status: str
+    websocket_status: str
+    active_connections: int
+    uptime: Optional[str] = None
+
+# Analytics schemas - TAMBAHAN BARU  
+class ConversationAnalytics(BaseModel):
+    """Schema untuk analytics percakapan"""
+    conversation_id: str
+    total_messages: int
+    user_messages: int
+    luna_messages: int
+    average_response_time: Optional[float] = None
+    most_common_topics: Optional[List[str]] = None
+    sentiment_score: Optional[float] = None
+    created_at: str
+    last_activity: str
+    duration_minutes: Optional[float] = None
+    timezone: str = "WIB"
+
+class UserChatAnalytics(BaseModel):
+    """Schema untuk analytics chat user"""
+    user_id: str
+    total_conversations: int
+    active_conversations: int
+    total_messages: int
+    average_messages_per_conversation: float
+    most_active_day: Optional[str] = None
+    most_active_hour: Optional[int] = None
+    favorite_topics: Optional[List[str]] = None
+    chat_frequency: Optional[str] = None  # daily, weekly, monthly
+    join_date: str
+    last_activity: Optional[str] = None
+    timezone: str = "Asia/Jakarta (WIB/GMT+7)"

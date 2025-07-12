@@ -10,7 +10,6 @@ class ChatInput extends StatefulWidget {
   final Function(String)? onSendMessage;
   final VoidCallback? onImagePressed;
   final VoidCallback? onVoicePressed;
-  final bool enabled;
 
   const ChatInput({
     Key? key,
@@ -18,7 +17,6 @@ class ChatInput extends StatefulWidget {
     this.onSendMessage,
     this.onImagePressed,
     this.onVoicePressed,
-    this.enabled = true,
   }) : super(key: key);
 
   @override
@@ -56,13 +54,15 @@ class _ChatInputState extends State<ChatInput> {
     }
   }
 
-  void _sendMessage() {
-    if (_hasText && widget.onSendMessage != null && !_isSending && widget.enabled) {
+  void _sendMessage() async {
+    if (_hasText && widget.onSendMessage != null && !_isSending) {
       setState(() {
         _isSending = true;
       });
 
       final message = _controller.text.trim();
+      
+      // Send message - auto-create conversation jika belum ada
       widget.onSendMessage!(message);
       
       // Clear the text field immediately
@@ -98,10 +98,10 @@ class _ChatInputState extends State<ChatInput> {
     return Consumer<ChatProvider>(
       builder: (context, chatProvider, child) {
         final isLoading = chatProvider.state == ChatState.sending || _isSending;
-        final isDisabled = !widget.enabled || isLoading || !chatProvider.hasActiveConversation;
         
         return Container(
-          padding: const EdgeInsets.all(24),
+          // PADDING LEBIH KECIL untuk mobile
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
           decoration: BoxDecoration(
             color: AppColors.white,
             border: Border(
@@ -117,171 +117,131 @@ class _ChatInputState extends State<ChatInput> {
           ),
           child: SafeArea(
             top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Status message if needed
-                if (!chatProvider.hasActiveConversation)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: AppColors.warning.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: AppColors.warning.withOpacity(0.3),
+            child: Container(
+              constraints: const BoxConstraints(
+                minHeight: 48,
+                maxHeight: 120, // MAX HEIGHT untuk prevent overflow
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.gray50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Text Input Area - DENGAN SCROLL INTERNAL
+                  Flexible(
+                    child: TextField(
+                      controller: _controller,
+                      focusNode: _focusNode,
+                      maxLines: 8, // MAX 8 LINES seperti yang diminta
+                      minLines: 2, // MINIMUM 2 LINES seperti original
+                      textCapitalization: TextCapitalization.sentences,
+                      textInputAction: TextInputAction.newline,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.gray800,
                       ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.info_outline,
-                          size: 16,
-                          color: AppColors.warning,
+                      decoration: InputDecoration(
+                        hintText: 'Tanyakan tentang keuangan Anda...',
+                        hintStyle: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.gray400,
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Buat percakapan baru untuk mulai chat',
-                            style: AppTextStyles.caption.copyWith(
-                              color: AppColors.warning,
-                            ),
-                          ),
-                        ),
-                      ],
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                        isDense: true,
+                      ),
+                      onSubmitted: (text) {
+                        if (_hasText && !isLoading) {
+                          _sendMessage();
+                        }
+                      },
+                      onChanged: (text) {
+                        // Handle typing indicators only if connected
+                        if (text.isNotEmpty && chatProvider.isConnected) {
+                          chatProvider.startTyping();
+                        } else {
+                          chatProvider.stopTyping();
+                        }
+                      },
                     ),
                   ),
-                
-                // Input container
-                Container(
-                  constraints: const BoxConstraints(
-                    minHeight: 48,
-                    maxHeight: 150,
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: isDisabled ? AppColors.gray100 : AppColors.gray50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isDisabled ? AppColors.gray300 : AppColors.border,
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
+
+                  const SizedBox(height: 8),
+
+                  // Icon Bar (Image + Send/Mic) - ORIGINAL DESIGN
+                  Row(
                     children: [
-                      // Text Input Area
-                      TextField(
-                        controller: _controller,
-                        focusNode: _focusNode,
-                        enabled: !isDisabled,
-                        maxLines: null,
-                        minLines: 2,
-                        textCapitalization: TextCapitalization.sentences,
-                        textInputAction: TextInputAction.newline,
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: isDisabled ? AppColors.gray400 : AppColors.gray800,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: isDisabled 
-                              ? 'Chat tidak tersedia...'
-                              : 'Ketik pesan Anda...',
-                          hintStyle: AppTextStyles.bodyMedium.copyWith(
-                            color: AppColors.gray400,
+                      // Image Upload Button
+                      InkWell(
+                        onTap: isLoading 
+                            ? null
+                            : (widget.onImagePressed ??
+                                () => _showComingSoonDialog('Upload Gambar')),
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: isLoading ? AppColors.gray300 : AppColors.gray200,
+                            shape: BoxShape.circle,
                           ),
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          disabledBorder: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
-                          isDense: true,
+                          child: Icon(
+                            Icons.image_outlined,
+                            color: isLoading ? AppColors.gray400 : AppColors.gray600,
+                            size: 20,
+                          ),
                         ),
-                        onSubmitted: (text) {
-                          if (_hasText && !isDisabled) {
-                            _sendMessage();
-                          }
-                        },
-                        onChanged: (text) {
-                          // Handle typing indicators
-                          if (text.isNotEmpty && chatProvider.hasActiveConversation) {
-                            chatProvider.startTyping();
-                          } else {
-                            chatProvider.stopTyping();
-                          }
-                        },
                       ),
 
-                      const SizedBox(height: 8),
+                      const Spacer(),
 
-                      // Icon Bar (Image + Send/Mic)
-                      Row(
-                        children: [
-                          // Image Upload Button
-                          InkWell(
-                            onTap: isDisabled 
-                                ? null 
-                                : (widget.onImagePressed ?? () => _showComingSoonDialog('Upload Gambar')),
-                            borderRadius: BorderRadius.circular(20),
-                            child: Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: isDisabled ? AppColors.gray300 : AppColors.gray200,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.image_outlined,
-                                color: isDisabled ? AppColors.gray400 : AppColors.gray600,
-                                size: 20,
-                              ),
-                            ),
+                      // Voice Input / Send Button - ORIGINAL DESIGN
+                      InkWell(
+                        onTap: isLoading
+                            ? null
+                            : (_hasText
+                                ? _sendMessage
+                                : (widget.onVoicePressed ??
+                                    () => _showComingSoonDialog('Voice Input'))),
+                        borderRadius: BorderRadius.circular(20),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: isLoading
+                                ? AppColors.gray300
+                                : (_hasText ? AppColors.gray800 : AppColors.gray200),
+                            shape: BoxShape.circle,
                           ),
-
-                          const Spacer(),
-
-                          // Voice Input / Send Button
-                          InkWell(
-                            onTap: isDisabled
-                                ? null
-                                : (_hasText
-                                    ? _sendMessage
-                                    : (widget.onVoicePressed ?? () => _showComingSoonDialog('Voice Input'))),
-                            borderRadius: BorderRadius.circular(20),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: isDisabled
-                                    ? AppColors.gray300
-                                    : (_hasText ? AppColors.gray800 : AppColors.gray200),
-                                shape: BoxShape.circle,
-                              ),
-                              child: isLoading
-                                  ? Padding(
-                                      padding: const EdgeInsets.all(8),
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor: AlwaysStoppedAnimation<Color>(
-                                          _hasText ? AppColors.white : AppColors.gray600,
-                                        ),
-                                      ),
-                                    )
-                                  : Icon(
-                                      _hasText ? Icons.send_outlined : Icons.mic_outlined,
-                                      color: isDisabled
-                                          ? AppColors.gray400
-                                          : (_hasText ? AppColors.white : AppColors.gray600),
-                                      size: 18,
+                          child: isLoading
+                              ? Padding(
+                                  padding: const EdgeInsets.all(8),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      _hasText ? AppColors.white : AppColors.gray600,
                                     ),
-                            ),
-                          ),
-                        ],
+                                  ),
+                                )
+                              : Icon(
+                                  _hasText ? Icons.send_outlined : Icons.mic_outlined,
+                                  color: isLoading
+                                      ? AppColors.gray400
+                                      : (_hasText ? AppColors.white : AppColors.gray600),
+                                  size: 18,
+                                ),
+                        ),
                       ),
                     ],
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );

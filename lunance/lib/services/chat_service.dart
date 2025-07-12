@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/chat_model.dart';
 import '../config/app_config.dart';
+import '../utils/timezone_utils.dart';
 import 'api_service.dart';
 
 class ChatService {
@@ -15,7 +16,7 @@ class ChatService {
     };
   }
 
-  // Create new conversation
+  // Create new conversation dengan auto-cleanup
   Future<Map<String, dynamic>> createConversation() async {
     try {
       final response = await http.post(
@@ -23,7 +24,19 @@ class ChatService {
         headers: await _authHeaders,
       ).timeout(AppConfig.connectionTimeout);
 
-      return _handleResponse(response);
+      final result = _handleResponse(response);
+      
+      // Log timezone info jika berhasil
+      if (result['success'] == true && result['data'] != null) {
+        final conversationData = result['data']['conversation'];
+        if (conversationData['created_at'] != null) {
+          final createdTime = DateTime.parse(conversationData['created_at']);
+          final wibTime = IndonesiaTimeHelper.fromUtc(createdTime);
+          print('📝 Conversation created at: ${IndonesiaTimeHelper.format(wibTime)} WIB');
+        }
+      }
+      
+      return result;
     } catch (e) {
       return {
         'success': false,
@@ -32,16 +45,40 @@ class ChatService {
     }
   }
 
-  // Get user conversations
-  Future<Map<String, dynamic>> getConversations({int limit = 20}) async {
+  // Get user conversations dengan auto-cleanup
+  Future<Map<String, dynamic>> getConversations({
+    int limit = 20, 
+    bool autoCleanup = true
+  }) async {
     try {
-      final url = AppConfig.getChatUrl('/conversations?limit=$limit');
+      final url = AppConfig.getChatUrl('/conversations?limit=$limit&auto_cleanup=$autoCleanup');
       final response = await http.get(
         Uri.parse(url),
         headers: await _authHeaders,
       ).timeout(AppConfig.connectionTimeout);
 
-      return _handleResponse(response);
+      final result = _handleResponse(response);
+      
+      // Log timezone info jika berhasil
+      if (result['success'] == true && result['data'] != null) {
+        final conversations = result['data']['conversations'] as List?;
+        if (conversations != null && conversations.isNotEmpty) {
+          print('📱 Loaded ${conversations.length} conversations');
+          final firstConv = conversations.first;
+          if (firstConv['updated_at'] != null) {
+            final updatedTime = DateTime.parse(firstConv['updated_at']);
+            final wibTime = IndonesiaTimeHelper.fromUtc(updatedTime);
+            print('📱 Latest conversation updated: ${IndonesiaTimeHelper.format(wibTime)} WIB');
+          }
+        }
+        
+        // Log cleanup stats jika ada
+        if (result['data']['cleanup_stats'] != null) {
+          print('🧹 Auto-cleanup stats: ${result['data']['cleanup_stats']}');
+        }
+      }
+      
+      return result;
     } catch (e) {
       return {
         'success': false,
@@ -50,7 +87,7 @@ class ChatService {
     }
   }
 
-  // Get conversation messages
+  // Get conversation messages dengan timezone yang benar
   Future<Map<String, dynamic>> getConversationMessages(
     String conversationId, {
     int limit = 50,
@@ -62,7 +99,23 @@ class ChatService {
         headers: await _authHeaders,
       ).timeout(AppConfig.connectionTimeout);
 
-      return _handleResponse(response);
+      final result = _handleResponse(response);
+      
+      // Log timezone info jika berhasil
+      if (result['success'] == true && result['data'] != null) {
+        final messages = result['data']['messages'] as List?;
+        if (messages != null && messages.isNotEmpty) {
+          print('💬 Loaded ${messages.length} messages');
+          final latestMessage = messages.last;
+          if (latestMessage['timestamp'] != null) {
+            final timestamp = DateTime.parse(latestMessage['timestamp']);
+            final wibTime = IndonesiaTimeHelper.fromUtc(timestamp);
+            print('💬 Latest message at: ${IndonesiaTimeHelper.format(wibTime)} WIB');
+          }
+        }
+      }
+      
+      return result;
     } catch (e) {
       return {
         'success': false,
@@ -71,7 +124,7 @@ class ChatService {
     }
   }
 
-  // Send message via HTTP (fallback when WebSocket is not available)
+  // Send message via HTTP dengan timezone yang benar
   Future<Map<String, dynamic>> sendMessage(
     String conversationId,
     String message,
@@ -93,7 +146,27 @@ class ChatService {
         }),
       ).timeout(AppConfig.sendTimeout);
 
-      return _handleResponse(response);
+      final result = _handleResponse(response);
+      
+      // Log timezone info jika berhasil
+      if (result['success'] == true && result['data'] != null) {
+        final userMsg = result['data']['user_message'];
+        final lunaMsg = result['data']['luna_response'];
+        
+        if (userMsg['timestamp'] != null) {
+          final userTime = DateTime.parse(userMsg['timestamp']);
+          final wibTime = IndonesiaTimeHelper.fromUtc(userTime);
+          print('📤 User message sent at: ${IndonesiaTimeHelper.format(wibTime)} WIB');
+        }
+        
+        if (lunaMsg['timestamp'] != null) {
+          final lunaTime = DateTime.parse(lunaMsg['timestamp']);
+          final wibTime = IndonesiaTimeHelper.fromUtc(lunaTime);
+          print('🤖 Luna replied at: ${IndonesiaTimeHelper.format(wibTime)} WIB');
+        }
+      }
+      
+      return result;
     } catch (e) {
       return {
         'success': false,
@@ -139,7 +212,35 @@ class ChatService {
     }
   }
 
-  // Get chat statistics (future feature)
+  // Manual cleanup conversations
+  Future<Map<String, dynamic>> manualCleanup() async {
+    try {
+      final url = AppConfig.getChatUrl('/cleanup');
+      final response = await http.post(
+        Uri.parse(url),
+        headers: await _authHeaders,
+      ).timeout(AppConfig.connectionTimeout);
+
+      final result = _handleResponse(response);
+      
+      // Log cleanup results
+      if (result['success'] == true && result['data'] != null) {
+        final cleanupStats = result['data']['cleanup_stats'];
+        final cleanupTime = result['data']['cleanup_time'];
+        print('🧹 Manual cleanup completed at $cleanupTime WIB');
+        print('🧹 Cleanup stats: $cleanupStats');
+      }
+      
+      return result;
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Gagal terhubung ke server: ${e.toString()}',
+      };
+    }
+  }
+
+  // Get chat statistics dengan timezone yang benar
   Future<Map<String, dynamic>> getChatStatistics() async {
     try {
       final url = AppConfig.getChatUrl('/statistics');
@@ -148,7 +249,21 @@ class ChatService {
         headers: await _authHeaders,
       ).timeout(AppConfig.connectionTimeout);
 
-      return _handleResponse(response);
+      final result = _handleResponse(response);
+      
+      // Log timezone info jika berhasil
+      if (result['success'] == true && result['data'] != null) {
+        final stats = result['data'];
+        print('📊 Chat statistics retrieved');
+        print('📊 Timezone: ${stats['timezone']}');
+        print('📊 Current time WIB: ${stats['current_time_wib']}');
+        
+        if (stats['last_activity_formatted'] != null) {
+          print('📊 Last activity: ${stats['last_activity_formatted']} WIB');
+        }
+      }
+      
+      return result;
     } catch (e) {
       return {
         'success': false,
@@ -241,16 +356,26 @@ class ChatService {
     }
   }
 
-  // Helper methods to parse responses
+  // Helper methods to parse responses dengan timezone yang benar
   List<Conversation> parseConversations(Map<String, dynamic> response) {
     if (response['success'] != true || response['data'] == null) {
       return [];
     }
 
     final List<dynamic> conversationsData = response['data']['conversations'] ?? [];
-    return conversationsData
+    final conversations = conversationsData
         .map((data) => Conversation.fromJson(data))
         .toList();
+    
+    // Debug: Log timezone info untuk conversations
+    if (conversations.isNotEmpty) {
+      final firstConv = conversations.first;
+      print('📱 Parsed conversation: ${firstConv.displayTitle}');
+      print('📱 Created: ${firstConv.createdTimeFormatted} WIB');
+      print('📱 Last activity: ${firstConv.lastActivityTime}');
+    }
+    
+    return conversations;
   }
 
   List<ChatMessage> parseMessages(Map<String, dynamic> response) {
@@ -259,9 +384,19 @@ class ChatService {
     }
 
     final List<dynamic> messagesData = response['data']['messages'] ?? [];
-    return messagesData
+    final messages = messagesData
         .map((data) => ChatMessage.fromJson(data))
         .toList();
+    
+    // Debug: Log timezone info untuk messages
+    if (messages.isNotEmpty) {
+      final latestMessage = messages.last;
+      print('💬 Parsed ${messages.length} messages');
+      print('💬 Latest message time: ${latestMessage.formattedTime} WIB');
+      print('💬 Relative time: ${latestMessage.relativeTime}');
+    }
+    
+    return messages;
   }
 
   Conversation? parseConversation(Map<String, dynamic> response) {
@@ -271,7 +406,13 @@ class ChatService {
 
     final conversationData = response['data']['conversation'];
     if (conversationData != null) {
-      return Conversation.fromJson(conversationData);
+      final conversation = Conversation.fromJson(conversationData);
+      
+      // Debug: Log timezone info
+      print('📝 Parsed conversation: ${conversation.displayTitle}');
+      print('📝 Created: ${conversation.createdTimeFormatted} WIB');
+      
+      return conversation;
     }
 
     return null;
@@ -283,7 +424,18 @@ class ChatService {
     }
 
     try {
-      return ChatStatistics.fromJson(response['data']);
+      final statistics = ChatStatistics.fromJson(response['data']);
+      
+      // Debug: Log timezone info
+      print('📊 Chat statistics parsed');
+      print('📊 Total conversations: ${statistics.totalConversations}');
+      print('📊 Total messages: ${statistics.totalMessages}');
+      print('📊 Today messages: ${statistics.todayMessages}');
+      if (statistics.lastActivity != null) {
+        print('📊 Last activity: ${statistics.lastActivityFormatted}');
+      }
+      
+      return statistics;
     } catch (e) {
       if (AppConfig.enableLogging) {
         print('Error parsing chat statistics: $e');
@@ -307,13 +459,21 @@ class ChatService {
     }
   }
 
-  // Get connection info
+  // Get connection info dengan timezone info
   Map<String, dynamic> getConnectionInfo() {
     return {
       'baseUrl': AppConfig.chatBaseUrl,
       'wsUrl': AppConfig.wsBaseUrl,
       'environment': AppConfig.isDevelopment ? 'development' : 'production',
       'version': AppConfig.appVersion,
+      'timezone': 'Asia/Jakarta (WIB/GMT+7)',
+      'currentTimeWIB': IndonesiaTimeHelper.format(IndonesiaTimeHelper.now()),
+      'timezoneOffset': '+7',
     };
+  }
+
+  // Debugging helper - get timezone info
+  Map<String, String> getTimezoneDebugInfo() {
+    return IndonesiaTimeHelper.getTimezoneInfo();
   }
 }

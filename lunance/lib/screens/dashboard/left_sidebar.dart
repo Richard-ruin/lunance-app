@@ -281,7 +281,7 @@ class _LeftSidebarState extends State<LeftSidebar> {
                 // Navigation Items
                 _buildSidebarItem(
                   icon: Icons.analytics_outlined,
-                  title: 'Catatan Keuangan',
+                  title: 'Jelajahi Keuangan',
                   isSelected: widget.selectedIndex == 1,
                   onTap: () => widget.onNavigationItemSelected(1),
                 ),

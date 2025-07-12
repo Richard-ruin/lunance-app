@@ -5,8 +5,21 @@ import 'providers/chat_provider.dart';
 import 'screens/splash_screen.dart';
 import 'utils/app_colors.dart';
 import 'utils/app_text_styles.dart';
+import 'utils/timezone_utils.dart';
+import 'config/app_config.dart';
 
-void main() {
+void main() async {
+  // Ensure Flutter is initialized
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize timezone and locale - FIX UNTUK LOCALE ERROR
+  await IndonesiaTimeHelper.initialize();
+  
+  // Print app configuration in development
+  if (AppConfig.isDevelopment) {
+    AppConfig.printConfig();
+  }
+  
   runApp(const LunanceApp());
 }
 
@@ -21,7 +34,7 @@ class LunanceApp extends StatelessWidget {
         ChangeNotifierProvider(create: (context) => ChatProvider()),
       ],
       child: MaterialApp(
-        title: 'Lunance',
+        title: AppConfig.appName,
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           // Color scheme

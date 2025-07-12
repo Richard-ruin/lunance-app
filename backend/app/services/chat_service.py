@@ -86,15 +86,70 @@ class LunaAI:
         # Default responses
         return random.choice(self.general_responses)
 
+    def generate_conversation_title(self, user_message: str, luna_response: str) -> str:
+        """Generate judul percakapan dari pesan user dan Luna (maksimal 10 kata)"""
+        
+        # Prioritas keywords untuk judul
+        priority_keywords = {
+            'budget': 'Budget Planning',
+            'anggaran': 'Perencanaan Anggaran',
+            'tabungan': 'Tips Menabung',
+            'investasi': 'Panduan Investasi',
+            'pengeluaran': 'Analisis Pengeluaran',
+            'pemasukan': 'Manajemen Pemasukan',
+            'keuangan': 'Konsultasi Keuangan',
+            'hutang': 'Strategi Hutang',
+            'cicilan': 'Manajemen Cicilan',
+            'gaji': 'Perencanaan Gaji'
+        }
+        
+        # Cek kata kunci prioritas dalam pesan user
+        user_lower = user_message.lower()
+        for keyword, title in priority_keywords.items():
+            if keyword in user_lower:
+                return title
+        
+        # Jika tidak ada kata kunci finansial, ambil dari awal pesan user
+        # Bersihkan dan ambil kata-kata penting
+        words = re.findall(r'\b\w+\b', user_message)
+        
+        # Filter kata-kata yang tidak penting
+        stop_words = {
+            'saya', 'aku', 'anda', 'kamu', 'ini', 'itu', 'di', 'ke', 'dari', 'untuk',
+            'dengan', 'pada', 'yang', 'adalah', 'akan', 'sudah', 'belum', 'tidak',
+            'jangan', 'bisa', 'dapat', 'harus', 'ingin', 'mau', 'ada', 'dan', 'atau',
+            'tapi', 'tetapi', 'kalau', 'jika', 'bila', 'ketika', 'saat', 'waktu'
+        }
+        
+        important_words = [word for word in words if word.lower() not in stop_words and len(word) > 2]
+        
+        # Ambil maksimal 10 kata pertama yang penting
+        title_words = important_words[:10] if important_words else words[:10]
+        
+        # Gabungkan dan buat title
+        title = ' '.join(title_words)
+        
+        # Kapitalisasi kata pertama
+        if title:
+            title = title[0].upper() + title[1:] if len(title) > 1 else title.upper()
+        else:
+            title = "Chat Keuangan"
+        
+        # Batasi panjang maksimal
+        if len(title) > 50:
+            title = title[:47] + "..."
+        
+        return title
+
 class ChatService:
-    """Service untuk mengelola chat dan percakapan"""
+    """Service untuk mengelola chat dan percakapan dengan timezone Indonesia yang benar"""
     
     def __init__(self):
         self.db = get_database()
         self.luna_ai = LunaAI()
     
     async def create_conversation(self, user_id: str) -> Conversation:
-        """Membuat percakapan baru dengan timezone Indonesia"""
+        """Membuat percakapan baru dengan timezone Indonesia yang benar"""
         # Menggunakan waktu Indonesia untuk konsistensi
         now = now_for_db()
         
@@ -110,7 +165,6 @@ class ChatService:
         }
         
         print(f"Creating conversation at Indonesia time: {IndonesiaDatetime.format(now)}")
-        print(f"Conversation data: {conversation_data}")
         
         # Insert ke database
         result = self.db.conversations.insert_one(conversation_data)
@@ -134,7 +188,7 @@ class ChatService:
         return conversation
     
     async def get_user_conversations(self, user_id: str, limit: int = 20) -> List[Conversation]:
-        """Mengambil daftar percakapan user"""
+        """Mengambil daftar percakapan user dengan timezone yang benar"""
         try:
             print(f"Getting conversations for user: {user_id}, limit: {limit}")
             
@@ -172,7 +226,7 @@ class ChatService:
             return []
     
     async def get_conversation_messages(self, conversation_id: str, limit: int = 50) -> List[Message]:
-        """Mengambil pesan dalam percakapan"""
+        """Mengambil pesan dalam percakapan dengan timezone yang benar"""
         try:
             print(f"Getting messages for conversation: {conversation_id}")
             
@@ -182,7 +236,7 @@ class ChatService:
             
             messages = []
             for doc in cursor:
-                # Ensure timestamp exists
+                # Ensure timestamp exists dengan timezone Indonesia
                 if "timestamp" not in doc:
                     doc["timestamp"] = now_for_db()
                 
@@ -201,10 +255,10 @@ class ChatService:
             return []
     
     async def send_message(self, user_id: str, conversation_id: str, content: str) -> Dict[str, Any]:
-        """Mengirim pesan user dan generate response dari Luna dengan timezone Indonesia"""
+        """Mengirim pesan user dan generate response dari Luna dengan timezone Indonesia yang benar"""
         
         try:
-            # Menggunakan waktu Indonesia
+            # Menggunakan waktu Indonesia yang benar
             now = now_for_db()
             indonesia_time_str = IndonesiaDatetime.format(now)
             
@@ -220,8 +274,6 @@ class ChatService:
                 "status": "sent",
                 "timestamp": now
             }
-            
-            print(f"User message timestamp: {indonesia_time_str}")
             
             user_result = self.db.messages.insert_one(user_message_data)
             user_message_id = str(user_result.inserted_id)
@@ -271,8 +323,8 @@ class ChatService:
                 timestamp=luna_timestamp
             )
             
-            # Update conversation dengan timestamp Indonesia
-            await self._update_conversation_safe(conversation_id, content, user_id)
+            # Update conversation dengan timestamp Indonesia dan generate title
+            await self._update_conversation_safe(conversation_id, content, luna_response, user_id)
             
             print(f"✅ Messages sent successfully at {indonesia_time_str}")
             
@@ -286,8 +338,8 @@ class ChatService:
             print(f"❌ Error in send_message: {e}")
             raise e
     
-    async def _update_conversation_safe(self, conversation_id: str, last_message: str, user_id: str):
-        """Update conversation dengan timezone Indonesia"""
+    async def _update_conversation_safe(self, conversation_id: str, user_message: str, luna_response: str, user_id: str):
+        """Update conversation dengan timezone Indonesia dan auto-generate title"""
         try:
             current_conv = self.db.conversations.find_one({"_id": ObjectId(conversation_id)})
             if not current_conv:
@@ -295,19 +347,22 @@ class ChatService:
                 return
             
             current_count = current_conv.get("message_count", 0)
-            new_count = current_count + 2
+            new_count = current_count + 2  # User message + Luna response
             
             current_title = current_conv.get("title")
             new_title = current_title
+            
+            # Generate title untuk conversation baru (message_count == 0)
             if not current_title and current_count == 0:
-                new_title = last_message[:50] + "..." if len(last_message) > 50 else last_message
+                new_title = self.luna_ai.generate_conversation_title(user_message, luna_response)
+                print(f"Generated conversation title: {new_title}")
             
             # Menggunakan waktu Indonesia untuk update
             update_time = now_for_db()
             indonesia_time_str = IndonesiaDatetime.format(update_time)
             
             update_data = {
-                "last_message": last_message,
+                "last_message": user_message,  # Simpan pesan user sebagai last_message
                 "last_message_at": update_time,
                 "updated_at": update_time,
                 "message_count": new_count,
@@ -364,6 +419,58 @@ class ChatService:
             print(f"❌ Error deleting conversation: {e}")
             return False
     
+    async def auto_delete_empty_conversations(self, user_id: str) -> int:
+        """Auto-delete conversations yang tidak memiliki pesan (message_count = 0)"""
+        try:
+            print(f"🧹 Checking for empty conversations for user: {user_id}")
+            
+            # Cari conversations dengan message_count = 0 atau tidak ada pesan sama sekali
+            empty_conversations = self.db.conversations.find({
+                "user_id": user_id,
+                "$or": [
+                    {"message_count": 0},
+                    {"message_count": {"$exists": False}},
+                    {"last_message": {"$exists": False}},
+                    {"last_message": None}
+                ],
+                "status": {"$ne": ConversationStatus.DELETED.value}
+            })
+            
+            deleted_count = 0
+            for conv in empty_conversations:
+                conversation_id = str(conv["_id"])
+                
+                # Double check: pastikan tidak ada pesan di messages collection
+                message_count = self.db.messages.count_documents({
+                    "conversation_id": conversation_id
+                })
+                
+                if message_count == 0:
+                    # Delete conversation yang benar-benar kosong
+                    result = self.db.conversations.update_one(
+                        {"_id": conv["_id"]},
+                        {"$set": {
+                            "status": ConversationStatus.DELETED.value,
+                            "updated_at": now_for_db()
+                        }}
+                    )
+                    
+                    if result.modified_count > 0:
+                        deleted_count += 1
+                        created_time = IndonesiaDatetime.format(conv.get("created_at", now_for_db()))
+                        print(f"🗑️ Deleted empty conversation {conversation_id} created at {created_time}")
+            
+            if deleted_count > 0:
+                print(f"✅ Auto-deleted {deleted_count} empty conversations for user {user_id}")
+            else:
+                print(f"✅ No empty conversations found for user {user_id}")
+            
+            return deleted_count
+            
+        except Exception as e:
+            print(f"❌ Error in auto_delete_empty_conversations: {e}")
+            return 0
+    
     async def search_conversations(self, user_id: str, query: str) -> List[Conversation]:
         """Mencari percakapan berdasarkan query"""
         try:
@@ -397,69 +504,86 @@ class ChatService:
             print(f"Error searching conversations: {e}")
             return []
     
-    async def fix_timezone_for_existing_data(self):
-        """Fix timezone untuk data yang sudah ada - convert UTC to Indonesia time"""
+    async def cleanup_user_conversations(self, user_id: str) -> Dict[str, int]:
+        """Comprehensive cleanup untuk user conversations"""
         try:
-            print("🕐 Fixing timezone for existing data...")
+            print(f"🧹 Starting comprehensive cleanup for user: {user_id}")
             
-            # Fix conversations
-            conversations = self.db.conversations.find({})
-            conv_fixed = 0
+            # 1. Auto-delete empty conversations
+            empty_deleted = await self.auto_delete_empty_conversations(user_id)
             
+            # 2. Update message counts untuk conversations yang ada
+            conversations = self.db.conversations.find({
+                "user_id": user_id,
+                "status": {"$ne": ConversationStatus.DELETED.value}
+            })
+            
+            updated_count = 0
             for conv in conversations:
-                update_fields = {}
+                conversation_id = str(conv["_id"])
                 
-                # Convert UTC timestamps to Indonesia time if they exist
-                for field in ["created_at", "updated_at", "last_message_at"]:
-                    if field in conv and conv[field]:
-                        utc_time = conv[field]
-                        # Convert to Indonesia time then back to naive UTC for storage consistency
-                        indonesia_time = IndonesiaDatetime.from_utc(utc_time)
-                        # For display, we'll handle timezone conversion in the API response
-                        # For now, keep as is but note the timezone
-                        print(f"Conversation {conv['_id']} {field}: {IndonesiaDatetime.format(utc_time)} WIB")
+                # Hitung jumlah pesan yang sebenarnya
+                actual_message_count = self.db.messages.count_documents({
+                    "conversation_id": conversation_id
+                })
                 
-                if update_fields:
-                    self.db.conversations.update_one(
+                current_count = conv.get("message_count", 0)
+                
+                if actual_message_count != current_count:
+                    update_data = {
+                        "message_count": actual_message_count,
+                        "updated_at": now_for_db()
+                    }
+                    
+                    # Jika tidak ada pesan, hapus conversation
+                    if actual_message_count == 0:
+                        update_data["status"] = ConversationStatus.DELETED.value
+                    else:
+                        # Update last_message jika diperlukan
+                        last_message = self.db.messages.find_one(
+                            {"conversation_id": conversation_id},
+                            sort=[("timestamp", -1)]
+                        )
+                        
+                        if last_message:
+                            update_data["last_message"] = last_message.get("content")
+                            update_data["last_message_at"] = last_message.get("timestamp")
+                    
+                    result = self.db.conversations.update_one(
                         {"_id": conv["_id"]},
-                        {"$set": update_fields}
+                        {"$set": update_data}
                     )
-                    conv_fixed += 1
+                    
+                    if result.modified_count > 0:
+                        updated_count += 1
             
-            # Fix messages
-            messages = self.db.messages.find({})
-            msg_fixed = 0
+            cleanup_stats = {
+                "empty_conversations_deleted": empty_deleted,
+                "conversations_updated": updated_count,
+                "total_cleaned": empty_deleted + updated_count
+            }
             
-            for msg in messages:
-                if "timestamp" in msg and msg["timestamp"]:
-                    utc_time = msg["timestamp"]
-                    print(f"Message {msg['_id']} timestamp: {IndonesiaDatetime.format(utc_time)} WIB")
-            
-            print(f"✅ Timezone info logged for existing data")
+            print(f"✅ Cleanup completed: {cleanup_stats}")
+            return cleanup_stats
             
         except Exception as e:
-            print(f"❌ Error fixing timezone: {e}")
+            print(f"❌ Error in cleanup_user_conversations: {e}")
+            return {"empty_conversations_deleted": 0, "conversations_updated": 0, "total_cleaned": 0}
     
     async def get_chat_statistics(self, user_id: str) -> Dict[str, Any]:
-        """Mendapatkan statistik chat dengan timezone Indonesia"""
+        """Mendapatkan statistik chat dengan timezone Indonesia yang benar"""
         try:
-            # Total conversations
+            # Total conversations (active only)
             total_conversations = self.db.conversations.count_documents({
                 "user_id": user_id,
-                "$or": [
-                    {"status": ConversationStatus.ACTIVE.value},
-                    {"status": {"$exists": False}}
-                ]
+                "status": {"$ne": ConversationStatus.DELETED.value}
             })
             
             # Get conversation IDs
             user_conversations = self.db.conversations.find(
                 {
                     "user_id": user_id,
-                    "$or": [
-                        {"status": ConversationStatus.ACTIVE.value},
-                        {"status": {"$exists": False}}
-                    ]
+                    "status": {"$ne": ConversationStatus.DELETED.value}
                 },
                 {"_id": 1}
             )
@@ -473,7 +597,7 @@ class ChatService:
             # Today messages (Indonesia time)
             indonesia_now = IndonesiaDatetime.now()
             today_start = indonesia_now.replace(hour=0, minute=0, second=0, microsecond=0)
-            # Convert to UTC for database query
+            # Convert to UTC for database query (karena database menyimpan dalam UTC)
             today_start_utc = IndonesiaDatetime.to_utc(today_start).replace(tzinfo=None)
             
             today_messages = self.db.messages.count_documents({
@@ -504,7 +628,8 @@ class ChatService:
                 "today_messages": today_messages,
                 "weekly_messages": weekly_messages,
                 "last_activity": last_activity,
-                "timezone": "Asia/Jakarta (WIB/GMT+7)"
+                "timezone": "Asia/Jakarta (WIB/GMT+7)",
+                "current_time_wib": IndonesiaDatetime.format(indonesia_now)
             }
         except Exception as e:
             print(f"Error getting chat statistics: {e}")
@@ -514,5 +639,6 @@ class ChatService:
                 "today_messages": 0,
                 "weekly_messages": 0,
                 "last_activity": None,
-                "timezone": "Asia/Jakarta (WIB/GMT+7)"
+                "timezone": "Asia/Jakarta (WIB/GMT+7)",
+                "current_time_wib": IndonesiaDatetime.format(IndonesiaDatetime.now())
             }

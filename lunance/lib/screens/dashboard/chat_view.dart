@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/app_text_styles.dart';
+import '../../utils/timezone_utils.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/chat_model.dart';
@@ -15,14 +16,16 @@ class ChatView extends StatefulWidget {
   State<ChatView> createState() => _ChatViewState();
 }
 
-class _ChatViewState extends State<ChatView> {
+class _ChatViewState extends State<ChatView> with WidgetsBindingObserver {
   final TextEditingController _chatController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   bool _hasInitialized = false;
+  bool _isKeyboardVisible = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeChat();
     });
@@ -30,9 +33,32 @@ class _ChatViewState extends State<ChatView> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _chatController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    
+    // Detect keyboard visibility
+    final bottomInset = WidgetsBinding.instance.window.viewInsets.bottom;
+    final newKeyboardVisible = bottomInset > 0;
+    
+    if (_isKeyboardVisible != newKeyboardVisible) {
+      setState(() {
+        _isKeyboardVisible = newKeyboardVisible;
+      });
+      
+      // Auto scroll to bottom when keyboard appears
+      if (newKeyboardVisible) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToBottom();
+        });
+      }
+    }
   }
 
   Future<void> _initializeChat() async {
@@ -42,20 +68,24 @@ class _ChatViewState extends State<ChatView> {
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
     
     if (authProvider.user != null) {
-      // Connect to WebSocket
-      await chatProvider.connectWebSocket(authProvider.user!.id);
-      
-      // Load conversations if not already loaded
-      if (chatProvider.conversations.isEmpty) {
-        await chatProvider.loadConversations();
+      try {
+        // Connect to WebSocket
+        await chatProvider.connectWebSocket(authProvider.user!.id);
+        
+        // Initialize for new user - no validation required
+        await chatProvider.initializeForNewUser();
+        
+        _hasInitialized = true;
+        print('✅ Chat initialized successfully for user: ${authProvider.user!.id}');
+        
+        // Scroll to bottom after initialization
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToBottom();
+        });
+      } catch (e) {
+        print('⚠️ Failed to initialize chat: $e');
+        // Don't show error to user, it will be handled by provider
       }
-      
-      // Create new conversation if no active conversation
-      if (!chatProvider.hasActiveConversation && chatProvider.conversations.isEmpty) {
-        await chatProvider.createNewConversation();
-      }
-      
-      _hasInitialized = true;
     }
   }
 
@@ -66,62 +96,69 @@ class _ChatViewState extends State<ChatView> {
       // Clear input immediately
       _chatController.clear();
       
-      // Send message
+      // Send message - auto-create conversation if needed
       chatProvider.sendMessageViaWebSocket(message);
       
-      // Scroll to bottom
+      // Scroll to bottom after sending
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToBottom();
       });
     }
   }
 
-  void _scrollToBottom() {
+  void _scrollToBottom({bool animate = true}) {
     if (_scrollController.hasClients) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
+      if (animate) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      } else {
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      }
     }
   }
 
+  // Use IndonesiaTimeHelper for correct time formatting
   String _formatTime(DateTime timestamp) {
-    final hour = timestamp.hour.toString().padLeft(2, '0');
-    final minute = timestamp.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
+    return IndonesiaTimeHelper.formatTimeOnly(timestamp);
   }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<ChatProvider>(
       builder: (context, chatProvider, child) {
-        return Column(
-          children: [
-            // Connection Status Banner
-            if (!chatProvider.isConnected)
-              _buildConnectionBanner(),
-            
-            // Chat Messages Area
-            Expanded(
-              child: _buildChatContent(chatProvider),
-            ),
-            
-            // Error Message
-            if (chatProvider.errorMessage != null)
-              _buildErrorBanner(chatProvider),
-            
-            // Typing Indicator
-            if (chatProvider.isTyping && chatProvider.typingSender == 'luna')
-              _buildTypingIndicator(),
-            
-            // Chat Input
-            ChatInput(
-              controller: _chatController,
-              onSendMessage: _sendMessage,
-              enabled: chatProvider.hasActiveConversation,
-            ),
-          ],
+        return Scaffold(
+          // IMPORTANT: resizeToAvoidBottomInset untuk handle keyboard
+          resizeToAvoidBottomInset: true,
+          backgroundColor: AppColors.background,
+          body: Column(
+            children: [
+              // Connection Status Banner
+              if (!chatProvider.isConnected)
+                _buildConnectionBanner(),
+              
+              // Chat Messages Area - Flexible untuk adjust dengan keyboard
+              Flexible(
+                child: _buildChatContent(chatProvider),
+              ),
+              
+              // Error Message
+              if (chatProvider.errorMessage != null)
+                _buildErrorBanner(chatProvider),
+              
+              // Typing Indicator
+              if (chatProvider.isTyping && chatProvider.typingSender == 'luna')
+                _buildTypingIndicator(),
+              
+              // Chat Input - Akan auto-adjust dengan keyboard
+              ChatInput(
+                controller: _chatController,
+                onSendMessage: _sendMessage,
+              ),
+            ],
+          ),
         );
       },
     );
@@ -190,13 +227,13 @@ class _ChatViewState extends State<ChatView> {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: AppColors.gray200,
+              color: AppColors.primary.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(
               Icons.smart_toy_outlined,
               size: 18,
-              color: AppColors.gray600,
+              color: AppColors.primary,
             ),
           ),
           const SizedBox(width: 12),
@@ -213,7 +250,7 @@ class _ChatViewState extends State<ChatView> {
             height: 20,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation<Color>(AppColors.gray400),
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
             ),
           ),
         ],
@@ -226,10 +263,7 @@ class _ChatViewState extends State<ChatView> {
       return _buildLoadingState();
     }
 
-    if (!chatProvider.hasActiveConversation) {
-      return _buildNoConversationState(chatProvider);
-    }
-
+    // No validation required - always show content
     if (chatProvider.currentMessages.isEmpty) {
       return _buildEmptyMessagesState();
     }
@@ -245,7 +279,7 @@ class _ChatViewState extends State<ChatView> {
           CircularProgressIndicator(color: AppColors.primary),
           SizedBox(height: 16),
           Text(
-            'Memuat percakapan...',
+            'Menyiapkan chat...',
             style: AppTextStyles.bodyMedium,
           ),
         ],
@@ -253,46 +287,106 @@ class _ChatViewState extends State<ChatView> {
     );
   }
 
-  Widget _buildNoConversationState(ChatProvider chatProvider) {
-    return EmptyStateWidget(
-      icon: Icons.chat_bubble_outline,
-      title: 'Tidak ada percakapan aktif',
-      subtitle: 'Buat percakapan baru untuk mulai chat dengan Luna',
-      actionText: 'Buat Percakapan Baru',
-      onActionPressed: () async {
-        await chatProvider.createNewConversation();
-      },
-    );
-  }
-
   Widget _buildEmptyMessagesState() {
-    return Consumer<ChatProvider>(
-      builder: (context, chatProvider, child) {
-        final conversationTitle = chatProvider.activeConversation?.displayTitle ?? 'Chat Baru';
-        
-        return EmptyStateWidget(
-          icon: Icons.smart_toy_outlined,
-          title: 'Mulai percakapan di $conversationTitle',
-          subtitle: 'Tanyakan apapun tentang keuangan Anda atau mulai mencatat transaksi',
-        );
-      },
+    return SingleChildScrollView(
+      controller: _scrollController,
+      child: Container(
+        constraints: BoxConstraints(
+          minHeight: MediaQuery.of(context).size.height * 0.6,
+        ),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.smart_toy_outlined,
+                    size: 40,
+                    color: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Mulai chat dengan Luna!',
+                  style: AppTextStyles.h6.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Tanyakan apapun tentang keuangan Anda.\nLuna siap membantu mengelola finansial Anda.',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.gray50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        'Contoh pertanyaan:',
+                        style: AppTextStyles.labelMedium.copyWith(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '• "Bagaimana cara mengatur budget bulanan?"\n'
+                        '• "Tips menabung untuk dana darurat"\n'
+                        '• "Strategi investasi untuk pemula"',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textTertiary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
   Widget _buildMessagesList(ChatProvider chatProvider) {
-    // Auto scroll to bottom when new messages arrive
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollToBottom();
-      }
-    });
-
     return ListView.builder(
       controller: _scrollController,
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: _isKeyboardVisible ? 8 : 16, // Less padding when keyboard is visible
+      ),
       itemCount: chatProvider.currentMessages.length,
       itemBuilder: (context, index) {
         final message = chatProvider.currentMessages[index];
+        
+        // Auto scroll to bottom for new messages
+        if (index == chatProvider.currentMessages.length - 1) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _scrollToBottom();
+          });
+        }
+        
         return _buildMessageBubble(message);
       },
     );
@@ -313,13 +407,13 @@ class _ChatViewState extends State<ChatView> {
               width: 32,
               height: 32,
               decoration: BoxDecoration(
-                color: AppColors.gray200,
+                color: AppColors.primary.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.smart_toy_outlined,
                 size: 18,
-                color: AppColors.gray600,
+                color: AppColors.primary,
               ),
             ),
             const SizedBox(width: 8),
@@ -337,7 +431,7 @@ class _ChatViewState extends State<ChatView> {
               ),
               decoration: BoxDecoration(
                 color: message.isUser 
-                    ? AppColors.gray800 
+                    ? AppColors.primary 
                     : AppColors.gray100,
                 borderRadius: BorderRadius.circular(18).copyWith(
                   bottomRight: message.isUser 
@@ -391,11 +485,14 @@ class _ChatViewState extends State<ChatView> {
             // User Avatar
             Consumer<AuthProvider>(
               builder: (context, authProvider, child) {
+                final userName = authProvider.user?.profile?.fullName ?? 'User';
+                final userInitial = userName.isNotEmpty ? userName.substring(0, 1).toUpperCase() : 'U';
+                
                 return CircleAvatar(
                   radius: 16,
                   backgroundColor: AppColors.gray200,
                   child: Text(
-                    authProvider.user?.profile?.fullName?.substring(0, 1).toUpperCase() ?? 'U',
+                    userInitial,
                     style: AppTextStyles.labelSmall.copyWith(
                       color: AppColors.gray700,
                       fontWeight: FontWeight.w600,
