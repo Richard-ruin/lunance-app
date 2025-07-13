@@ -115,14 +115,13 @@ class ApiService {
     }
   }
 
+  /// Setup profile - Updated for Indonesian students
   Future<Map<String, dynamic>> setupProfile({
     required String fullName,
     String? phoneNumber,
-    DateTime? dateOfBirth,
-    String? occupation,
-    String? city,
-    String language = 'id',
-    String currency = 'IDR',
+    required String university,  // Required field for university
+    required String city,        // Required field for city/district
+    String? occupation,          // Optional side job
     bool notificationsEnabled = true,
     bool voiceEnabled = true,
     bool darkMode = false,
@@ -130,17 +129,20 @@ class ApiService {
     try {
       final body = <String, dynamic>{
         'full_name': fullName,
-        'language': language,
-        'currency': currency,
+        'university': university,
+        'city': city,
         'notifications_enabled': notificationsEnabled,
         'voice_enabled': voiceEnabled,
         'dark_mode': darkMode,
       };
 
-      if (phoneNumber != null) body['phone_number'] = phoneNumber;
-      if (dateOfBirth != null) body['date_of_birth'] = dateOfBirth.toIso8601String();
-      if (occupation != null) body['occupation'] = occupation;
-      if (city != null) body['city'] = city;
+      // Add optional fields only if they have values
+      if (phoneNumber != null && phoneNumber.isNotEmpty) {
+        body['phone_number'] = phoneNumber;
+      }
+      if (occupation != null && occupation.isNotEmpty) {
+        body['occupation'] = occupation;
+      }
 
       final response = await http.post(
         Uri.parse('$baseUrl/auth/setup-profile'),
@@ -157,22 +159,18 @@ class ApiService {
     }
   }
 
+  /// Setup financial - Updated for Indonesian students
   Future<Map<String, dynamic>> setupFinancial({
-    required double monthlyIncome,
-    double? monthlyBudget,
-    double savingsGoalPercentage = 20.0,
-    double? emergencyFundTarget,
-    String? primaryBank,
+    required double currentSavings,       // Current total savings
+    required double monthlySavingsTarget, // Monthly savings target
+    required String primaryBank,          // Primary bank/e-wallet
   }) async {
     try {
       final body = <String, dynamic>{
-        'monthly_income': monthlyIncome,
-        'savings_goal_percentage': savingsGoalPercentage,
+        'current_savings': currentSavings,
+        'monthly_savings_target': monthlySavingsTarget,
+        'primary_bank': primaryBank,
       };
-
-      if (monthlyBudget != null) body['monthly_budget'] = monthlyBudget;
-      if (emergencyFundTarget != null) body['emergency_fund_target'] = emergencyFundTarget;
-      if (primaryBank != null) body['primary_bank'] = primaryBank;
 
       final response = await http.post(
         Uri.parse('$baseUrl/auth/initial-financial-setup'),

@@ -127,15 +127,13 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  // Setup profile
+  // Setup profile - Updated for Indonesian students
   Future<bool> setupProfile({
     required String fullName,
     String? phoneNumber,
-    DateTime? dateOfBirth,
-    String? occupation,
-    String? city,
-    String language = 'id',
-    String currency = 'IDR',
+    required String university,  // Required field for university
+    required String city,        // Required field for city/district  
+    String? occupation,          // Optional side job
     bool notificationsEnabled = true,
     bool voiceEnabled = true,
     bool darkMode = false,
@@ -147,11 +145,9 @@ class AuthProvider with ChangeNotifier {
       final response = await _apiService.setupProfile(
         fullName: fullName,
         phoneNumber: phoneNumber,
-        dateOfBirth: dateOfBirth,
-        occupation: occupation,
+        university: university,
         city: city,
-        language: language,
-        currency: currency,
+        occupation: occupation,
         notificationsEnabled: notificationsEnabled,
         voiceEnabled: voiceEnabled,
         darkMode: darkMode,
@@ -174,23 +170,19 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  // Setup financial
+  // Setup financial - Updated for Indonesian students
   Future<bool> setupFinancial({
-    required double monthlyIncome,
-    double? monthlyBudget,
-    double savingsGoalPercentage = 20.0,
-    double? emergencyFundTarget,
-    String? primaryBank,
+    required double currentSavings,       // Current total savings
+    required double monthlySavingsTarget, // Monthly savings target
+    required String primaryBank,          // Primary bank/e-wallet
   }) async {
     _setLoading(true);
     _clearError();
 
     try {
       final response = await _apiService.setupFinancial(
-        monthlyIncome: monthlyIncome,
-        monthlyBudget: monthlyBudget,
-        savingsGoalPercentage: savingsGoalPercentage,
-        emergencyFundTarget: emergencyFundTarget,
+        currentSavings: currentSavings,
+        monthlySavingsTarget: monthlySavingsTarget,
         primaryBank: primaryBank,
       );
 

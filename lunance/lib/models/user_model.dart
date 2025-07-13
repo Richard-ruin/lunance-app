@@ -75,17 +75,17 @@ class User {
 class UserProfile {
   final String fullName;
   final String? phoneNumber;
-  final DateTime? dateOfBirth;
-  final String? occupation;
-  final String? city;
+  final String? university;  // Field baru untuk universitas
+  final String? city;  // Kota/kecamatan tempat tinggal
+  final String? occupation;  // Pekerjaan sampingan (opsional)
   final String? profilePicture;
 
   UserProfile({
     required this.fullName,
     this.phoneNumber,
-    this.dateOfBirth,
-    this.occupation,
+    this.university,
     this.city,
+    this.occupation,
     this.profilePicture,
   });
 
@@ -93,11 +93,9 @@ class UserProfile {
     return UserProfile(
       fullName: json['full_name'] ?? '',
       phoneNumber: json['phone_number'],
-      dateOfBirth: json['date_of_birth'] != null 
-          ? DateTime.parse(json['date_of_birth']) 
-          : null,
-      occupation: json['occupation'],
+      university: json['university'],  // Field universitas
       city: json['city'],
+      occupation: json['occupation'],
       profilePicture: json['profile_picture'],
     );
   }
@@ -106,17 +104,17 @@ class UserProfile {
     return {
       'full_name': fullName,
       'phone_number': phoneNumber,
-      'date_of_birth': dateOfBirth?.toIso8601String(),
-      'occupation': occupation,
+      'university': university,  // Field universitas
       'city': city,
+      'occupation': occupation,
       'profile_picture': profilePicture,
     };
   }
 }
 
 class UserPreferences {
-  final String language;
-  final String currency;
+  final String language;  // Fixed ke "id" untuk Bahasa Indonesia
+  final String currency;  // Fixed ke "IDR" untuk Rupiah
   final String dateFormat;
   final String timeFormat;
   final bool notificationsEnabled;
@@ -137,8 +135,8 @@ class UserPreferences {
 
   factory UserPreferences.fromJson(Map<String, dynamic> json) {
     return UserPreferences(
-      language: json['language'] ?? 'id',
-      currency: json['currency'] ?? 'IDR',
+      language: json['language'] ?? 'id',  // Default Bahasa Indonesia
+      currency: json['currency'] ?? 'IDR',  // Default Rupiah
       dateFormat: json['date_format'] ?? 'DD/MM/YYYY',
       timeFormat: json['time_format'] ?? '24h',
       notificationsEnabled: json['notifications_enabled'] ?? true,
@@ -163,42 +161,49 @@ class UserPreferences {
 }
 
 class FinancialSettings {
-  final double monthlyIncome;
-  final double? monthlyBudget;
-  final double savingsGoalPercentage;
-  final double? emergencyFundTarget;
-  final String? primaryBank;
+  final double currentSavings;  // Total tabungan saat ini
+  final double monthlySavingsTarget;  // Target tabungan bulanan
+  final String primaryBank;  // Bank atau e-wallet utama
   final List<String> expenseCategories;
   final List<String> incomeCategories;
 
   FinancialSettings({
-    required this.monthlyIncome,
-    this.monthlyBudget,
-    required this.savingsGoalPercentage,
-    this.emergencyFundTarget,
-    this.primaryBank,
+    required this.currentSavings,
+    required this.monthlySavingsTarget,
+    required this.primaryBank,
     required this.expenseCategories,
     required this.incomeCategories,
   });
 
   factory FinancialSettings.fromJson(Map<String, dynamic> json) {
     return FinancialSettings(
-      monthlyIncome: (json['monthly_income'] ?? 0).toDouble(),
-      monthlyBudget: json['monthly_budget']?.toDouble(),
-      savingsGoalPercentage: (json['savings_goal_percentage'] ?? 20.0).toDouble(),
-      emergencyFundTarget: json['emergency_fund_target']?.toDouble(),
-      primaryBank: json['primary_bank'],
-      expenseCategories: List<String>.from(json['expense_categories'] ?? []),
-      incomeCategories: List<String>.from(json['income_categories'] ?? []),
+      currentSavings: (json['current_savings'] ?? 0).toDouble(),
+      monthlySavingsTarget: (json['monthly_savings_target'] ?? 0).toDouble(),
+      primaryBank: json['primary_bank'] ?? '',
+      expenseCategories: List<String>.from(json['expense_categories'] ?? [
+        "Makanan & Minuman",
+        "Transportasi", 
+        "Buku & Alat Tulis",
+        "Hiburan",
+        "Kesehatan",
+        "Kos/Tempat Tinggal",
+        "Internet & Pulsa",
+        "Lainnya"
+      ]),
+      incomeCategories: List<String>.from(json['income_categories'] ?? [
+        "Uang Saku/Kiriman Ortu",
+        "Part-time Job",
+        "Freelance",
+        "Beasiswa",
+        "Lainnya"
+      ]),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'monthly_income': monthlyIncome,
-      'monthly_budget': monthlyBudget,
-      'savings_goal_percentage': savingsGoalPercentage,
-      'emergency_fund_target': emergencyFundTarget,
+      'current_savings': currentSavings,
+      'monthly_savings_target': monthlySavingsTarget,
       'primary_bank': primaryBank,
       'expense_categories': expenseCategories,
       'income_categories': incomeCategories,

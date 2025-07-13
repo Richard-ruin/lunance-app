@@ -1,13 +1,14 @@
+# app/models/user.py (Fixed untuk Pydantic V2)
 from datetime import datetime
 from typing import Optional, Dict, Any
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from bson import ObjectId
 from enum import Enum
 
 class UserPreferences(BaseModel):
-    """Model untuk preferensi user"""
-    language: str = "id"  # Default Bahasa Indonesia
-    currency: str = "IDR"  # Default Rupiah
+    """Model untuk preferensi user - disesuaikan untuk mahasiswa Indonesia"""
+    language: str = "id"  # Fixed Bahasa Indonesia
+    currency: str = "IDR"  # Fixed Rupiah
     date_format: str = "DD/MM/YYYY"
     time_format: str = "24h"
     notifications_enabled: bool = True
@@ -16,41 +17,49 @@ class UserPreferences(BaseModel):
     auto_categorization: bool = True
 
 class FinancialSettings(BaseModel):
-    """Model untuk pengaturan keuangan"""
-    monthly_income: Optional[float] = None
-    monthly_budget: Optional[float] = None
-    savings_goal_percentage: float = 20.0  # Default 20% dari income
-    emergency_fund_target: Optional[float] = None
-    primary_bank: Optional[str] = None
+    """Model untuk pengaturan keuangan mahasiswa"""
+    current_savings: Optional[float] = None  # Total tabungan saat ini
+    monthly_savings_target: Optional[float] = None  # Target tabungan bulanan
+    primary_bank: Optional[str] = None  # Bank atau e-wallet utama
+    
+    # Default categories untuk mahasiswa
     expense_categories: list = Field(default_factory=lambda: [
         "Makanan & Minuman",
         "Transportasi", 
-        "Belanja",
+        "Buku & Alat Tulis",
         "Hiburan",
         "Kesehatan",
-        "Pendidikan",
-        "Tagihan",
+        "Kos/Tempat Tinggal",
+        "Internet & Pulsa",
         "Lainnya"
     ])
     income_categories: list = Field(default_factory=lambda: [
-        "Gaji",
+        "Uang Saku/Kiriman Ortu",
+        "Part-time Job",
         "Freelance",
-        "Bisnis",
-        "Investasi",
+        "Beasiswa",
         "Lainnya"
     ])
 
 class UserProfile(BaseModel):
-    """Model untuk profil user"""
+    """Model untuk profil mahasiswa"""
     full_name: str
     phone_number: Optional[str] = None
-    date_of_birth: Optional[datetime] = None
-    occupation: Optional[str] = None
-    city: Optional[str] = None
+    university: Optional[str] = None  # Universitas
+    city: Optional[str] = None  # Kota/kecamatan tempat tinggal
+    occupation: Optional[str] = None  # Pekerjaan sampingan (opsional)
     profile_picture: Optional[str] = None
 
 class User(BaseModel):
     """Model utama untuk User"""
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_encoders={
+            ObjectId: str,
+            datetime: lambda v: v.isoformat()
+        }
+    )
+    
     id: Optional[str] = Field(default=None, alias="_id")
     username: str
     email: EmailStr
@@ -83,14 +92,6 @@ class User(BaseModel):
     # Refresh token untuk session management
     refresh_token: Optional[str] = None
     
-    class Config:
-        populate_by_name = True
-        allow_population_by_field_name = True
-        json_encoders = {
-            ObjectId: str,
-            datetime: lambda v: v.isoformat()
-        }
-    
     @classmethod
     def from_mongo(cls, data: Dict[str, Any]) -> "User":
         """Mengkonversi data dari MongoDB ke User model"""
@@ -107,8 +108,8 @@ class User(BaseModel):
     
     def to_mongo(self) -> Dict[str, Any]:
         """Mengkonversi User model ke format MongoDB"""
-        # Gunakan dict dengan by_alias=True untuk mendapatkan _id
-        data = self.dict(by_alias=True, exclude_unset=True)
+        # Gunakan model_dump dengan by_alias=True untuk mendapatkan _id
+        data = self.model_dump(by_alias=True, exclude_unset=True)
         
         # Hapus _id jika None (untuk insert baru)
         if "_id" in data and data["_id"] is None:

@@ -1,3 +1,4 @@
+# app/services/finance_service.py (Enhanced Version)
 import re
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
@@ -8,6 +9,7 @@ from ..models.finance import (
     Transaction, SavingsGoal, FinancialSummary, PendingFinancialData,
     TransactionType, TransactionStatus, SavingsGoalStatus
 )
+from ..models.user import User, FinancialSettings
 from ..utils.timezone_utils import IndonesiaDatetime, now_for_db
 
 class FinancialDataParser:
@@ -180,17 +182,150 @@ class FinancialDataParser:
         return result
 
 class FinanceService:
-    """Service untuk mengelola data keuangan"""
+    """Service untuk mengelola data keuangan dengan integrasi User Financial Settings"""
     
     def __init__(self):
         self.db = get_database()
         self.parser = FinancialDataParser()
     
-    # === Transaction Management ===
+    # === User Financial Settings Integration ===
+    
+    async def sync_user_financial_settings(self, user_id: str) -> Dict[str, Any]:
+        """Sinkronisasi financial settings user dengan data aktual"""
+        # Calculate actual current savings from all active savings goals
+        total_current_savings = await self._calculate_total_current_savings(user_id)
+        
+        # Get user's monthly target achievement this month
+        monthly_progress = await self._calculate_monthly_savings_progress(user_id)
+        
+        # Update user financial settings
+        update_data = {
+            "financial_settings.current_savings": total_current_savings,
+            "updated_at": now_for_db()
+        }
+        
+        result = self.db.users.update_one(
+            {"_id": ObjectId(user_id)},
+            {"$set": update_data}
+        )
+        
+        return {
+            "success": result.modified_count > 0,
+            "total_current_savings": total_current_savings,
+            "monthly_progress": monthly_progress,
+            "updated": result.modified_count > 0
+        }
+    
+    async def _calculate_total_current_savings(self, user_id: str) -> float:
+        """Hitung total tabungan aktual dari semua savings goals"""
+        pipeline = [
+            {"$match": {
+                "user_id": user_id,
+                "status": {"$in": [SavingsGoalStatus.ACTIVE.value, SavingsGoalStatus.COMPLETED.value]}
+            }},
+            {"$group": {
+                "_id": None,
+                "total_current": {"$sum": "$current_amount"}
+            }}
+        ]
+        
+        result = list(self.db.savings_goals.aggregate(pipeline))
+        return result[0]["total_current"] if result else 0.0
+    
+    async def _calculate_monthly_savings_progress(self, user_id: str) -> Dict[str, Any]:
+        """Hitung progress tabungan bulanan"""
+        now = IndonesiaDatetime.now()
+        start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        start_of_month_utc = IndonesiaDatetime.to_utc(start_of_month).replace(tzinfo=None)
+        
+        # Get user's monthly target
+        user_doc = self.db.users.find_one({"_id": ObjectId(user_id)})
+        if not user_doc or not user_doc.get("financial_settings"):
+            return {"monthly_target": 0, "achieved_this_month": 0, "progress_percentage": 0}
+        
+        monthly_target = user_doc["financial_settings"].get("monthly_savings_target", 0)
+        
+        # Calculate savings added this month (income - expense)
+        pipeline = [
+            {"$match": {
+                "user_id": user_id,
+                "status": TransactionStatus.CONFIRMED.value,
+                "date": {"$gte": start_of_month_utc}
+            }},
+            {"$group": {
+                "_id": "$type",
+                "total": {"$sum": "$amount"}
+            }}
+        ]
+        
+        transaction_summary = list(self.db.transactions.aggregate(pipeline))
+        income_this_month = 0
+        expense_this_month = 0
+        
+        for item in transaction_summary:
+            if item["_id"] == TransactionType.INCOME.value:
+                income_this_month = item["total"]
+            elif item["_id"] == TransactionType.EXPENSE.value:
+                expense_this_month = item["total"]
+        
+        net_savings_this_month = income_this_month - expense_this_month
+        progress_percentage = (net_savings_this_month / monthly_target * 100) if monthly_target > 0 else 0
+        
+        return {
+            "monthly_target": monthly_target,
+            "income_this_month": income_this_month,
+            "expense_this_month": expense_this_month,
+            "net_savings_this_month": net_savings_this_month,
+            "progress_percentage": min(progress_percentage, 100),
+            "remaining_to_target": max(monthly_target - net_savings_this_month, 0)
+        }
+    
+    async def create_monthly_savings_goal(self, user_id: str) -> Optional[SavingsGoal]:
+        """Buat atau update target tabungan bulanan otomatis"""
+        user_doc = self.db.users.find_one({"_id": ObjectId(user_id)})
+        if not user_doc or not user_doc.get("financial_settings"):
+            return None
+        
+        financial_settings = user_doc["financial_settings"]
+        monthly_target = financial_settings.get("monthly_savings_target")
+        
+        if not monthly_target or monthly_target <= 0:
+            return None
+        
+        now = IndonesiaDatetime.now()
+        month_year = now.strftime("%B %Y")
+        goal_name = f"Target Tabungan {month_year}"
+        
+        # Check if goal for this month already exists
+        existing_goal = self.db.savings_goals.find_one({
+            "user_id": user_id,
+            "item_name": goal_name,
+            "source": "auto_monthly"
+        })
+        
+        if existing_goal:
+            return SavingsGoal.from_mongo(existing_goal)
+        
+        # Create new monthly goal
+        goal_data = {
+            "item_name": goal_name,
+            "target_amount": monthly_target,
+            "description": f"Target tabungan bulanan untuk {month_year}",
+            "monthly_target": monthly_target,
+            "target_date": now.replace(day=28) + timedelta(days=4)  # End of month
+        }
+        
+        return await self.create_savings_goal(
+            user_id,
+            goal_data,
+            {"source": "auto_monthly"}
+        )
+    
+    # === Enhanced Transaction Management ===
     
     async def create_transaction(self, user_id: str, transaction_data: Dict[str, Any], 
                                chat_context: Dict[str, Any] = None) -> Transaction:
-        """Membuat transaksi baru"""
+        """Membuat transaksi baru dengan auto-sync financial settings"""
         now = now_for_db()
         
         # Prepare transaction data
@@ -225,7 +360,7 @@ class FinanceService:
         return Transaction.from_mongo(trans_data)
     
     async def confirm_transaction(self, transaction_id: str, user_id: str) -> bool:
-        """Konfirmasi transaksi"""
+        """Konfirmasi transaksi dengan auto-sync financial settings"""
         result = self.db.transactions.update_one(
             {"_id": ObjectId(transaction_id), "user_id": user_id},
             {"$set": {
@@ -234,6 +369,11 @@ class FinanceService:
                 "updated_at": now_for_db()
             }}
         )
+        
+        # Sync financial settings after transaction confirmation
+        if result.modified_count > 0:
+            await self.sync_user_financial_settings(user_id)
+        
         return result.modified_count > 0
     
     async def get_user_transactions(self, user_id: str, filters: Dict[str, Any] = None,
@@ -264,11 +404,11 @@ class FinanceService:
         
         return transactions
     
-    # === Savings Goal Management ===
+    # === Enhanced Savings Goal Management ===
     
     async def create_savings_goal(self, user_id: str, goal_data: Dict[str, Any],
                                 chat_context: Dict[str, Any] = None) -> SavingsGoal:
-        """Membuat target tabungan baru"""
+        """Membuat target tabungan baru dengan auto-sync financial settings"""
         now = now_for_db()
         
         # Prepare goal data
@@ -299,12 +439,15 @@ class FinanceService:
         result = self.db.savings_goals.insert_one(goal_data_prepared)
         goal_id = str(result.inserted_id)
         
+        # Sync financial settings after creating goal
+        await self.sync_user_financial_settings(user_id)
+        
         # Return goal object
         goal_data_prepared["_id"] = goal_id
         return SavingsGoal.from_mongo(goal_data_prepared)
     
     async def add_savings_to_goal(self, goal_id: str, user_id: str, amount: float) -> bool:
-        """Menambah tabungan ke target"""
+        """Menambah tabungan ke target dengan auto-sync financial settings"""
         # Get current goal
         goal_doc = self.db.savings_goals.find_one({
             "_id": ObjectId(goal_id),
@@ -332,6 +475,10 @@ class FinanceService:
             {"$set": update_data}
         )
         
+        # Sync financial settings after updating savings
+        if result.modified_count > 0:
+            await self.sync_user_financial_settings(user_id)
+        
         return result.modified_count > 0
     
     async def get_user_savings_goals(self, user_id: str, status: str = None) -> List[SavingsGoal]:
@@ -347,6 +494,56 @@ class FinanceService:
             goals.append(SavingsGoal.from_mongo(doc))
         
         return goals
+    
+    # === Financial Dashboard & Analytics ===
+    
+    async def get_financial_dashboard(self, user_id: str) -> Dict[str, Any]:
+        """Mendapatkan data dashboard keuangan lengkap"""
+        # Get user financial settings
+        user_doc = self.db.users.find_one({"_id": ObjectId(user_id)})
+        financial_settings = user_doc.get("financial_settings", {}) if user_doc else {}
+        
+        # Get monthly progress
+        monthly_progress = await self._calculate_monthly_savings_progress(user_id)
+        
+        # Get current savings total
+        total_current_savings = await self._calculate_total_current_savings(user_id)
+        
+        # Get active goals summary
+        active_goals = await self.get_user_savings_goals(user_id, "active")
+        
+        # Get recent transactions
+        recent_transactions = await self.get_user_transactions(user_id, {"status": "confirmed"}, 5, 0)
+        
+        # Get monthly summary
+        monthly_summary = await self.get_financial_summary(user_id, "monthly")
+        
+        return {
+            "user_financial_settings": {
+                "current_savings": financial_settings.get("current_savings", 0),
+                "monthly_savings_target": financial_settings.get("monthly_savings_target", 0),
+                "primary_bank": financial_settings.get("primary_bank", "")
+            },
+            "calculated_totals": {
+                "actual_current_savings": total_current_savings,
+                "savings_difference": total_current_savings - financial_settings.get("current_savings", 0)
+            },
+            "monthly_progress": monthly_progress,
+            "active_goals": {
+                "count": len(active_goals),
+                "goals": [goal.dict() for goal in active_goals[:3]],  # Top 3 goals
+                "total_target": sum(goal.target_amount for goal in active_goals),
+                "total_current": sum(goal.current_amount for goal in active_goals)
+            },
+            "recent_activity": {
+                "transactions": [trans.dict() for trans in recent_transactions],
+                "monthly_summary": monthly_summary.dict()
+            },
+            "sync_status": {
+                "last_synced": now_for_db(),
+                "needs_sync": abs(total_current_savings - financial_settings.get("current_savings", 0)) > 1000
+            }
+        }
     
     # === Pending Data Management ===
     

@@ -17,11 +17,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _fullNameController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _occupationController = TextEditingController();
+  final _universityController = TextEditingController();
   final _cityController = TextEditingController();
+  final _occupationController = TextEditingController();
   
-  String _selectedLanguage = 'id';
-  String _selectedCurrency = 'IDR';
   bool _notificationsEnabled = true;
   bool _voiceEnabled = true;
   bool _darkMode = false;
@@ -30,8 +29,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   void dispose() {
     _fullNameController.dispose();
     _phoneController.dispose();
-    _occupationController.dispose();
+    _universityController.dispose();
     _cityController.dispose();
+    _occupationController.dispose();
     super.dispose();
   }
 
@@ -44,14 +44,11 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         phoneNumber: _phoneController.text.trim().isNotEmpty 
             ? _phoneController.text.trim() 
             : null,
+        university: _universityController.text.trim(),
+        city: _cityController.text.trim(),
         occupation: _occupationController.text.trim().isNotEmpty 
             ? _occupationController.text.trim() 
             : null,
-        city: _cityController.text.trim().isNotEmpty 
-            ? _cityController.text.trim() 
-            : null,
-        language: _selectedLanguage,
-        currency: _selectedCurrency,
         notificationsEnabled: _notificationsEnabled,
         voiceEnabled: _voiceEnabled,
         darkMode: _darkMode,
@@ -148,7 +145,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                                   const SizedBox(height: 8),
                                   
                                   Text(
-                                    'Bantu kami mengenal Anda lebih baik untuk\npengalaman yang lebih personal',
+                                    'Bantu Luna AI memberikan saran keuangan\nyang tepat untuk mahasiswa',
                                     style: AppTextStyles.bodyMedium.copyWith(
                                       color: AppColors.textSecondary,
                                     ),
@@ -207,115 +204,57 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                             
                             const SizedBox(height: 24),
                             
-                            // Occupation field (optional)
+                            // University field (required)
                             CustomTextField(
-                              label: 'Pekerjaan',
-                              hintText: 'Software Developer, Teacher, dll.',
-                              controller: _occupationController,
-                              prefixIcon: Icons.work_outline,
+                              label: 'Universitas *',
+                              hintText: 'Universitas Indonesia, ITB, UGM, dll.',
+                              controller: _universityController,
+                              prefixIcon: Icons.school_outlined,
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Universitas tidak boleh kosong';
+                                }
+                                if (value.length < 2) {
+                                  return 'Nama universitas minimal 2 karakter';
+                                }
+                                return null;
+                              },
                             ),
                             
                             const SizedBox(height: 24),
                             
-                            // City field (optional)
+                            // City field (required)
                             CustomTextField(
-                              label: 'Kota',
-                              hintText: 'Jakarta, Bandung, dll.',
+                              label: 'Kota/Kecamatan *',
+                              hintText: 'Jakarta Pusat, Bandung, Yogyakarta, dll.',
                               controller: _cityController,
                               prefixIcon: Icons.location_city_outlined,
-                            ),
-                            
-                            const SizedBox(height: 32),
-                            
-                            // Language selection
-                            Text(
-                              'Bahasa',
-                              style: AppTextStyles.labelMedium.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Container(
-                              decoration: BoxDecoration(
-                                color: AppColors.gray50,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: AppColors.border),
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: RadioListTile<String>(
-                                      title: const Text('Bahasa Indonesia'),
-                                      value: 'id',
-                                      groupValue: _selectedLanguage,
-                                      activeColor: AppColors.primary,
-                                      onChanged: (value) {
-                                        setState(() {
-                                          _selectedLanguage = value!;
-                                        });
-                                      },
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: RadioListTile<String>(
-                                      title: const Text('English'),
-                                      value: 'en',
-                                      groupValue: _selectedLanguage,
-                                      activeColor: AppColors.primary,
-                                      onChanged: (value) {
-                                        setState(() {
-                                          _selectedLanguage = value!;
-                                        });
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              ),
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Kota/kecamatan tidak boleh kosong';
+                                }
+                                if (value.length < 2) {
+                                  return 'Nama kota minimal 2 karakter';
+                                }
+                                return null;
+                              },
                             ),
                             
                             const SizedBox(height: 24),
                             
-                            // Currency selection
-                            Text(
-                              'Mata Uang',
-                              style: AppTextStyles.labelMedium.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Container(
-                              decoration: BoxDecoration(
-                                color: AppColors.gray50,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: AppColors.border),
-                              ),
-                              child: DropdownButtonFormField<String>(
-                                value: _selectedCurrency,
-                                decoration: const InputDecoration(
-                                  border: InputBorder.none,
-                                  contentPadding: EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 16,
-                                  ),
-                                ),
-                                items: const [
-                                  DropdownMenuItem(value: 'IDR', child: Text('IDR (Rupiah)')),
-                                  DropdownMenuItem(value: 'USD', child: Text('USD (Dollar)')),
-                                  DropdownMenuItem(value: 'EUR', child: Text('EUR (Euro)')),
-                                ],
-                                onChanged: (value) {
-                                  setState(() {
-                                    _selectedCurrency = value!;
-                                  });
-                                },
-                              ),
+                            // Occupation field (optional - untuk pekerjaan sampingan)
+                            CustomTextField(
+                              label: 'Pekerjaan Sampingan',
+                              hintText: 'Freelancer, Part-time, dll. (opsional)',
+                              controller: _occupationController,
+                              prefixIcon: Icons.work_outline,
                             ),
                             
                             const SizedBox(height: 32),
                             
                             // Preferences
                             Text(
-                              'Preferensi',
+                              'Preferensi Aplikasi',
                               style: AppTextStyles.h6,
                             ),
                             const SizedBox(height: 16),

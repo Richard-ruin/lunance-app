@@ -1,6 +1,7 @@
+# app/models/finance.py (Fixed untuk Pydantic V2)
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from bson import ObjectId
 from enum import Enum
 
@@ -24,6 +25,14 @@ class SavingsGoalStatus(str, Enum):
 
 class Transaction(BaseModel):
     """Model untuk transaksi keuangan (pemasukan/pengeluaran)"""
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_encoders={
+            ObjectId: str,
+            datetime: lambda v: v.isoformat()
+        }
+    )
+    
     id: Optional[str] = Field(default=None, alias="_id")
     user_id: str
     
@@ -51,14 +60,6 @@ class Transaction(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     confirmed_at: Optional[datetime] = None
     
-    class Config:
-        populate_by_name = True
-        allow_population_by_field_name = True
-        json_encoders = {
-            ObjectId: str,
-            datetime: lambda v: v.isoformat()
-        }
-    
     @classmethod
     def from_mongo(cls, data: Dict[str, Any]) -> "Transaction":
         """Mengkonversi data dari MongoDB ke Transaction model"""
@@ -74,7 +75,7 @@ class Transaction(BaseModel):
     
     def to_mongo(self, exclude_id: bool = False) -> Dict[str, Any]:
         """Mengkonversi Transaction model ke format MongoDB"""
-        data = self.dict(by_alias=True, exclude_unset=True)
+        data = self.model_dump(by_alias=True, exclude_unset=True)
         
         if exclude_id or ("_id" in data and data["_id"] is None):
             data.pop("_id", None)
@@ -94,6 +95,14 @@ class Transaction(BaseModel):
 
 class SavingsGoal(BaseModel):
     """Model untuk target tabungan untuk membeli sesuatu"""
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_encoders={
+            ObjectId: str,
+            datetime: lambda v: v.isoformat()
+        }
+    )
+    
     id: Optional[str] = Field(default=None, alias="_id")
     user_id: str
     
@@ -124,14 +133,6 @@ class SavingsGoal(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     completed_at: Optional[datetime] = None
     
-    class Config:
-        populate_by_name = True
-        allow_population_by_field_name = True
-        json_encoders = {
-            ObjectId: str,
-            datetime: lambda v: v.isoformat()
-        }
-    
     @classmethod
     def from_mongo(cls, data: Dict[str, Any]) -> "SavingsGoal":
         """Mengkonversi data dari MongoDB ke SavingsGoal model"""
@@ -147,7 +148,7 @@ class SavingsGoal(BaseModel):
     
     def to_mongo(self, exclude_id: bool = False) -> Dict[str, Any]:
         """Mengkonversi SavingsGoal model ke format MongoDB"""
-        data = self.dict(by_alias=True, exclude_unset=True)
+        data = self.model_dump(by_alias=True, exclude_unset=True)
         
         if exclude_id or ("_id" in data and data["_id"] is None):
             data.pop("_id", None)
@@ -188,6 +189,12 @@ class SavingsGoal(BaseModel):
 
 class FinancialSummary(BaseModel):
     """Model untuk ringkasan keuangan"""
+    model_config = ConfigDict(
+        json_encoders={
+            datetime: lambda v: v.isoformat()
+        }
+    )
+    
     user_id: str
     period: str  # daily, weekly, monthly, yearly
     
@@ -213,14 +220,17 @@ class FinancialSummary(BaseModel):
     start_date: datetime
     end_date: datetime
     generated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
 
 class PendingFinancialData(BaseModel):
     """Model untuk data keuangan yang menunggu konfirmasi dari chat"""
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_encoders={
+            ObjectId: str,
+            datetime: lambda v: v.isoformat()
+        }
+    )
+    
     id: Optional[str] = Field(default=None, alias="_id")
     user_id: str
     conversation_id: str
@@ -244,14 +254,6 @@ class PendingFinancialData(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     confirmed_at: Optional[datetime] = None
     
-    class Config:
-        populate_by_name = True
-        allow_population_by_field_name = True
-        json_encoders = {
-            ObjectId: str,
-            datetime: lambda v: v.isoformat()
-        }
-    
     @classmethod
     def from_mongo(cls, data: Dict[str, Any]) -> "PendingFinancialData":
         """Mengkonversi data dari MongoDB ke PendingFinancialData model"""
@@ -267,7 +269,7 @@ class PendingFinancialData(BaseModel):
     
     def to_mongo(self, exclude_id: bool = False) -> Dict[str, Any]:
         """Mengkonversi PendingFinancialData model ke format MongoDB"""
-        data = self.dict(by_alias=True, exclude_unset=True)
+        data = self.model_dump(by_alias=True, exclude_unset=True)
         
         if exclude_id or ("_id" in data and data["_id"] is None):
             data.pop("_id", None)

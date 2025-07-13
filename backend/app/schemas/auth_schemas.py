@@ -52,43 +52,23 @@ class TokenRefresh(BaseModel):
     refresh_token: str
 
 class ProfileSetup(BaseModel):
-    """Schema untuk setup profil user"""
+    """Schema untuk setup profil mahasiswa Indonesia"""
     full_name: str = Field(..., min_length=2, max_length=100)
     phone_number: Optional[str] = Field(None, pattern=r'^\+?[1-9]\d{1,14}$')
-    date_of_birth: Optional[datetime] = None
-    occupation: Optional[str] = Field(None, max_length=100)
-    city: Optional[str] = Field(None, max_length=100)
+    university: str = Field(..., min_length=2, max_length=200)  # Universitas (wajib)
+    city: str = Field(..., min_length=2, max_length=100)  # Kota/kecamatan (wajib)
+    occupation: Optional[str] = Field(None, max_length=100)  # Pekerjaan sampingan (opsional)
     
-    # Preferences
-    language: str = Field(default="id", pattern=r'^(id|en)$')
-    currency: str = Field(default="IDR", pattern=r'^[A-Z]{3}$')
+    # Preferences (tetap sama, tapi language dan currency dihapus karena sudah fix untuk Indonesia)
     notifications_enabled: bool = True
     voice_enabled: bool = True
     dark_mode: bool = False
 
 class FinancialSetup(BaseModel):
-    """Schema untuk setup keuangan awal"""
-    monthly_income: float = Field(..., gt=0)
-    monthly_budget: Optional[float] = Field(None, gt=0)
-    savings_goal_percentage: float = Field(default=20.0, ge=0, le=100)
-    emergency_fund_target: Optional[float] = Field(None, gt=0)
-    primary_bank: Optional[str] = Field(None, max_length=100)
-    
-    @model_validator(mode='after')
-    def budget_not_exceed_income(self) -> Self:
-        if self.monthly_budget and self.monthly_budget > self.monthly_income:
-            raise ValueError('Budget bulanan tidak boleh melebihi pendapatan bulanan')
-        return self
-    
-    @field_validator('emergency_fund_target')
-    @classmethod
-    def emergency_fund_reasonable(cls, v, info):
-        if v and hasattr(info, 'data') and 'monthly_income' in info.data:
-            # Emergency fund sebaiknya 3-12 bulan pengeluaran
-            max_reasonable = info.data['monthly_income'] * 12
-            if v > max_reasonable:
-                raise ValueError('Target dana darurat terlalu besar (maksimal 12x pendapatan bulanan)')
-        return v
+    """Schema untuk setup keuangan mahasiswa"""
+    current_savings: float = Field(..., ge=0)  # Total tabungan saat ini
+    monthly_savings_target: float = Field(..., gt=0)  # Target tabungan bulanan
+    primary_bank: str = Field(..., min_length=2, max_length=100)  # Bank/e-wallet utama (wajib)
 
 class UserResponse(BaseModel):
     """Schema untuk response user data"""
@@ -134,13 +114,11 @@ class UpdateProfile(BaseModel):
     """Schema untuk update profil"""
     full_name: Optional[str] = Field(None, min_length=2, max_length=100)
     phone_number: Optional[str] = Field(None, pattern=r'^\+?[1-9]\d{1,14}$')
-    date_of_birth: Optional[datetime] = None
+    university: Optional[str] = Field(None, min_length=2, max_length=200)
+    city: Optional[str] = Field(None, min_length=2, max_length=100)
     occupation: Optional[str] = Field(None, max_length=100)
-    city: Optional[str] = Field(None, max_length=100)
     
-    # Preferences yang bisa diupdate
-    language: Optional[str] = Field(None, pattern=r'^(id|en)$')
-    currency: Optional[str] = Field(None, pattern=r'^[A-Z]{3}$')
+    # Preferences yang bisa diupdate (language dan currency dihapus)
     notifications_enabled: Optional[bool] = None
     voice_enabled: Optional[bool] = None
     dark_mode: Optional[bool] = None

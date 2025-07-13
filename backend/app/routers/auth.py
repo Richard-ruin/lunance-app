@@ -1,5 +1,7 @@
+# app/routers/auth.py (Enhanced Version with Financial Integration)
 from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import JSONResponse
 from typing import Optional
 
 from ..services.auth_service import AuthService
@@ -49,7 +51,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 @router.post("/register", response_model=ApiResponse, status_code=status.HTTP_201_CREATED)
 async def register(user_data: UserRegister):
     """
-    Registrasi user baru
+    Registrasi mahasiswa baru
     
     - **username**: Username unik (3-50 karakter, alfanumerik + underscore)
     - **email**: Email valid dan unik
@@ -61,7 +63,7 @@ async def register(user_data: UserRegister):
         
         return ApiResponse(
             success=True,
-            message="Registrasi berhasil! Silakan login untuk melanjutkan.",
+            message="Registrasi berhasil! Silakan login untuk melanjutkan setup profil.",
             data={
                 "user_id": new_user.id,
                 "username": new_user.username,
@@ -81,7 +83,7 @@ async def register(user_data: UserRegister):
 @router.post("/login", response_model=ApiResponse)
 async def login(login_data: UserLogin):
     """
-    Login user
+    Login mahasiswa
     
     - **email**: Email terdaftar
     - **password**: Password yang sesuai
@@ -118,12 +120,21 @@ async def login(login_data: UserLogin):
             last_login=user.last_login
         )
         
+        # 🆕 Get financial overview if setup completed
+        financial_overview = None
+        if user.onboarding_completed:
+            try:
+                financial_overview = await auth_service.get_user_financial_overview(user.id)
+            except Exception as e:
+                print(f"Warning: Could not get financial overview: {e}")
+        
         return ApiResponse(
             success=True,
             message="Login berhasil!",
             data={
                 "tokens": tokens,
-                "user": user_response.dict()
+                "user": user_response.dict(),
+                "financial_overview": financial_overview
             }
         )
         
@@ -165,18 +176,18 @@ async def setup_profile(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Setup profil user setelah registrasi
+    Setup profil mahasiswa setelah registrasi
     
-    - **full_name**: Nama lengkap (2-100 karakter)
+    - **full_name**: Nama lengkap (2-100 karakter) *wajib*
     - **phone_number**: Nomor telepon (opsional)
-    - **date_of_birth**: Tanggal lahir (opsional)
-    - **occupation**: Pekerjaan (opsional)
-    - **city**: Kota tempat tinggal (opsional)
-    - **language**: Bahasa (id/en)
-    - **currency**: Mata uang (IDR, USD, dll)
+    - **university**: Nama universitas (2-200 karakter) *wajib*
+    - **city**: Kota/kecamatan tempat tinggal (2-100 karakter) *wajib*
+    - **occupation**: Pekerjaan sampingan (opsional)
     - **notifications_enabled**: Aktifkan notifikasi
     - **voice_enabled**: Aktifkan fitur suara
     - **dark_mode**: Mode gelap
+    
+    Note: Bahasa sudah fixed ke Bahasa Indonesia dan mata uang ke Rupiah
     """
     try:
         updated_user = await auth_service.setup_profile(current_user.id, profile_data)
@@ -200,7 +211,7 @@ async def setup_profile(
         
         return ApiResponse(
             success=True,
-            message="Profil berhasil disimpan!",
+            message="Profil berhasil disimpan! Silakan lanjutkan setup keuangan.",
             data={"user": user_response.dict()}
         )
         
@@ -218,13 +229,14 @@ async def initial_financial_setup(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Setup keuangan awal user
+    Setup keuangan awal mahasiswa dengan integrasi savings goals
     
-    - **monthly_income**: Pendapatan bulanan (wajib, > 0)
-    - **monthly_budget**: Budget bulanan (opsional, <= monthly_income)
-    - **savings_goal_percentage**: Persentase target tabungan (0-100, default 20%)
-    - **emergency_fund_target**: Target dana darurat (opsional)
-    - **primary_bank**: Bank utama (opsional)
+    - **current_savings**: Total tabungan saat ini (>= 0) *wajib*
+    - **monthly_savings_target**: Target tabungan bulanan (> 0) *wajib*
+    - **primary_bank**: Bank atau e-wallet utama *wajib*
+    
+    Disesuaikan untuk kebutuhan mahasiswa Indonesia dengan fokus pada tabungan.
+    Otomatis membuat initial savings goals berdasarkan data yang diinput.
     """
     try:
         updated_user = await auth_service.setup_financial(current_user.id, financial_data)
@@ -246,24 +258,31 @@ async def initial_financial_setup(
             last_login=updated_user.last_login
         )
         
-        # Hitung target tabungan bulanan berdasarkan persentase
-        monthly_savings_target = (
-            financial_data.monthly_income * financial_data.savings_goal_percentage / 100
-        )
+        # 🆕 Get financial dashboard after setup
+        financial_overview = await auth_service.get_user_financial_overview(updated_user.id)
+        
+        # Hitung proyeksi tabungan untuk insight
+        projected_6_months = financial_data.current_savings + (financial_data.monthly_savings_target * 6)
+        projected_1_year = financial_data.current_savings + (financial_data.monthly_savings_target * 12)
         
         return ApiResponse(
             success=True,
-            message="Setup keuangan berhasil! Sekarang Anda dapat mulai menggunakan Lunance.",
+            message="Setup keuangan berhasil! Selamat datang di Lunance - AI finansial untuk mahasiswa Indonesia!",
             data={
                 "user": user_response.dict(),
-                "calculations": {
-                    "monthly_savings_target": monthly_savings_target,
-                    "monthly_income": financial_data.monthly_income,
-                    "budget_remaining": (
-                        financial_data.monthly_budget - monthly_savings_target 
-                        if financial_data.monthly_budget else None
-                    )
-                }
+                "financial_overview": financial_overview,
+                "projections": {
+                    "current_savings": financial_data.current_savings,
+                    "monthly_target": financial_data.monthly_savings_target,
+                    "projected_6_months": projected_6_months,
+                    "projected_1_year": projected_1_year
+                },
+                "next_steps": [
+                    "Mulai chat dengan Luna AI untuk tracking keuangan otomatis",
+                    "Buat target tabungan untuk barang yang ingin dibeli",
+                    "Input transaksi harian melalui chat natural",
+                    "Pantau progress bulanan di dashboard"
+                ]
             }
         )
         
@@ -278,7 +297,7 @@ async def initial_financial_setup(
 @router.get("/me", response_model=ApiResponse)
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """
-    Mendapatkan informasi user yang sedang login
+    Mendapatkan informasi mahasiswa yang sedang login dengan financial overview
     """
     try:
         user_response = UserResponse(
@@ -298,10 +317,18 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
             last_login=current_user.last_login
         )
         
+        # 🆕 Get financial overview if setup completed
+        financial_overview = None
+        if current_user.onboarding_completed:
+            financial_overview = await auth_service.get_user_financial_overview(current_user.id)
+        
         return ApiResponse(
             success=True,
             message="Data user berhasil diambil",
-            data={"user": user_response.dict()}
+            data={
+                "user": user_response.dict(),
+                "financial_overview": financial_overview
+            }
         )
         
     except Exception as e:
@@ -313,7 +340,7 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
 @router.post("/logout", response_model=ApiResponse)
 async def logout(current_user: User = Depends(get_current_user)):
     """
-    Logout user (menghapus refresh token)
+    Logout mahasiswa (menghapus refresh token)
     """
     try:
         success = await auth_service.logout_user(current_user.id)
@@ -343,7 +370,7 @@ async def change_password(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Ganti password user
+    Ganti password mahasiswa
     
     - **current_password**: Password saat ini
     - **new_password**: Password baru (minimal 6 karakter dengan huruf dan angka)
@@ -379,9 +406,10 @@ async def update_profile(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Update profil user
+    Update profil mahasiswa
     
     Semua field bersifat opsional. Hanya field yang dikirim yang akan diupdate.
+    Bahasa dan mata uang tidak bisa diubah (fixed untuk Indonesia).
     """
     try:
         updated_user = await auth_service.update_profile(current_user.id, update_data)
@@ -415,4 +443,184 @@ async def update_profile(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Terjadi kesalahan dalam update profil: {str(e)}"
+        )
+
+# 🆕 NEW ENDPOINTS: Financial Settings Management
+
+@router.put("/financial-settings", response_model=ApiResponse)
+async def update_financial_settings(
+    financial_data: dict,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Update financial settings dengan sinkronisasi savings goals
+    
+    - **current_savings**: Update total tabungan saat ini
+    - **monthly_savings_target**: Update target tabungan bulanan  
+    - **primary_bank**: Update bank/e-wallet utama
+    
+    Akan otomatis sinkronisasi dengan data savings goals.
+    """
+    try:
+        updated_user = await auth_service.update_financial_settings(current_user.id, financial_data)
+        
+        user_response = UserResponse(
+            id=updated_user.id,
+            username=updated_user.username,
+            email=updated_user.email,
+            profile=updated_user.profile.dict() if updated_user.profile else None,
+            preferences=updated_user.preferences.dict(),
+            financial_settings=updated_user.financial_settings.dict() if updated_user.financial_settings else None,
+            is_active=updated_user.is_active,
+            is_verified=updated_user.is_verified,
+            is_premium=updated_user.is_premium,
+            profile_setup_completed=updated_user.profile_setup_completed,
+            financial_setup_completed=updated_user.financial_setup_completed,
+            onboarding_completed=updated_user.onboarding_completed,
+            created_at=updated_user.created_at,
+            last_login=updated_user.last_login
+        )
+        
+        # Get updated financial overview
+        financial_overview = await auth_service.get_user_financial_overview(updated_user.id)
+        
+        return ApiResponse(
+            success=True,
+            message="Financial settings berhasil diperbarui dan disinkronisasi",
+            data={
+                "user": user_response.dict(),
+                "financial_overview": financial_overview
+            }
+        )
+        
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Terjadi kesalahan dalam update financial settings: {str(e)}"
+        )
+
+@router.get("/financial-overview", response_model=ApiResponse)
+async def get_financial_overview(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Mendapatkan overview keuangan lengkap user
+    
+    Menampilkan:
+    - Financial settings user
+    - Dashboard keuangan real-time
+    - Sync status antara settings dan data aktual
+    - Monthly progress
+    - Active savings goals
+    """
+    try:
+        financial_overview = await auth_service.get_user_financial_overview(current_user.id)
+        
+        return ApiResponse(
+            success=True,
+            message="Financial overview berhasil diambil",
+            data=financial_overview
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Terjadi kesalahan mengambil financial overview: {str(e)}"
+        )
+
+@router.post("/sync-financial-data", response_model=ApiResponse)
+async def sync_financial_data(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Sinkronisasi manual antara user financial settings dengan data savings goals
+    
+    Berguna jika ada perbedaan antara:
+    - current_savings di user settings vs total current_amount di savings goals
+    - Data tidak sinkron karena import atau perubahan manual
+    """
+    try:
+        # Import finance service
+        from ..services.finance_service import FinanceService
+        finance_service = FinanceService()
+        
+        # Sync financial settings
+        sync_result = await finance_service.sync_user_financial_settings(current_user.id)
+        
+        # Get updated overview
+        financial_overview = await auth_service.get_user_financial_overview(current_user.id)
+        
+        return ApiResponse(
+            success=True,
+            message="Sinkronisasi financial data berhasil dilakukan",
+            data={
+                "sync_result": sync_result,
+                "financial_overview": financial_overview
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Terjadi kesalahan dalam sinkronisasi: {str(e)}"
+        )
+
+@router.get("/onboarding-status", response_model=ApiResponse)
+async def get_onboarding_status(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Cek status onboarding user dan langkah yang belum selesai
+    """
+    try:
+        status_data = {
+            "user_id": current_user.id,
+            "username": current_user.username,
+            "email": current_user.email,
+            "profile_setup_completed": current_user.profile_setup_completed,
+            "financial_setup_completed": current_user.financial_setup_completed,
+            "onboarding_completed": current_user.onboarding_completed,
+            "next_steps": []
+        }
+        
+        # Determine next steps
+        if not current_user.profile_setup_completed:
+            status_data["next_steps"].append({
+                "step": "profile_setup",
+                "title": "Setup Profil",
+                "description": "Lengkapi profil dengan nama, universitas, dan kota",
+                "endpoint": "/api/v1/auth/setup-profile",
+                "priority": 1
+            })
+        
+        if not current_user.financial_setup_completed:
+            status_data["next_steps"].append({
+                "step": "financial_setup", 
+                "title": "Setup Keuangan",
+                "description": "Atur tabungan awal dan target bulanan",
+                "endpoint": "/api/v1/auth/initial-financial-setup",
+                "priority": 2
+            })
+        
+        if current_user.onboarding_completed:
+            status_data["next_steps"].append({
+                "step": "start_using",
+                "title": "Mulai Gunakan Lunance",
+                "description": "Chat dengan Luna AI untuk tracking keuangan otomatis",
+                "endpoint": "/api/v1/chat/ws/{user_id}",
+                "priority": 3
+            })
+        
+        return ApiResponse(
+            success=True,
+            message="Status onboarding berhasil diambil",
+            data=status_data
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Terjadi kesalahan mengambil status onboarding: {str(e)}"
         )

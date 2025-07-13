@@ -1,5 +1,6 @@
+# app/services/auth_service.py (Enhanced Version)
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Dict, Any
 from fastapi import HTTPException, status
 from bson import ObjectId
 
@@ -49,12 +50,12 @@ class AuthService:
         # Hash password
         hashed_password = get_password_hash(user_data.password)
         
-        # Buat user baru - tanpa menyetting id karena akan di-generate oleh MongoDB
+        # Buat user baru dengan default preferences untuk mahasiswa Indonesia
         new_user = User(
             username=user_data.username,
             email=user_data.email,
             hashed_password=hashed_password,
-            preferences=UserPreferences(),  # Default preferences
+            preferences=UserPreferences(),  # Default preferences (ID, IDR)
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
@@ -201,22 +202,22 @@ class AuthService:
             )
     
     async def setup_profile(self, user_id: str, profile_data: ProfileSetup) -> User:
-        """Setup profil user setelah registrasi"""
+        """Setup profil mahasiswa setelah registrasi"""
         
         try:
-            # Buat profile object
+            # Buat profile object untuk mahasiswa
             profile = UserProfile(
                 full_name=profile_data.full_name,
                 phone_number=profile_data.phone_number,
-                date_of_birth=profile_data.date_of_birth,
-                occupation=profile_data.occupation,
-                city=profile_data.city
+                university=profile_data.university,  # Field baru untuk universitas
+                city=profile_data.city,  # Sekarang wajib
+                occupation=profile_data.occupation  # Pekerjaan sampingan (opsional)
             )
             
-            # Update preferences
+            # Update preferences (language dan currency sudah fix di default)
             preferences = UserPreferences(
-                language=profile_data.language,
-                currency=profile_data.currency,
+                language="id",  # Fixed Bahasa Indonesia
+                currency="IDR",  # Fixed Rupiah
                 notifications_enabled=profile_data.notifications_enabled,
                 voice_enabled=profile_data.voice_enabled,
                 dark_mode=profile_data.dark_mode
@@ -255,15 +256,13 @@ class AuthService:
             )
     
     async def setup_financial(self, user_id: str, financial_data: FinancialSetup) -> User:
-        """Setup keuangan awal user"""
+        """Setup keuangan awal mahasiswa dengan integrasi savings goal"""
         
         try:
-            # Buat financial settings object
+            # Buat financial settings object untuk mahasiswa
             financial_settings = FinancialSettings(
-                monthly_income=financial_data.monthly_income,
-                monthly_budget=financial_data.monthly_budget,
-                savings_goal_percentage=financial_data.savings_goal_percentage,
-                emergency_fund_target=financial_data.emergency_fund_target,
+                current_savings=financial_data.current_savings,
+                monthly_savings_target=financial_data.monthly_savings_target,
                 primary_bank=financial_data.primary_bank
             )
             
@@ -290,6 +289,9 @@ class AuthService:
                     detail="User tidak ditemukan"
                 )
             
+            # 🆕 INTEGRASI FINANCIAL: Buat initial savings goal untuk monthly target
+            await self._create_initial_financial_goals(user_id, financial_data)
+            
             # Ambil user yang sudah diupdate
             updated_user = self.users_collection.find_one({"_id": ObjectId(user_id)})
             return User.from_mongo(updated_user)
@@ -302,6 +304,55 @@ class AuthService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Gagal setup keuangan"
             )
+    
+    async def _create_initial_financial_goals(self, user_id: str, financial_data: FinancialSetup):
+        """Buat initial savings goals berdasarkan financial setup"""
+        try:
+            # Import di sini untuk menghindari circular import
+            from .finance_service import FinanceService
+            finance_service = FinanceService()
+            
+            # 1. Buat initial savings goal jika user sudah punya tabungan
+            if financial_data.current_savings > 0:
+                await self._create_current_savings_goal(
+                    user_id, 
+                    financial_data.current_savings, 
+                    finance_service
+                )
+            
+            # 2. Buat monthly savings goal untuk bulan ini
+            if financial_data.monthly_savings_target > 0:
+                await finance_service.create_monthly_savings_goal(user_id)
+            
+            print(f"✅ Initial financial goals created for user {user_id}")
+            
+        except Exception as e:
+            print(f"⚠️ Warning: Failed to create initial financial goals: {e}")
+            # Don't raise error karena ini optional
+    
+    async def _create_current_savings_goal(self, user_id: str, current_savings: float, finance_service):
+        """Buat savings goal untuk current savings yang sudah ada"""
+        try:
+            goal_data = {
+                "item_name": "Tabungan Awal",
+                "target_amount": current_savings,
+                "current_amount": current_savings,  # Sudah tercapai
+                "description": f"Tabungan awal sebesar Rp {current_savings:,.0f} yang sudah dimiliki saat setup",
+                "status": "completed"
+            }
+            
+            # Create savings goal
+            await finance_service.create_savings_goal(
+                user_id,
+                goal_data,
+                {"source": "initial_setup"}
+            )
+            
+            # Mark as completed since it's already achieved
+            # Note: The service will handle the completion logic
+            
+        except Exception as e:
+            print(f"Error creating current savings goal: {e}")
     
     async def get_user_by_id(self, user_id: str) -> Optional[User]:
         """Mendapatkan user berdasarkan ID"""
@@ -377,7 +428,7 @@ class AuthService:
             )
     
     async def update_profile(self, user_id: str, update_data: UpdateProfile) -> User:
-        """Update profil user"""
+        """Update profil mahasiswa"""
         
         try:
             update_dict = {}
@@ -388,18 +439,14 @@ class AuthService:
                 profile_updates["profile.full_name"] = update_data.full_name
             if update_data.phone_number is not None:
                 profile_updates["profile.phone_number"] = update_data.phone_number
-            if update_data.date_of_birth is not None:
-                profile_updates["profile.date_of_birth"] = update_data.date_of_birth
-            if update_data.occupation is not None:
-                profile_updates["profile.occupation"] = update_data.occupation
+            if update_data.university is not None:
+                profile_updates["profile.university"] = update_data.university
             if update_data.city is not None:
                 profile_updates["profile.city"] = update_data.city
+            if update_data.occupation is not None:
+                profile_updates["profile.occupation"] = update_data.occupation
             
-            # Update preferences
-            if update_data.language is not None:
-                profile_updates["preferences.language"] = update_data.language
-            if update_data.currency is not None:
-                profile_updates["preferences.currency"] = update_data.currency
+            # Update preferences (language dan currency tidak bisa diubah)
             if update_data.notifications_enabled is not None:
                 profile_updates["preferences.notifications_enabled"] = update_data.notifications_enabled
             if update_data.voice_enabled is not None:
@@ -435,3 +482,82 @@ class AuthService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Gagal update profil"
             )
+    
+    # 🆕 NEW METHODS: Financial Settings Management
+    
+    async def update_financial_settings(self, user_id: str, financial_data: Dict[str, Any]) -> User:
+        """Update financial settings dengan sinkronisasi savings goals"""
+        try:
+            financial_updates = {}
+            
+            # Update financial settings fields
+            if "current_savings" in financial_data:
+                financial_updates["financial_settings.current_savings"] = financial_data["current_savings"]
+            if "monthly_savings_target" in financial_data:
+                financial_updates["financial_settings.monthly_savings_target"] = financial_data["monthly_savings_target"]
+            if "primary_bank" in financial_data:
+                financial_updates["financial_settings.primary_bank"] = financial_data["primary_bank"]
+            
+            if financial_updates:
+                financial_updates["updated_at"] = datetime.utcnow()
+                
+                result = self.users_collection.update_one(
+                    {"_id": ObjectId(user_id)},
+                    {"$set": financial_updates}
+                )
+                
+                if result.modified_count == 0:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="User tidak ditemukan atau tidak ada perubahan"
+                    )
+                
+                # Sync dengan finance service jika ada perubahan
+                from .finance_service import FinanceService
+                finance_service = FinanceService()
+                await finance_service.sync_user_financial_settings(user_id)
+            
+            # Ambil user yang sudah diupdate
+            updated_user = self.users_collection.find_one({"_id": ObjectId(user_id)})
+            return User.from_mongo(updated_user)
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"Error updating financial settings: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Gagal update financial settings"
+            )
+    
+    async def get_user_financial_overview(self, user_id: str) -> Dict[str, Any]:
+        """Mendapatkan overview keuangan user"""
+        try:
+            user = await self.get_user_by_id(user_id)
+            if not user or not user.financial_settings:
+                return {
+                    "has_financial_setup": False,
+                    "message": "Financial setup belum dilakukan"
+                }
+            
+            # Get financial dashboard dari finance service
+            from .finance_service import FinanceService
+            finance_service = FinanceService()
+            dashboard = await finance_service.get_financial_dashboard(user_id)
+            
+            return {
+                "has_financial_setup": True,
+                "user_profile": {
+                    "full_name": user.profile.full_name if user.profile else "",
+                    "university": user.profile.university if user.profile else "",
+                    "city": user.profile.city if user.profile else ""
+                },
+                "financial_overview": dashboard
+            }
+            
+        except Exception as e:
+            print(f"Error getting financial overview: {e}")
+            return {
+                "has_financial_setup": False,
+                "error": str(e)
+            }

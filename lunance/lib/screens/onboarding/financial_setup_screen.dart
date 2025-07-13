@@ -15,18 +15,14 @@ class FinancialSetupScreen extends StatefulWidget {
 
 class _FinancialSetupScreenState extends State<FinancialSetupScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _monthlyIncomeController = TextEditingController();
-  final _monthlyBudgetController = TextEditingController();
-  final _emergencyFundController = TextEditingController();
+  final _currentSavingsController = TextEditingController();
+  final _monthlySavingsTargetController = TextEditingController();
   final _primaryBankController = TextEditingController();
-  
-  double _savingsGoalPercentage = 20.0;
 
   @override
   void dispose() {
-    _monthlyIncomeController.dispose();
-    _monthlyBudgetController.dispose();
-    _emergencyFundController.dispose();
+    _currentSavingsController.dispose();
+    _monthlySavingsTargetController.dispose();
     _primaryBankController.dispose();
     super.dispose();
   }
@@ -36,17 +32,9 @@ class _FinancialSetupScreenState extends State<FinancialSetupScreen> {
       final authProvider = context.read<AuthProvider>();
       
       final success = await authProvider.setupFinancial(
-        monthlyIncome: double.parse(_monthlyIncomeController.text.replaceAll(',', '')),
-        monthlyBudget: _monthlyBudgetController.text.isNotEmpty 
-            ? double.parse(_monthlyBudgetController.text.replaceAll(',', ''))
-            : null,
-        savingsGoalPercentage: _savingsGoalPercentage,
-        emergencyFundTarget: _emergencyFundController.text.isNotEmpty 
-            ? double.parse(_emergencyFundController.text.replaceAll(',', ''))
-            : null,
-        primaryBank: _primaryBankController.text.trim().isNotEmpty 
-            ? _primaryBankController.text.trim()
-            : null,
+        currentSavings: double.parse(_currentSavingsController.text.replaceAll(',', '')),
+        monthlySavingsTarget: double.parse(_monthlySavingsTargetController.text.replaceAll(',', '')),
+        primaryBank: _primaryBankController.text.trim(),
       );
 
       if (success && mounted) {
@@ -154,7 +142,7 @@ class _FinancialSetupScreenState extends State<FinancialSetupScreen> {
                                   const SizedBox(height: 16),
                                   
                                   Text(
-                                    'Setup Keuangan Awal',
+                                    'Setup Keuangan Mahasiswa',
                                     style: AppTextStyles.h3,
                                     textAlign: TextAlign.center,
                                   ),
@@ -162,7 +150,7 @@ class _FinancialSetupScreenState extends State<FinancialSetupScreen> {
                                   const SizedBox(height: 8),
                                   
                                   Text(
-                                    'Bantu Luna AI memberikan saran keuangan\nyang tepat untuk Anda',
+                                    'Bantu Luna AI memberikan saran keuangan\nyang tepat sesuai kondisi mahasiswa',
                                     style: AppTextStyles.bodyMedium.copyWith(
                                       color: AppColors.textSecondary,
                                     ),
@@ -183,17 +171,17 @@ class _FinancialSetupScreenState extends State<FinancialSetupScreen> {
                             
                             const SizedBox(height: 8),
                             
-                            // Monthly income field (required)
+                            // Current savings field (required)
                             CustomTextField(
-                              label: 'Pendapatan Bulanan *',
-                              hintText: '10,000,000',
-                              controller: _monthlyIncomeController,
+                              label: 'Total Tabungan Saat Ini *',
+                              hintText: '2,000,000',
+                              controller: _currentSavingsController,
                               keyboardType: TextInputType.number,
-                              prefixIcon: Icons.attach_money,
+                              prefixIcon: Icons.savings_outlined,
                               onChanged: (value) {
                                 String formatted = _formatCurrency(value);
                                 if (formatted != value) {
-                                  _monthlyIncomeController.value = TextEditingValue(
+                                  _currentSavingsController.value = TextEditingValue(
                                     text: formatted,
                                     selection: TextSelection.collapsed(offset: formatted.length),
                                   );
@@ -201,78 +189,110 @@ class _FinancialSetupScreenState extends State<FinancialSetupScreen> {
                               },
                               validator: (value) {
                                 if (value == null || value.isEmpty) {
-                                  return 'Pendapatan bulanan tidak boleh kosong';
+                                  return 'Total tabungan tidak boleh kosong';
                                 }
                                 final numValue = double.tryParse(value.replaceAll(',', ''));
-                                if (numValue == null || numValue <= 0) {
-                                  return 'Masukkan pendapatan yang valid';
+                                if (numValue == null || numValue < 0) {
+                                  return 'Masukkan jumlah tabungan yang valid';
                                 }
                                 return null;
                               },
                             ),
                             
+                            const SizedBox(height: 8),
+                            
+                            Text(
+                              'Masukkan total uang yang Anda miliki saat ini (tabungan + dompet)',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            
                             const SizedBox(height: 24),
                             
-                            // Monthly budget field (optional)
+                            // Monthly savings target field (required)
                             CustomTextField(
-                              label: 'Budget Bulanan',
-                              hintText: '8,000,000',
-                              controller: _monthlyBudgetController,
+                              label: 'Target Tabungan Bulanan *',
+                              hintText: '500,000',
+                              controller: _monthlySavingsTargetController,
                               keyboardType: TextInputType.number,
-                              prefixIcon: Icons.receipt_long,
+                              prefixIcon: Icons.trending_up_outlined,
                               onChanged: (value) {
                                 String formatted = _formatCurrency(value);
                                 if (formatted != value) {
-                                  _monthlyBudgetController.value = TextEditingValue(
+                                  _monthlySavingsTargetController.value = TextEditingValue(
                                     text: formatted,
                                     selection: TextSelection.collapsed(offset: formatted.length),
                                   );
                                 }
                               },
                               validator: (value) {
-                                if (value != null && value.isNotEmpty) {
-                                  final budgetValue = double.tryParse(value.replaceAll(',', ''));
-                                  final incomeValue = double.tryParse(
-                                    _monthlyIncomeController.text.replaceAll(',', '')
-                                  );
-                                  
-                                  if (budgetValue == null || budgetValue <= 0) {
-                                    return 'Masukkan budget yang valid';
-                                  }
-                                  
-                                  if (incomeValue != null && budgetValue > incomeValue) {
-                                    return 'Budget tidak boleh melebihi pendapatan';
-                                  }
+                                if (value == null || value.isEmpty) {
+                                  return 'Target tabungan bulanan tidak boleh kosong';
+                                }
+                                final numValue = double.tryParse(value.replaceAll(',', ''));
+                                if (numValue == null || numValue <= 0) {
+                                  return 'Masukkan target tabungan yang valid';
                                 }
                                 return null;
                               },
                             ),
                             
-                            const SizedBox(height: 32),
+                            const SizedBox(height: 8),
                             
-                            // Savings goal percentage
                             Text(
-                              'Target Tabungan',
-                              style: AppTextStyles.labelMedium.copyWith(
+                              'Berapa rupiah yang ingin Anda sisihkan setiap bulan untuk ditabung?',
+                              style: AppTextStyles.bodySmall.copyWith(
                                 color: AppColors.textSecondary,
                               ),
                             ),
+                            
+                            const SizedBox(height: 24),
+                            
+                            // Primary bank field (required)
+                            CustomTextField(
+                              label: 'Bank atau E-Wallet Utama *',
+                              hintText: 'BCA, Mandiri, GoPay, DANA, dll.',
+                              controller: _primaryBankController,
+                              prefixIcon: Icons.account_balance,
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Bank atau e-wallet utama tidak boleh kosong';
+                                }
+                                if (value.length < 2) {
+                                  return 'Nama bank/e-wallet minimal 2 karakter';
+                                }
+                                return null;
+                              },
+                            ),
+                            
                             const SizedBox(height: 8),
                             
+                            Text(
+                              'Bank atau aplikasi e-wallet yang paling sering Anda gunakan',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            
+                            const SizedBox(height: 32),
+                            
+                            // Tips untuk mahasiswa
                             CustomCard(
-                              padding: const EdgeInsets.all(16),
+                              backgroundColor: AppColors.primary.withOpacity(0.05),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Text(
-                                        'Persentase dari Pendapatan',
-                                        style: AppTextStyles.labelLarge,
+                                      Icon(
+                                        Icons.lightbulb_outline,
+                                        color: AppColors.primary,
+                                        size: 20,
                                       ),
+                                      const SizedBox(width: 8),
                                       Text(
-                                        '${_savingsGoalPercentage.toInt()}%',
+                                        'Tips untuk Mahasiswa',
                                         style: AppTextStyles.labelLarge.copyWith(
                                           color: AppColors.primary,
                                           fontWeight: FontWeight.w600,
@@ -280,23 +300,16 @@ class _FinancialSetupScreenState extends State<FinancialSetupScreen> {
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 16),
-                                  Slider(
-                                    value: _savingsGoalPercentage,
-                                    min: 0,
-                                    max: 50,
-                                    divisions: 10,
-                                    activeColor: AppColors.primary,
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _savingsGoalPercentage = value;
-                                      });
-                                    },
-                                  ),
+                                  const SizedBox(height: 12),
+                                  
                                   Text(
-                                    'Rekomendasi: 10-30% dari pendapatan bulanan',
+                                    '• Mulai dengan target tabungan yang realistis (10-20% dari uang saku)\n'
+                                    '• Gunakan aplikasi digital banking untuk kemudahan tracking\n'
+                                    '• Sisihkan uang tabungan setiap kali terima kiriman dari orangtua\n'
+                                    '• Coba cari penghasilan tambahan dari part-time atau freelance',
                                     style: AppTextStyles.bodySmall.copyWith(
                                       color: AppColors.textSecondary,
+                                      height: 1.5,
                                     ),
                                   ),
                                 ],
@@ -305,90 +318,48 @@ class _FinancialSetupScreenState extends State<FinancialSetupScreen> {
                             
                             const SizedBox(height: 24),
                             
-                            // Emergency fund target (optional)
-                            CustomTextField(
-                              label: 'Target Dana Darurat',
-                              hintText: '30,000,000',
-                              controller: _emergencyFundController,
-                              keyboardType: TextInputType.number,
-                              prefixIcon: Icons.emergency,
-                              onChanged: (value) {
-                                String formatted = _formatCurrency(value);
-                                if (formatted != value) {
-                                  _emergencyFundController.value = TextEditingValue(
-                                    text: formatted,
-                                    selection: TextSelection.collapsed(offset: formatted.length),
-                                  );
-                                }
-                              },
-                              validator: (value) {
-                                if (value != null && value.isNotEmpty) {
-                                  final emergencyValue = double.tryParse(value.replaceAll(',', ''));
-                                  if (emergencyValue == null || emergencyValue <= 0) {
-                                    return 'Masukkan target dana darurat yang valid';
-                                  }
-                                }
-                                return null;
-                              },
-                            ),
-                            
-                            const SizedBox(height: 8),
-                            
-                            Text(
-                              'Rekomendasi: 3-6 bulan pengeluaran untuk dana darurat',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                            
-                            const SizedBox(height: 24),
-                            
-                            // Primary bank (optional)
-                            CustomTextField(
-                              label: 'Bank Utama',
-                              hintText: 'BCA, Mandiri, BNI, dll.',
-                              controller: _primaryBankController,
-                              prefixIcon: Icons.account_balance,
-                            ),
-                            
-                            const SizedBox(height: 32),
-                            
                             // Preview calculations
-                            if (_monthlyIncomeController.text.isNotEmpty)
+                            if (_currentSavingsController.text.isNotEmpty && 
+                                _monthlySavingsTargetController.text.isNotEmpty)
                               CustomCard(
-                                backgroundColor: AppColors.primary.withOpacity(0.05),
+                                backgroundColor: AppColors.success.withOpacity(0.05),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'Ringkasan Keuangan',
+                                      'Ringkasan Keuangan Anda',
                                       style: AppTextStyles.h6,
                                     ),
                                     const SizedBox(height: 16),
                                     
                                     _buildCalculationRow(
-                                      'Pendapatan Bulanan:',
-                                      'Rp ${_monthlyIncomeController.text}',
+                                      'Tabungan Saat Ini:',
+                                      'Rp ${_currentSavingsController.text}',
                                     ),
                                     
-                                    if (_monthlyBudgetController.text.isNotEmpty)
-                                      _buildCalculationRow(
-                                        'Budget Bulanan:',
-                                        'Rp ${_monthlyBudgetController.text}',
-                                      ),
+                                    _buildCalculationRow(
+                                      'Target Nabung/Bulan:',
+                                      'Rp ${_monthlySavingsTargetController.text}',
+                                      isHighlight: true,
+                                    ),
                                     
                                     Builder(
                                       builder: (context) {
-                                        final income = double.tryParse(
-                                          _monthlyIncomeController.text.replaceAll(',', '')
+                                        final currentSavings = double.tryParse(
+                                          _currentSavingsController.text.replaceAll(',', '')
                                         ) ?? 0;
-                                        final savingsTarget = income * (_savingsGoalPercentage / 100);
+                                        final monthlyTarget = double.tryParse(
+                                          _monthlySavingsTargetController.text.replaceAll(',', '')
+                                        ) ?? 0;
                                         
-                                        return _buildCalculationRow(
-                                          'Target Tabungan:',
-                                          'Rp ${_formatCurrency(savingsTarget.toInt().toString())}',
-                                          isHighlight: true,
-                                        );
+                                        if (monthlyTarget > 0) {
+                                          final projectedIn6Months = currentSavings + (monthlyTarget * 6);
+                                          return _buildCalculationRow(
+                                            'Proyeksi 6 Bulan:',
+                                            'Rp ${_formatCurrency(projectedIn6Months.toInt().toString())}',
+                                          );
+                                        }
+                                        return const SizedBox.shrink();
                                       }
                                     ),
                                   ],
@@ -406,7 +377,7 @@ class _FinancialSetupScreenState extends State<FinancialSetupScreen> {
                   Container(
                     padding: const EdgeInsets.all(24),
                     child: CustomButton(
-                      text: 'Selesai',
+                      text: 'Selesai & Mulai Lunance',
                       onPressed: _handleSetupFinancial,
                       isLoading: authProvider.isLoading,
                       width: double.infinity,
