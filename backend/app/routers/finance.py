@@ -1,710 +1,392 @@
-# app/routers/finance.py (Enhanced Version)
+# app/routers/finance.py (No Prophet Dependencies - Windows Compatible)
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
+import statistics
+import warnings
+warnings.filterwarnings('ignore')
 
 from ..services.auth_dependency import get_current_user
 from ..services.finance_service import FinanceService
 from ..models.user import User
 from ..utils.timezone_utils import IndonesiaDatetime
-from ..schemas.finance_schemas import (
-    CreateTransactionRequest,
-    CreateSavingsGoalRequest,
-    UpdateSavingsGoalRequest,
-    AddSavingsRequest,
-    ConfirmFinancialDataRequest,
-    TransactionResponse,
-    SavingsGoalResponse,
-    FinancialSummaryResponse,
-    PendingFinancialDataResponse,
-    TransactionListResponse,
-    SavingsGoalListResponse,
-    FinanceApiResponse
-)
 
-router = APIRouter(prefix="/finance", tags=["Finance"])
+router = APIRouter(prefix="/finance", tags=["Finance Analytics"])
 finance_service = FinanceService()
 
 def format_currency(amount: float) -> str:
     """Format jumlah uang ke format Rupiah"""
     return f"Rp {amount:,.0f}".replace(',', '.')
 
-def format_transaction_response(transaction, user_preferences=None) -> Dict[str, Any]:
-    """Format transaction untuk response"""
-    return {
-        "id": transaction.id,
-        "user_id": transaction.user_id,
-        "type": transaction.type,
-        "amount": transaction.amount,
-        "category": transaction.category,
-        "description": transaction.description,
-        "date": transaction.date,
-        "status": transaction.status,
-        "source": transaction.source,
-        "tags": transaction.tags,
-        "notes": transaction.notes,
-        "created_at": transaction.created_at,
-        "updated_at": transaction.updated_at,
-        "confirmed_at": transaction.confirmed_at,
+class SimplePredictionEngine:
+    """Simple prediction engine without external dependencies"""
+    
+    @staticmethod
+    def moving_average_prediction(data_points: List[float], days_ahead: int, window_size: int = 7) -> List[float]:
+        """Moving average prediction"""
+        if len(data_points) < window_size:
+            window_size = max(1, len(data_points))
         
-        # Formatted fields
-        "formatted_amount": format_currency(transaction.amount),
-        "formatted_date": IndonesiaDatetime.format_date_only(transaction.date),
-        "relative_date": IndonesiaDatetime.format_relative(transaction.date)
-    }
-
-def format_savings_goal_response(goal, user_preferences=None) -> Dict[str, Any]:
-    """Format savings goal untuk response"""
-    return {
-        "id": goal.id,
-        "user_id": goal.user_id,
-        "item_name": goal.item_name,
-        "target_amount": goal.target_amount,
-        "current_amount": goal.current_amount,
-        "description": goal.description,
-        "target_date": goal.target_date,
-        "status": goal.status,
-        "monthly_target": goal.monthly_target,
-        "source": goal.source,
-        "tags": goal.tags,
-        "notes": goal.notes,
-        "created_at": goal.created_at,
-        "updated_at": goal.updated_at,
-        "completed_at": goal.completed_at,
+        # Calculate moving average for the last window
+        recent_data = data_points[-window_size:]
+        avg = sum(recent_data) / len(recent_data)
         
-        # Calculated fields
-        "progress_percentage": goal.progress_percentage,
-        "remaining_amount": goal.remaining_amount,
+        # Add some trend calculation
+        if len(data_points) >= 2:
+            trend = (data_points[-1] - data_points[0]) / len(data_points)
+        else:
+            trend = 0
         
-        # Formatted fields
-        "formatted_target_amount": format_currency(goal.target_amount),
-        "formatted_current_amount": format_currency(goal.current_amount),
-        "formatted_remaining_amount": format_currency(goal.remaining_amount),
-        "formatted_target_date": IndonesiaDatetime.format_date_only(goal.target_date) if goal.target_date else None
-    }
+        predictions = []
+        for i in range(days_ahead):
+            # Apply slight trend and some randomness based on historical variance
+            if len(data_points) > 1:
+                variance = statistics.variance(recent_data) if len(recent_data) > 1 else 0
+                prediction = max(0, avg + (trend * i) + (variance * 0.1))
+            else:
+                prediction = max(0, avg)
+            predictions.append(prediction)
+        
+        return predictions
+    
+    @staticmethod
+    def linear_regression_prediction(data_points: List[Dict], days_ahead: int) -> List[Dict]:
+        """Simple linear regression prediction"""
+        if len(data_points) < 2:
+            # Fallback to average
+            avg_income = sum(p.get('income', 0) for p in data_points) / max(len(data_points), 1)
+            avg_expense = sum(p.get('expense', 0) for p in data_points) / max(len(data_points), 1)
+            
+            predictions = []
+            base_date = datetime.now()
+            
+            for i in range(days_ahead):
+                pred_date = base_date + timedelta(days=i+1)
+                predictions.append({
+                    "date": pred_date.strftime("%Y-%m-%d"),
+                    "formatted_date": pred_date.strftime("%d %b %Y"),
+                    "predicted_income": max(0, avg_income),
+                    "predicted_expense": max(0, avg_expense),
+                    "predicted_net": avg_income - avg_expense,
+                    "confidence": "low"
+                })
+            
+            return predictions
+        
+        # Extract time series data
+        incomes = [p.get('income', 0) for p in data_points]
+        expenses = [p.get('expense', 0) for p in data_points]
+        
+        # Simple linear trend calculation
+        n = len(data_points)
+        x_values = list(range(n))
+        
+        def calculate_trend(y_values):
+            if n < 2:
+                return 0, sum(y_values) / n if y_values else 0
+            
+            sum_x = sum(x_values)
+            sum_y = sum(y_values)
+            sum_xy = sum(x * y for x, y in zip(x_values, y_values))
+            sum_x2 = sum(x * x for x in x_values)
+            
+            # Calculate slope and intercept
+            denominator = n * sum_x2 - sum_x * sum_x
+            if denominator == 0:
+                slope = 0
+            else:
+                slope = (n * sum_xy - sum_x * sum_y) / denominator
+            
+            intercept = (sum_y - slope * sum_x) / n
+            return slope, intercept
+        
+        income_slope, income_intercept = calculate_trend(incomes)
+        expense_slope, expense_intercept = calculate_trend(expenses)
+        
+        # Generate predictions
+        predictions = []
+        base_date = datetime.now()
+        
+        for i in range(days_ahead):
+            pred_date = base_date + timedelta(days=i+1)
+            x_pred = n + i
+            
+            pred_income = max(0, income_slope * x_pred + income_intercept)
+            pred_expense = max(0, expense_slope * x_pred + expense_intercept)
+            pred_net = pred_income - pred_expense
+            
+            predictions.append({
+                "date": pred_date.strftime("%Y-%m-%d"),
+                "formatted_date": pred_date.strftime("%d %b %Y"),
+                "predicted_income": pred_income,
+                "predicted_expense": pred_expense,
+                "predicted_net": pred_net,
+                "confidence": "medium" if n > 10 else "low"
+            })
+        
+        return predictions
 
-# === 🆕 NEW: Dashboard & Sync Endpoints ===
+# === 1. DASHBOARD SUMMARY ===
 
-@router.get("/dashboard", response_model=FinanceApiResponse)
-async def get_financial_dashboard(
+@router.get("/dashboard-summary")
+async def get_dashboard_summary(
     current_user: User = Depends(get_current_user)
 ):
-    """Mengambil dashboard keuangan lengkap dengan integrasi user financial settings"""
+    """Mendapatkan ringkasan total pemasukan, pengeluaran, dan tabungan"""
     try:
-        dashboard_data = await finance_service.get_financial_dashboard(current_user.id)
-        
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "message": "Dashboard keuangan berhasil diambil",
-                "data": dashboard_data
-            }
+        # Get monthly summary
+        monthly_summary = await finance_service.get_financial_summary(
+            current_user.id, "monthly"
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal mengambil dashboard: {str(e)}")
-
-@router.post("/sync", response_model=FinanceApiResponse)
-async def sync_financial_settings(
-    current_user: User = Depends(get_current_user)
-):
-    """Sinkronisasi financial settings user dengan data aktual"""
-    try:
-        sync_result = await finance_service.sync_user_financial_settings(current_user.id)
         
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "message": "Sinkronisasi berhasil dilakukan",
-                "data": sync_result
-            }
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal sinkronisasi: {str(e)}")
-
-@router.get("/monthly-progress", response_model=FinanceApiResponse)
-async def get_monthly_progress(
-    current_user: User = Depends(get_current_user)
-):
-    """Mengambil progress tabungan bulanan"""
-    try:
+        # Get total current savings
+        total_savings = await finance_service._calculate_total_current_savings(current_user.id)
+        
+        # Get user's financial settings
+        user_settings = current_user.financial_settings.dict() if current_user.financial_settings else {}
+        
+        # Calculate monthly progress
         monthly_progress = await finance_service._calculate_monthly_savings_progress(current_user.id)
         
-        # Format currency for display
-        monthly_progress.update({
-            "formatted_monthly_target": format_currency(monthly_progress["monthly_target"]),
-            "formatted_income_this_month": format_currency(monthly_progress["income_this_month"]),
-            "formatted_expense_this_month": format_currency(monthly_progress["expense_this_month"]),
-            "formatted_net_savings_this_month": format_currency(monthly_progress["net_savings_this_month"]),
-            "formatted_remaining_to_target": format_currency(monthly_progress["remaining_to_target"])
-        })
-        
         return JSONResponse(
             status_code=200,
             content={
                 "success": True,
-                "message": "Progress bulanan berhasil diambil",
-                "data": monthly_progress
-            }
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal mengambil progress bulanan: {str(e)}")
-
-@router.post("/create-monthly-goal", response_model=FinanceApiResponse)
-async def create_monthly_savings_goal(
-    current_user: User = Depends(get_current_user)
-):
-    """Membuat target tabungan bulanan otomatis"""
-    try:
-        goal = await finance_service.create_monthly_savings_goal(current_user.id)
-        
-        if not goal:
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "success": False,
-                    "message": "Tidak dapat membuat target bulanan. Pastikan monthly_savings_target sudah diset.",
-                    "data": None
-                }
-            )
-        
-        return JSONResponse(
-            status_code=201,
-            content={
-                "success": True,
-                "message": "Target tabungan bulanan berhasil dibuat",
+                "message": "Dashboard summary berhasil diambil",
                 "data": {
-                    "savings_goal": format_savings_goal_response(goal)
+                    "monthly_totals": {
+                        "total_income": monthly_summary.total_income,
+                        "total_expense": monthly_summary.total_expense,
+                        "net_balance": monthly_summary.net_balance,
+                        "formatted_income": format_currency(monthly_summary.total_income),
+                        "formatted_expense": format_currency(monthly_summary.total_expense),
+                        "formatted_balance": format_currency(monthly_summary.net_balance)
+                    },
+                    "savings_summary": {
+                        "current_total_savings": total_savings,
+                        "monthly_target": user_settings.get("monthly_savings_target", 0),
+                        "monthly_progress": monthly_progress,
+                        "formatted_total_savings": format_currency(total_savings),
+                        "formatted_monthly_target": format_currency(user_settings.get("monthly_savings_target", 0))
+                    },
+                    "period": {
+                        "start_date": monthly_summary.start_date.isoformat(),
+                        "end_date": monthly_summary.end_date.isoformat(),
+                        "month_year": IndonesiaDatetime.now().strftime("%B %Y")
+                    }
                 }
             }
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal membuat target bulanan: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Gagal mengambil dashboard summary: {str(e)}")
 
-# === Transaction Endpoints ===
+# === 2. TRANSACTION HISTORY WITH FILTERS ===
 
-@router.post("/transactions", response_model=FinanceApiResponse)
-async def create_transaction(
-    request: CreateTransactionRequest,
+@router.get("/history")
+async def get_transaction_history(
+    type: Optional[str] = Query(None, description="income, expense, atau all"),
+    category: Optional[str] = Query(None, description="Filter berdasarkan kategori"),
+    start_date: Optional[datetime] = Query(None, description="Tanggal mulai"),
+    end_date: Optional[datetime] = Query(None, description="Tanggal akhir"),
+    min_amount: Optional[float] = Query(None, description="Jumlah minimum"),
+    max_amount: Optional[float] = Query(None, description="Jumlah maksimum"),
+    search: Optional[str] = Query(None, description="Cari dalam deskripsi"),
+    page: int = Query(1, ge=1, description="Halaman"),
+    limit: int = Query(20, ge=1, le=100, description="Items per halaman"),
+    sort_by: str = Query("date", description="Urutkan berdasarkan: date, amount, category"),
+    sort_order: str = Query("desc", description="asc atau desc"),
     current_user: User = Depends(get_current_user)
 ):
-    """Membuat transaksi baru secara manual"""
+    """Mendapatkan history transaksi dengan filter lengkap"""
     try:
-        transaction = await finance_service.create_transaction(
-            current_user.id,
-            request.dict()
-        )
+        # Build filters
+        filters = {"status": "confirmed"}
         
-        # Auto-confirm manual transactions
-        await finance_service.confirm_transaction(transaction.id, current_user.id)
-        
-        # Get updated transaction
-        updated_transaction = await finance_service.get_user_transactions(
-            current_user.id,
-            {"_id": transaction.id}
-        )
-        
-        return JSONResponse(
-            status_code=201,
-            content={
-                "success": True,
-                "message": "Transaksi berhasil dibuat",
-                "data": {
-                    "transaction": format_transaction_response(updated_transaction[0] if updated_transaction else transaction)
-                }
-            }
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal membuat transaksi: {str(e)}")
-
-@router.get("/transactions", response_model=FinanceApiResponse)
-async def get_transactions(
-    type: Optional[str] = Query(None, description="income atau expense"),
-    category: Optional[str] = Query(None),
-    status: Optional[str] = Query(None),
-    start_date: Optional[datetime] = Query(None),
-    end_date: Optional[datetime] = Query(None),
-    limit: int = Query(50, le=100),
-    offset: int = Query(0, ge=0),
-    current_user: User = Depends(get_current_user)
-):
-    """Mengambil daftar transaksi user"""
-    try:
-        filters = {}
-        if type:
+        if type and type != "all":
             filters["type"] = type
         if category:
             filters["category"] = category
-        if status:
-            filters["status"] = status
         if start_date:
             filters["start_date"] = start_date
         if end_date:
             filters["end_date"] = end_date
         
+        # Get transactions
+        offset = (page - 1) * limit
         transactions = await finance_service.get_user_transactions(
-            current_user.id,
-            filters,
-            limit,
-            offset
+            current_user.id, filters, limit, offset
         )
         
-        transaction_list = [format_transaction_response(t) for t in transactions]
-        
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "message": "Daftar transaksi berhasil diambil",
-                "data": {
-                    "transactions": transaction_list,
-                    "total": len(transaction_list),
-                    "limit": limit,
-                    "offset": offset,
-                    "timezone": "WIB"
-                }
-            }
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal mengambil transaksi: {str(e)}")
-
-@router.get("/transactions/{transaction_id}", response_model=FinanceApiResponse)
-async def get_transaction_detail(
-    transaction_id: str,
-    current_user: User = Depends(get_current_user)
-):
-    """Mengambil detail transaksi"""
-    try:
-        transactions = await finance_service.get_user_transactions(
-            current_user.id,
-            {"_id": transaction_id}
-        )
-        
-        if not transactions:
-            raise HTTPException(status_code=404, detail="Transaksi tidak ditemukan")
-        
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "message": "Detail transaksi berhasil diambil",
-                "data": {
-                    "transaction": format_transaction_response(transactions[0])
-                }
-            }
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal mengambil detail transaksi: {str(e)}")
-
-# === Savings Goal Endpoints ===
-
-@router.post("/savings-goals", response_model=FinanceApiResponse)
-async def create_savings_goal(
-    request: CreateSavingsGoalRequest,
-    current_user: User = Depends(get_current_user)
-):
-    """Membuat target tabungan baru"""
-    try:
-        goal = await finance_service.create_savings_goal(
-            current_user.id,
-            request.dict()
-        )
-        
-        return JSONResponse(
-            status_code=201,
-            content={
-                "success": True,
-                "message": "Target tabungan berhasil dibuat",
-                "data": {
-                    "savings_goal": format_savings_goal_response(goal)
-                }
-            }
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal membuat target tabungan: {str(e)}")
-
-@router.get("/savings-goals", response_model=FinanceApiResponse)
-async def get_savings_goals(
-    status: Optional[str] = Query(None, description="active, completed, paused, cancelled"),
-    current_user: User = Depends(get_current_user)
-):
-    """Mengambil daftar target tabungan user"""
-    try:
-        goals = await finance_service.get_user_savings_goals(current_user.id, status)
-        
-        goal_list = [format_savings_goal_response(g) for g in goals]
-        
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "message": "Daftar target tabungan berhasil diambil",
-                "data": {
-                    "savings_goals": goal_list,
-                    "total": len(goal_list),
-                    "timezone": "WIB"
-                }
-            }
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal mengambil target tabungan: {str(e)}")
-
-@router.get("/savings-goals/{goal_id}", response_model=FinanceApiResponse)
-async def get_savings_goal_detail(
-    goal_id: str,
-    current_user: User = Depends(get_current_user)
-):
-    """Mengambil detail target tabungan"""
-    try:
-        goals = await finance_service.get_user_savings_goals(current_user.id)
-        goal = next((g for g in goals if g.id == goal_id), None)
-        
-        if not goal:
-            raise HTTPException(status_code=404, detail="Target tabungan tidak ditemukan")
-        
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "message": "Detail target tabungan berhasil diambil",
-                "data": {
-                    "savings_goal": format_savings_goal_response(goal)
-                }
-            }
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal mengambil detail target tabungan: {str(e)}")
-
-@router.put("/savings-goals/{goal_id}", response_model=FinanceApiResponse)
-async def update_savings_goal(
-    goal_id: str,
-    request: UpdateSavingsGoalRequest,
-    current_user: User = Depends(get_current_user)
-):
-    """Update target tabungan"""
-    try:
-        # Get current goal
-        goals = await finance_service.get_user_savings_goals(current_user.id)
-        goal = next((g for g in goals if g.id == goal_id), None)
-        
-        if not goal:
-            raise HTTPException(status_code=404, detail="Target tabungan tidak ditemukan")
-        
-        # Update goal fields
-        update_data = {}
-        if request.item_name is not None:
-            update_data["item_name"] = request.item_name
-        if request.target_amount is not None:
-            update_data["target_amount"] = request.target_amount
-        if request.description is not None:
-            update_data["description"] = request.description
-        if request.target_date is not None:
-            update_data["target_date"] = request.target_date
-        if request.monthly_target is not None:
-            update_data["monthly_target"] = request.monthly_target
-        if request.status is not None:
-            update_data["status"] = request.status
-        if request.tags is not None:
-            update_data["tags"] = request.tags
-        if request.notes is not None:
-            update_data["notes"] = request.notes
-        
-        if update_data:
-            from bson import ObjectId
-            result = finance_service.db.savings_goals.update_one(
-                {"_id": ObjectId(goal_id), "user_id": current_user.id},
-                {"$set": {**update_data, "updated_at": IndonesiaDatetime.now_for_db()}}
-            )
+        # Apply additional filters (amount, search)
+        filtered_transactions = []
+        for trans in transactions:
+            # Amount filter
+            if min_amount and trans.amount < min_amount:
+                continue
+            if max_amount and trans.amount > max_amount:
+                continue
             
-            if result.modified_count == 0:
-                raise HTTPException(status_code=400, detail="Tidak ada perubahan yang dilakukan")
-            
-            # Sync financial settings
-            await finance_service.sync_user_financial_settings(current_user.id)
+            # Search filter
+            if search and search.lower() not in trans.description.lower():
+                continue
+                
+            filtered_transactions.append(trans)
         
-        # Get updated goal
-        updated_goals = await finance_service.get_user_savings_goals(current_user.id)
-        updated_goal = next((g for g in updated_goals if g.id == goal_id), None)
+        # Format response
+        formatted_transactions = []
+        for trans in filtered_transactions:
+            formatted_transactions.append({
+                "id": trans.id,
+                "type": trans.type,
+                "amount": trans.amount,
+                "formatted_amount": format_currency(trans.amount),
+                "category": trans.category,
+                "description": trans.description,
+                "date": trans.date.isoformat(),
+                "formatted_date": IndonesiaDatetime.format_date_only(trans.date),
+                "relative_date": IndonesiaDatetime.format_relative(trans.date),
+                "source": trans.source,
+                "tags": trans.tags
+            })
         
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "message": "Target tabungan berhasil diperbarui",
-                "data": {
-                    "savings_goal": format_savings_goal_response(updated_goal) if updated_goal else None
-                }
-            }
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal memperbarui target tabungan: {str(e)}")
-
-@router.post("/savings-goals/{goal_id}/add-savings", response_model=FinanceApiResponse)
-async def add_savings_to_goal(
-    goal_id: str,
-    request: AddSavingsRequest,
-    current_user: User = Depends(get_current_user)
-):
-    """Menambah tabungan ke target"""
-    try:
-        success = await finance_service.add_savings_to_goal(
-            goal_id,
-            current_user.id,
-            request.amount
-        )
-        
-        if not success:
-            raise HTTPException(status_code=404, detail="Target tabungan tidak ditemukan")
-        
-        # Get updated goal
-        goals = await finance_service.get_user_savings_goals(current_user.id)
-        updated_goal = next((g for g in goals if g.id == goal_id), None)
-        
-        # Create income transaction for this savings addition
-        if request.description:
-            transaction_data = {
-                "type": "income",
-                "amount": request.amount,
-                "category": "tabungan",
-                "description": f"Menabung untuk {updated_goal.item_name if updated_goal else 'target'}: {request.description}"
-            }
-            
-            transaction = await finance_service.create_transaction(
-                current_user.id,
-                transaction_data,
-                {"source": "savings_addition"}
-            )
-            await finance_service.confirm_transaction(transaction.id, current_user.id)
-        
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "message": f"Berhasil menambah tabungan {format_currency(request.amount)}",
-                "data": {
-                    "savings_goal": format_savings_goal_response(updated_goal) if updated_goal else None,
-                    "added_amount": request.amount,
-                    "formatted_added_amount": format_currency(request.amount)
-                }
-            }
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal menambah tabungan: {str(e)}")
-
-@router.delete("/savings-goals/{goal_id}", response_model=FinanceApiResponse)
-async def delete_savings_goal(
-    goal_id: str,
-    current_user: User = Depends(get_current_user)
-):
-    """Hapus target tabungan"""
-    try:
-        from bson import ObjectId
-        
-        result = finance_service.db.savings_goals.delete_one({
-            "_id": ObjectId(goal_id),
-            "user_id": current_user.id
-        })
-        
-        if result.deleted_count == 0:
-            raise HTTPException(status_code=404, detail="Target tabungan tidak ditemukan")
-        
-        # Sync financial settings
-        await finance_service.sync_user_financial_settings(current_user.id)
-        
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "message": "Target tabungan berhasil dihapus",
-                "data": {"deleted_goal_id": goal_id}
-            }
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal menghapus target tabungan: {str(e)}")
-
-# === Pending Data Endpoints ===
-
-@router.get("/pending", response_model=FinanceApiResponse)
-async def get_pending_financial_data(
-    current_user: User = Depends(get_current_user)
-):
-    """Mengambil data keuangan yang menunggu konfirmasi"""
-    try:
-        pending_data = await finance_service.get_user_pending_data(current_user.id)
-        
-        pending_list = []
-        for pending in pending_data:
-            time_remaining = pending.expires_at - IndonesiaDatetime.now_for_db()
-            pending_list.append({
-                "id": pending.id,
-                "data_type": pending.data_type,
-                "parsed_data": pending.parsed_data,
-                "original_message": pending.original_message,
-                "luna_response": pending.luna_response,
-                "expires_at": pending.expires_at,
-                "created_at": pending.created_at,
-                "time_remaining": f"{max(0, time_remaining.total_seconds() / 3600):.1f} jam",
-                "formatted_expires_at": IndonesiaDatetime.format(pending.expires_at)
+        # Get savings goals history
+        savings_goals = await finance_service.get_user_savings_goals(current_user.id)
+        formatted_goals = []
+        for goal in savings_goals:
+            formatted_goals.append({
+                "id": goal.id,
+                "item_name": goal.item_name,
+                "target_amount": goal.target_amount,
+                "current_amount": goal.current_amount,
+                "formatted_target": format_currency(goal.target_amount),
+                "formatted_current": format_currency(goal.current_amount),
+                "progress_percentage": goal.progress_percentage,
+                "status": goal.status,
+                "created_date": goal.created_at.isoformat(),
+                "formatted_created": IndonesiaDatetime.format_date_only(goal.created_at)
             })
         
         return JSONResponse(
             status_code=200,
             content={
                 "success": True,
-                "message": f"Ditemukan {len(pending_list)} data yang menunggu konfirmasi",
+                "message": "History berhasil diambil",
                 "data": {
-                    "pending_data": pending_list,
-                    "total": len(pending_list)
+                    "transactions": formatted_transactions,
+                    "savings_goals": formatted_goals,
+                    "pagination": {
+                        "current_page": page,
+                        "per_page": limit,
+                        "total_transactions": len(formatted_transactions),
+                        "total_goals": len(formatted_goals)
+                    },
+                    "filters_applied": {
+                        "type": type,
+                        "category": category,
+                        "date_range": f"{start_date} - {end_date}" if start_date and end_date else None,
+                        "amount_range": f"{min_amount} - {max_amount}" if min_amount and max_amount else None,
+                        "search": search
+                    }
                 }
             }
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal mengambil data pending: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Gagal mengambil history: {str(e)}")
 
-@router.post("/pending/{pending_id}/confirm", response_model=FinanceApiResponse)
-async def confirm_pending_financial_data(
-    pending_id: str,
-    request: ConfirmFinancialDataRequest,
-    current_user: User = Depends(get_current_user)
-):
-    """Konfirmasi atau batalkan data keuangan yang pending"""
-    try:
-        result = await finance_service.confirm_pending_data(
-            pending_id,
-            current_user.id,
-            request.confirmed,
-            request.modifications
-        )
-        
-        if not result["success"]:
-            raise HTTPException(status_code=400, detail=result["message"])
-        
-        response_data = {
-            "success": True,
-            "message": result["message"],
-            "data": {
-                "confirmed": request.confirmed,
-                "pending_id": pending_id
-            }
-        }
-        
-        # Add created object to response if confirmed
-        if request.confirmed and "data" in result:
-            created_object = result["data"]
-            if hasattr(created_object, 'type'):  # Transaction
-                response_data["data"]["created_transaction"] = format_transaction_response(created_object)
-            else:  # Savings Goal
-                response_data["data"]["created_savings_goal"] = format_savings_goal_response(created_object)
-        
-        return JSONResponse(status_code=200, content=response_data)
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal memproses konfirmasi: {str(e)}")
+# === 3. CHARTS DATA - INCOME/EXPENSE BY TIME ===
 
-# === Financial Summary Endpoints ===
-
-@router.get("/summary", response_model=FinanceApiResponse)
-async def get_financial_summary(
-    period: str = Query("monthly", description="daily, weekly, monthly, yearly"),
+@router.get("/charts/time-series")
+async def get_time_series_chart_data(
+    period: str = Query("monthly", description="daily, weekly, monthly"),
     start_date: Optional[datetime] = Query(None),
     end_date: Optional[datetime] = Query(None),
     current_user: User = Depends(get_current_user)
 ):
-    """Mengambil ringkasan keuangan"""
+    """Mendapatkan data chart pemasukan/pengeluaran berdasarkan waktu"""
     try:
-        summary = await finance_service.get_financial_summary(
-            current_user.id,
-            period,
-            start_date,
-            end_date
-        )
+        # Set default date range if not provided
+        if not start_date or not end_date:
+            now = IndonesiaDatetime.now()
+            if period == "daily":
+                start_date = now - timedelta(days=30)  # Last 30 days
+                end_date = now
+            elif period == "weekly":
+                start_date = now - timedelta(weeks=12)  # Last 12 weeks
+                end_date = now
+            elif period == "monthly":
+                start_date = now - timedelta(days=365)  # Last 12 months
+                end_date = now
         
-        # Format summary response
-        summary_data = {
-            "user_id": summary.user_id,
-            "period": summary.period,
-            
-            # Income summary
-            "total_income": summary.total_income,
-            "income_count": summary.income_count,
-            "income_categories": summary.income_categories,
-            "formatted_total_income": format_currency(summary.total_income),
-            
-            # Expense summary
-            "total_expense": summary.total_expense,
-            "expense_count": summary.expense_count,
-            "expense_categories": summary.expense_categories,
-            "formatted_total_expense": format_currency(summary.total_expense),
-            
-            # Balance
-            "net_balance": summary.net_balance,
-            "formatted_net_balance": format_currency(summary.net_balance),
-            
-            # Savings summary
-            "active_goals_count": summary.active_goals_count,
-            "total_savings_target": summary.total_savings_target,
-            "total_savings_current": summary.total_savings_current,
-            "formatted_total_savings_target": format_currency(summary.total_savings_target),
-            "formatted_total_savings_current": format_currency(summary.total_savings_current),
-            
-            # Period info
-            "start_date": summary.start_date,
-            "end_date": summary.end_date,
-            "formatted_period": f"{IndonesiaDatetime.format_date_only(summary.start_date)} - {IndonesiaDatetime.format_date_only(summary.end_date)}",
-            "generated_at": summary.generated_at
+        # Get all transactions in period
+        filters = {
+            "status": "confirmed",
+            "start_date": start_date,
+            "end_date": end_date
         }
         
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "message": "Ringkasan keuangan berhasil diambil",
-                "data": summary_data
-            }
+        transactions = await finance_service.get_user_transactions(
+            current_user.id, filters, 1000, 0  # Get all transactions
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal mengambil ringkasan keuangan: {str(e)}")
-
-# === Categories Endpoints ===
-
-@router.get("/categories", response_model=FinanceApiResponse)
-async def get_categories(
-    current_user: User = Depends(get_current_user)
-):
-    """Mengambil daftar kategori default"""
-    try:
-        # Get categories from user financial settings or use default
-        user_categories = {
-            "income_categories": current_user.financial_settings.income_categories if current_user.financial_settings else [
-                "Uang Saku/Kiriman Ortu",
-                "Part-time Job", 
-                "Freelance",
-                "Beasiswa",
-                "Lainnya"
-            ],
-            "expense_categories": current_user.financial_settings.expense_categories if current_user.financial_settings else [
-                "Makanan & Minuman",
-                "Transportasi",
-                "Buku & Alat Tulis", 
-                "Hiburan",
-                "Kesehatan",
-                "Kos/Tempat Tinggal",
-                "Internet & Pulsa",
-                "Lainnya"
+        
+        # Group by period
+        data_points = {}
+        
+        for trans in transactions:
+            # Determine grouping key based on period
+            if period == "daily":
+                key = trans.date.strftime("%Y-%m-%d")
+                display_key = IndonesiaDatetime.format_date_only(trans.date)
+            elif period == "weekly":
+                # Start of week (Monday)
+                start_of_week = trans.date - timedelta(days=trans.date.weekday())
+                key = start_of_week.strftime("%Y-%m-%d")
+                display_key = f"Week of {IndonesiaDatetime.format_date_only(start_of_week)}"
+            elif period == "monthly":
+                key = trans.date.strftime("%Y-%m")
+                display_key = trans.date.strftime("%B %Y")
+            
+            if key not in data_points:
+                data_points[key] = {
+                    "period": display_key,
+                    "date_key": key,
+                    "income": 0,
+                    "expense": 0,
+                    "net": 0
+                }
+            
+            if trans.type == "income":
+                data_points[key]["income"] += trans.amount
+            else:
+                data_points[key]["expense"] += trans.amount
+            
+            data_points[key]["net"] = data_points[key]["income"] - data_points[key]["expense"]
+        
+        # Sort by date
+        sorted_data = sorted(data_points.values(), key=lambda x: x["date_key"])
+        
+        # Format for chart
+        chart_data = {
+            "labels": [point["period"] for point in sorted_data],
+            "datasets": [
+                {
+                    "label": "Pemasukan",
+                    "data": [point["income"] for point in sorted_data],
+                    "backgroundColor": "rgba(34, 197, 94, 0.8)",
+                    "borderColor": "rgba(34, 197, 94, 1)"
+                },
+                {
+                    "label": "Pengeluaran", 
+                    "data": [point["expense"] for point in sorted_data],
+                    "backgroundColor": "rgba(239, 68, 68, 0.8)",
+                    "borderColor": "rgba(239, 68, 68, 1)"
+                },
+                {
+                    "label": "Net Balance",
+                    "data": [point["net"] for point in sorted_data],
+                    "backgroundColor": "rgba(59, 130, 246, 0.8)",
+                    "borderColor": "rgba(59, 130, 246, 1)"
+                }
             ]
         }
         
@@ -712,209 +394,494 @@ async def get_categories(
             status_code=200,
             content={
                 "success": True,
-                "message": "Daftar kategori berhasil diambil",
-                "data": user_categories
+                "message": f"Chart data {period} berhasil diambil",
+                "data": {
+                    "chart_data": chart_data,
+                    "raw_data": sorted_data,
+                    "summary": {
+                        "total_income": sum(point["income"] for point in sorted_data),
+                        "total_expense": sum(point["expense"] for point in sorted_data),
+                        "average_monthly": sum(point["net"] for point in sorted_data) / len(sorted_data) if sorted_data else 0
+                    },
+                    "period_info": {
+                        "type": period,
+                        "start_date": start_date.isoformat(),
+                        "end_date": end_date.isoformat(),
+                        "data_points": len(sorted_data)
+                    }
+                }
             }
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal mengambil kategori: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Gagal mengambil chart data: {str(e)}")
 
-@router.get("/stats", response_model=FinanceApiResponse)
-async def get_financial_stats(
+# === 4. CHARTS DATA - BY CATEGORY ===
+
+@router.get("/charts/by-category")
+async def get_category_chart_data(
+    type: str = Query("expense", description="income atau expense"),
+    period: str = Query("monthly", description="daily, weekly, monthly, yearly"),
+    start_date: Optional[datetime] = Query(None),
+    end_date: Optional[datetime] = Query(None),
     current_user: User = Depends(get_current_user)
 ):
-    """Mengambil statistik keuangan singkat"""
+    """Mendapatkan data chart berdasarkan kategori"""
     try:
-        # Get current month summary
-        monthly_summary = await finance_service.get_financial_summary(
-            current_user.id,
-            "monthly"
+        # Get summary for the period
+        summary = await finance_service.get_financial_summary(
+            current_user.id, period, start_date, end_date
         )
         
-        # Get all active savings goals
-        active_goals = await finance_service.get_user_savings_goals(
-            current_user.id,
-            "active"
-        )
+        # Get category data based on type
+        if type == "income":
+            categories_data = summary.income_categories
+            total_amount = summary.total_income
+        else:
+            categories_data = summary.expense_categories
+            total_amount = summary.total_expense
         
-        # Get recent transactions
-        recent_transactions = await finance_service.get_user_transactions(
-            current_user.id,
-            {"status": "confirmed"},
-            5,  # last 5 transactions
-            0
-        )
+        if not categories_data:
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "message": f"Tidak ada data {type} untuk periode ini",
+                    "data": {
+                        "chart_data": {"labels": [], "datasets": []},
+                        "categories": [],
+                        "summary": {
+                            "total_amount": 0,
+                            "formatted_total": "Rp 0",
+                            "total_categories": 0,
+                            "type": type,
+                            "period": period
+                        }
+                    }
+                }
+            )
         
-        # Calculate additional stats
-        total_savings_progress = sum(g.current_amount for g in active_goals)
-        total_savings_target = sum(g.target_amount for g in active_goals)
-        overall_savings_progress = (total_savings_progress / total_savings_target * 100) if total_savings_target > 0 else 0
+        # Sort categories by amount (descending)
+        sorted_categories = sorted(categories_data.items(), key=lambda x: x[1], reverse=True)
         
-        stats = {
-            "monthly_income": monthly_summary.total_income,
-            "monthly_expense": monthly_summary.total_expense,
-            "monthly_balance": monthly_summary.net_balance,
-            "active_savings_goals": len(active_goals),
-            "total_savings_progress": total_savings_progress,
-            "total_savings_target": total_savings_target,
-            "overall_savings_progress_percentage": min(overall_savings_progress, 100),
-            "recent_transactions_count": len(recent_transactions),
-            
-            # Formatted versions
-            "formatted_monthly_income": format_currency(monthly_summary.total_income),
-            "formatted_monthly_expense": format_currency(monthly_summary.total_expense),
-            "formatted_monthly_balance": format_currency(monthly_summary.net_balance),
-            "formatted_total_savings_progress": format_currency(total_savings_progress),
-            "formatted_total_savings_target": format_currency(total_savings_target),
-            
-            # User financial settings comparison
-            "user_monthly_target": current_user.financial_settings.monthly_savings_target if current_user.financial_settings else 0,
-            "user_current_savings": current_user.financial_settings.current_savings if current_user.financial_settings else 0,
-            "formatted_user_monthly_target": format_currency(current_user.financial_settings.monthly_savings_target if current_user.financial_settings else 0),
-            "formatted_user_current_savings": format_currency(current_user.financial_settings.current_savings if current_user.financial_settings else 0),
+        # Prepare chart data
+        labels = [cat[0].title() for cat in sorted_categories]
+        amounts = [cat[1] for cat in sorted_categories]
+        percentages = [(amount/total_amount)*100 if total_amount > 0 else 0 for amount in amounts]
+        
+        # Colors for categories
+        colors = [
+            "#EF4444",  # Red
+            "#22C55E",  # Green  
+            "#3B82F6",  # Blue
+            "#F59E0B",  # Yellow
+            "#A855F7",  # Purple
+            "#EC4899",  # Pink
+            "#14B8A6",  # Teal
+            "#FB923C",  # Orange
+        ]
+        
+        chart_data = {
+            "labels": labels,
+            "datasets": [{
+                "label": f"{type.title()} by Category",
+                "data": amounts,
+                "backgroundColor": colors[:len(labels)],
+                "borderWidth": 2
+            }]
         }
         
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "message": "Statistik keuangan berhasil diambil",
-                "data": stats
-            }
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal mengambil statistik: {str(e)}")
-
-# === 🆕 NEW: Financial Analysis Endpoints ===
-
-@router.get("/insights", response_model=FinanceApiResponse)
-async def get_financial_insights(
-    current_user: User = Depends(get_current_user)
-):
-    """Mendapatkan insights keuangan berbasis AI"""
-    try:
-        # Get monthly data for analysis
-        monthly_summary = await finance_service.get_financial_summary(current_user.id, "monthly")
-        monthly_progress = await finance_service._calculate_monthly_savings_progress(current_user.id)
-        
-        # Generate insights
-        insights = []
-        
-        # Income vs Expense Analysis
-        if monthly_summary.total_income > 0:
-            expense_ratio = (monthly_summary.total_expense / monthly_summary.total_income) * 100
-            if expense_ratio > 80:
-                insights.append({
-                    "type": "warning",
-                    "category": "spending",
-                    "title": "Pengeluaran Tinggi",
-                    "message": f"Pengeluaran kamu {expense_ratio:.1f}% dari pemasukan. Coba kurangi pengeluaran non-esensial.",
-                    "priority": "high"
-                })
-            elif expense_ratio < 50:
-                insights.append({
-                    "type": "success", 
-                    "category": "saving",
-                    "title": "Hebat! Pengeluaran Terkendali",
-                    "message": f"Pengeluaran hanya {expense_ratio:.1f}% dari pemasukan. Kamu bisa menabung lebih banyak!",
-                    "priority": "medium"
-                })
-        
-        # Monthly Savings Target Analysis
-        if monthly_progress["monthly_target"] > 0:
-            progress_pct = monthly_progress["progress_percentage"]
-            if progress_pct >= 100:
-                insights.append({
-                    "type": "success",
-                    "category": "target",
-                    "title": "Target Bulanan Tercapai!",
-                    "message": f"Kamu sudah mencapai {progress_pct:.1f}% dari target tabungan bulanan. Luar biasa!",
-                    "priority": "high"
-                })
-            elif progress_pct < 25:
-                days_left = 30 - IndonesiaDatetime.now().day
-                if days_left > 0:
-                    daily_needed = monthly_progress["remaining_to_target"] / days_left
-                    insights.append({
-                        "type": "info",
-                        "category": "target",
-                        "title": "Kejar Target Bulanan",
-                        "message": f"Butuh menabung {format_currency(daily_needed)} per hari untuk mencapai target bulan ini.",
-                        "priority": "medium"
-                    })
-        
-        # Top Expense Category
-        if monthly_summary.expense_categories:
-            top_category = max(monthly_summary.expense_categories.items(), key=lambda x: x[1])
-            category_percentage = (top_category[1] / monthly_summary.total_expense) * 100
-            if category_percentage > 40:
-                insights.append({
-                    "type": "info",
-                    "category": "spending",
-                    "title": f"Pengeluaran Terbesar: {top_category[0].title()}",
-                    "message": f"{category_percentage:.1f}% pengeluaran untuk {top_category[0]}. Cek apakah masih wajar.",
-                    "priority": "medium"
-                })
-        
-        # Savings Goals Progress
-        active_goals = await finance_service.get_user_savings_goals(current_user.id, "active")
-        near_completion = [g for g in active_goals if g.progress_percentage >= 80]
-        if near_completion:
-            insights.append({
-                "type": "success",
-                "category": "goals",
-                "title": "Target Hampir Tercapai!",
-                "message": f"{len(near_completion)} target tabungan hampir selesai. Sedikit lagi!",
-                "priority": "medium"
+        # Detailed breakdown
+        categories_breakdown = []
+        for i, (category, amount) in enumerate(sorted_categories):
+            categories_breakdown.append({
+                "category": category.title(),
+                "amount": amount,
+                "formatted_amount": format_currency(amount),
+                "percentage": round(percentages[i], 1),
+                "color": colors[i % len(colors)]
             })
         
         return JSONResponse(
             status_code=200,
             content={
                 "success": True,
-                "message": "Insights keuangan berhasil diambil",
+                "message": f"Chart data kategori {type} berhasil diambil",
                 "data": {
-                    "insights": insights,
-                    "analysis_period": "monthly",
-                    "generated_at": IndonesiaDatetime.now_for_db()
+                    "chart_data": chart_data,
+                    "categories": categories_breakdown,
+                    "summary": {
+                        "total_amount": total_amount,
+                        "formatted_total": format_currency(total_amount),
+                        "total_categories": len(categories_breakdown),
+                        "type": type,
+                        "period": period
+                    }
                 }
             }
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal mengambil insights: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Gagal mengambil chart kategori: {str(e)}")
 
-# === Chat Integration Test Endpoint ===
+# === 5. PROGRESS BARS DATA ===
 
-@router.post("/parse-message", response_model=FinanceApiResponse)
-async def parse_financial_message(
-    message: dict,
+@router.get("/progress")
+async def get_progress_data(
     current_user: User = Depends(get_current_user)
 ):
-    """Test endpoint untuk parsing pesan keuangan (development only)"""
+    """Mendapatkan data progress untuk target tabungan"""
     try:
-        user_message = message.get("message", "")
-        if not user_message:
-            raise HTTPException(status_code=400, detail="Message required")
+        # Get monthly progress
+        monthly_progress = await finance_service._calculate_monthly_savings_progress(current_user.id)
         
-        result = finance_service.parse_financial_message(user_message)
+        # Get all active savings goals
+        active_goals = await finance_service.get_user_savings_goals(current_user.id, "active")
+        
+        # Format savings goals progress
+        goals_progress = []
+        for goal in active_goals:
+            # Calculate time progress if target_date exists
+            time_progress = None
+            if goal.target_date:
+                now = IndonesiaDatetime.now().replace(tzinfo=None)
+                total_days = (goal.target_date - goal.created_at).days
+                elapsed_days = (now - goal.created_at).days
+                time_progress = min((elapsed_days / total_days) * 100, 100) if total_days > 0 else 100
+            
+            goals_progress.append({
+                "id": goal.id,
+                "item_name": goal.item_name,
+                "target_amount": goal.target_amount,
+                "current_amount": goal.current_amount,
+                "formatted_target": format_currency(goal.target_amount),
+                "formatted_current": format_currency(goal.current_amount),
+                "formatted_remaining": format_currency(goal.remaining_amount),
+                "progress_percentage": round(goal.progress_percentage, 1),
+                "time_progress_percentage": round(time_progress, 1) if time_progress else None,
+                "status": goal.status,
+                "target_date": goal.target_date.isoformat() if goal.target_date else None,
+                "formatted_target_date": IndonesiaDatetime.format_date_only(goal.target_date) if goal.target_date else None,
+                "is_completed": goal.progress_percentage >= 100,
+                "days_remaining": (goal.target_date - IndonesiaDatetime.now().replace(tzinfo=None)).days if goal.target_date else None
+            })
+        
+        # Sort by progress percentage (highest first)
+        goals_progress.sort(key=lambda x: x["progress_percentage"], reverse=True)
         
         return JSONResponse(
             status_code=200,
             content={
                 "success": True,
-                "message": "Parsing berhasil",
+                "message": "Progress data berhasil diambil",
                 "data": {
-                    "original_message": user_message,
-                    "parse_result": result,
-                    "examples": [
-                        "Dapat gaji 5 juta",
-                        "Bayar listrik 200 ribu",
-                        "Belanja groceries 150rb", 
-                        "Mau nabung buat beli laptop 10 juta",
-                        "Target beli motor 20 juta"
-                    ]
+                    "monthly_savings_progress": {
+                        "target": monthly_progress["monthly_target"],
+                        "achieved": monthly_progress["net_savings_this_month"],
+                        "remaining": monthly_progress["remaining_to_target"],
+                        "progress_percentage": round(monthly_progress["progress_percentage"], 1),
+                        "formatted_target": format_currency(monthly_progress["monthly_target"]),
+                        "formatted_achieved": format_currency(monthly_progress["net_savings_this_month"]),
+                        "formatted_remaining": format_currency(monthly_progress["remaining_to_target"]),
+                        "is_completed": monthly_progress["progress_percentage"] >= 100,
+                        "month_year": IndonesiaDatetime.now().strftime("%B %Y")
+                    },
+                    "savings_goals_progress": goals_progress,
+                    "summary": {
+                        "total_active_goals": len(goals_progress),
+                        "completed_goals": len([g for g in goals_progress if g["is_completed"]]),
+                        "total_target_amount": sum(g["target_amount"] for g in goals_progress),
+                        "total_saved_amount": sum(g["current_amount"] for g in goals_progress),
+                        "overall_progress": round((sum(g["current_amount"] for g in goals_progress) / sum(g["target_amount"] for g in goals_progress)) * 100, 1) if goals_progress else 0
+                    }
                 }
             }
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error parsing: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Gagal mengambil progress data: {str(e)}")
+
+# === 6. SIMPLE PREDICTION WITHOUT PROPHET ===
+
+@router.get("/predictions")
+async def get_financial_predictions(
+    days_ahead: int = Query(30, ge=7, le=365, description="Jumlah hari prediksi ke depan"),
+    type: str = Query("both", description="income, expense, atau both"),
+    current_user: User = Depends(get_current_user)
+):
+    """Mendapatkan prediksi pemasukan/pengeluaran menggunakan simple prediction"""
+    try:
+        # Get historical data (last 6 months minimum for better prediction)
+        end_date = IndonesiaDatetime.now()
+        start_date = end_date - timedelta(days=180)  # 6 months history
+        
+        filters = {
+            "status": "confirmed",
+            "start_date": start_date,
+            "end_date": end_date
+        }
+        
+        transactions = await finance_service.get_user_transactions(
+            current_user.id, filters, 1000, 0
+        )
+        
+        if len(transactions) < 5:  # Need minimum data for prediction
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": False,
+                    "message": "Data transaksi tidak cukup untuk prediksi (minimum 5 transaksi dalam 6 bulan terakhir)",
+                    "data": {
+                        "predictions": {},
+                        "net_balance_predictions": [],
+                        "confidence": "insufficient_data",
+                        "data_points": len(transactions),
+                        "suggestion": "Tambahkan lebih banyak transaksi untuk mendapatkan prediksi yang akurat"
+                    }
+                }
+            )
+        
+        # Prepare daily aggregated data
+        daily_data = {}
+        for trans in transactions:
+            date_key = trans.date.strftime("%Y-%m-%d")
+            if date_key not in daily_data:
+                daily_data[date_key] = {"income": 0, "expense": 0, "net": 0}
+            
+            if trans.type == "income":
+                daily_data[date_key]["income"] += trans.amount
+            else:
+                daily_data[date_key]["expense"] += trans.amount
+            
+            daily_data[date_key]["net"] = daily_data[date_key]["income"] - daily_data[date_key]["expense"]
+        
+        # Convert to sorted list
+        sorted_data = [
+            {"date": k, **v} 
+            for k, v in sorted(daily_data.items())
+        ]
+        
+        # Use simple prediction engine
+        prediction_engine = SimplePredictionEngine()
+        predictions = {}
+        
+        try:
+            # Generate predictions based on type
+            if type in ["income", "both"]:
+                income_data = [item["income"] for item in sorted_data]
+                income_predictions = prediction_engine.moving_average_prediction(income_data, days_ahead)
+                
+                base_date = datetime.now()
+                predictions["income"] = {
+                    "predictions": [
+                        {
+                            "date": (base_date + timedelta(days=i+1)).strftime("%Y-%m-%d"),
+                            "formatted_date": (base_date + timedelta(days=i+1)).strftime("%d %b %Y"),
+                            "predicted_amount": max(0, pred),
+                            "formatted_predicted": format_currency(max(0, pred)),
+                            "lower_bound": max(0, pred * 0.7),
+                            "upper_bound": pred * 1.3,
+                            "confidence": "medium" if len(sorted_data) > 20 else "low"
+                        }
+                        for i, pred in enumerate(income_predictions)
+                    ],
+                    "total_predicted": sum(income_predictions),
+                    "average_daily": sum(income_predictions) / days_ahead,
+                    "data_points_used": len(sorted_data),
+                    "method": "moving_average"
+                }
+            
+            if type in ["expense", "both"]:
+                expense_data = [item["expense"] for item in sorted_data]
+                expense_predictions = prediction_engine.moving_average_prediction(expense_data, days_ahead)
+                
+                base_date = datetime.now()
+                predictions["expense"] = {
+                    "predictions": [
+                        {
+                            "date": (base_date + timedelta(days=i+1)).strftime("%Y-%m-%d"),
+                            "formatted_date": (base_date + timedelta(days=i+1)).strftime("%d %b %Y"),
+                            "predicted_amount": max(0, pred),
+                            "formatted_predicted": format_currency(max(0, pred)),
+                            "lower_bound": max(0, pred * 0.7),
+                            "upper_bound": pred * 1.3,
+                            "confidence": "medium" if len(sorted_data) > 20 else "low"
+                        }
+                        for i, pred in enumerate(expense_predictions)
+                    ],
+                    "total_predicted": sum(expense_predictions),
+                    "average_daily": sum(expense_predictions) / days_ahead,
+                    "data_points_used": len(sorted_data),
+                    "method": "moving_average"
+                }
+            
+            # Calculate net balance predictions if both are available
+            net_predictions = []
+            if "income" in predictions and "expense" in predictions:
+                for i in range(days_ahead):
+                    income_pred = predictions["income"]["predictions"][i]["predicted_amount"]
+                    expense_pred = predictions["expense"]["predictions"][i]["predicted_amount"]
+                    net_amount = income_pred - expense_pred
+                    
+                    net_predictions.append({
+                        "date": predictions["income"]["predictions"][i]["date"],
+                        "formatted_date": predictions["income"]["predictions"][i]["formatted_date"],
+                        "predicted_net": net_amount,
+                        "formatted_predicted_net": format_currency(net_amount),
+                        "income_predicted": income_pred,
+                        "expense_predicted": expense_pred
+                    })
+            
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "message": f"Prediksi {days_ahead} hari berhasil dibuat",
+                    "data": {
+                        "predictions": predictions,
+                        "net_balance_predictions": net_predictions,
+                        "summary": {
+                            "prediction_period": f"{days_ahead} days",
+                            "start_date": end_date.strftime("%Y-%m-%d"),
+                            "end_date": (end_date + timedelta(days=days_ahead)).strftime("%Y-%m-%d"),
+                            "historical_data_period": f"{(end_date - start_date).days} days",
+                            "total_transactions_analyzed": len(transactions),
+                            "model_confidence": "medium" if len(sorted_data) > 20 else "basic",
+                            "method_used": "moving_average_with_trend"
+                        },
+                        "disclaimer": "Prediksi ini menggunakan analisis tren historis sederhana. Gunakan sebagai referensi dan pertimbangan tambahan dalam perencanaan keuangan."
+                    }
+                }
+            )
+            
+        except Exception as prediction_error:
+            print(f"Prediction error: {prediction_error}")
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": False,
+                    "message": "Gagal membuat prediksi karena data tidak memadai",
+                    "data": {
+                        "predictions": {},
+                        "net_balance_predictions": [],
+                        "error_details": str(prediction_error),
+                        "suggestion": "Pastikan Anda memiliki transaksi yang konsisten untuk prediksi yang lebih akurat"
+                    }
+                }
+            )
+        
+    except Exception as e:
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": False,
+                "message": "Gagal memproses permintaan prediksi",
+                "data": {
+                    "predictions": {},
+                    "net_balance_predictions": [],
+                    "error_details": str(e),
+                    "suggestion": "Silakan coba lagi atau hubungi support jika masalah berlanjut"
+                }
+            }
+        )
+
+# === HELPER ENDPOINTS ===
+
+@router.get("/categories")
+async def get_available_categories(
+    current_user: User = Depends(get_current_user)
+):
+    """Mendapatkan daftar kategori yang tersedia"""
+    try:
+        # Get categories from actual transaction data
+        filters = {"status": "confirmed"}
+        transactions = await finance_service.get_user_transactions(
+            current_user.id, filters, 1000, 0
+        )
+        
+        income_categories = set()
+        expense_categories = set()
+        
+        for trans in transactions:
+            if trans.type == "income":
+                income_categories.add(trans.category)
+            else:
+                expense_categories.add(trans.category)
+        
+        # Add default categories if no transactions exist
+        if not income_categories:
+            income_categories = {"Gaji", "Freelance", "Bisnis", "Investasi", "Bonus", "Lainnya"}
+        
+        if not expense_categories:
+            expense_categories = {"Makanan", "Transportasi", "Belanja", "Hiburan", "Kesehatan", "Pendidikan", "Tagihan", "Lainnya"}
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "message": "Kategori berhasil diambil",
+                "data": {
+                    "income_categories": sorted(list(income_categories)),
+                    "expense_categories": sorted(list(expense_categories)),
+                    "all_categories": sorted(list(income_categories.union(expense_categories)))
+                }
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gagal mengambil kategori: {str(e)}")
+
+@router.get("/stats")
+async def get_basic_stats(
+    current_user: User = Depends(get_current_user)
+):
+    """Mendapatkan statistik dasar untuk dashboard"""
+    try:
+        # Get various periods
+        now = IndonesiaDatetime.now()
+        
+        # Current month
+        monthly_summary = await finance_service.get_financial_summary(current_user.id, "monthly")
+        
+        # Previous month for comparison
+        prev_month_start = now.replace(day=1) - timedelta(days=1)
+        prev_month_start = prev_month_start.replace(day=1)
+        prev_month_end = now.replace(day=1)
+        
+        prev_monthly_summary = await finance_service.get_financial_summary(
+            current_user.id, "monthly", prev_month_start, prev_month_end
+        )
+        
+        # Calculate changes
+        income_change = ((monthly_summary.total_income - prev_monthly_summary.total_income) / prev_monthly_summary.total_income * 100) if prev_monthly_summary.total_income > 0 else 0
+        expense_change = ((monthly_summary.total_expense - prev_monthly_summary.total_expense) / prev_monthly_summary.total_expense * 100) if prev_monthly_summary.total_expense > 0 else 0
+        
+        # Get goal stats
+        active_goals = await finance_service.get_user_savings_goals(current_user.id, "active")
+        completed_goals = await finance_service.get_user_savings_goals(current_user.id, "completed")
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "message": "Statistik dasar berhasil diambil",
+                "data": {
+                    "current_month": {
+                        "income": monthly_summary.total_income,
+                        "expense": monthly_summary.total_expense,
+                        "net": monthly_summary.net_balance,
+                        "transactions": monthly_summary.income_count + monthly_summary.expense_count
+                    },
+                    "month_over_month_change": {
+                        "income_change_percent": round(income_change, 1),
+                        "expense_change_percent": round(expense_change, 1),
+                        "income_trend": "up" if income_change > 0 else "down" if income_change < 0 else "stable",
+                        "expense_trend": "up" if expense_change > 0 else "down" if expense_change < 0 else "stable"
+                    },
+                    "savings_goals": {
+                        "active_count": len(active_goals),
+                        "completed_count": len(completed_goals),
+                        "total_target": sum(goal.target_amount for goal in active_goals),
+                        "total_saved": sum(goal.current_amount for goal in active_goals)
+                    }
+                }
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gagal mengambil statistik: {str(e)}")

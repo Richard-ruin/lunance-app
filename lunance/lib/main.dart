@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/chat_provider.dart';
+import 'providers/finance_provider.dart'; // Add this import
 import 'screens/splash_screen.dart';
 import 'utils/app_colors.dart';
 import 'utils/app_text_styles.dart';
@@ -32,6 +33,7 @@ class LunanceApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (context) => AuthProvider()),
         ChangeNotifierProvider(create: (context) => ChatProvider()),
+        ChangeNotifierProvider(create: (context) => FinanceProvider()), // Add this line
       ],
       child: MaterialApp(
         title: AppConfig.appName,

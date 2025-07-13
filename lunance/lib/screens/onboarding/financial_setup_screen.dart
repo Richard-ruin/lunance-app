@@ -4,6 +4,7 @@ import '../../providers/auth_provider.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/app_text_styles.dart';
 import '../../widgets/custom_widgets.dart';
+import '../../widgets/common_widgets.dart';
 import '../dashboard/dashboard_screen.dart';
 
 class FinancialSetupScreen extends StatefulWidget {

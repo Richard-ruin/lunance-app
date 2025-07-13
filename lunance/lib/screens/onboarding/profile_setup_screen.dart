@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/app_text_styles.dart';
-import '../../widgets/custom_widgets.dart';
+import '../../../widgets/custom_widgets.dart';
+import '../../../widgets/common_widgets.dart';
 import 'financial_setup_screen.dart';
+
 
 class ProfileSetupScreen extends StatefulWidget {
   const ProfileSetupScreen({Key? key}) : super(key: key);
