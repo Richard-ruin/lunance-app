@@ -30,9 +30,9 @@ class _DashboardTabState extends State<DashboardTab> {
   Future<void> _initializeData() async {
     if (!_isInitialized && mounted) {
       final financeProvider = Provider.of<FinanceProvider>(context, listen: false);
-      // Only load if data doesn't exist
+      // Load student-specific data
       if (financeProvider.dashboardData == null) {
-        await financeProvider.loadDashboardSummary();
+        await financeProvider.loadStudentDashboardSummary();
       }
       if (financeProvider.statsData == null) {
         await financeProvider.loadBasicStats();
@@ -48,13 +48,14 @@ class _DashboardTabState extends State<DashboardTab> {
       }
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
       onRefresh: () async {
         if (mounted) {
           final financeProvider = Provider.of<FinanceProvider>(context, listen: false);
-          await financeProvider.loadAllEssentialData();
+          await financeProvider.refreshAllStudentData();
         }
       },
       child: SingleChildScrollView(
@@ -63,19 +64,23 @@ class _DashboardTabState extends State<DashboardTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Financial Overview Card
-            _buildFinancialOverviewCard(),
+            // Real Financial Totals Overview
+            _buildRealFinancialTotalsCard(),
             
             const SizedBox(height: 24),
             
-            // Quick Stats Row
-            Row(
-              children: [
-                Expanded(child: _buildQuickStatCard()),
-                const SizedBox(width: 16),
-                Expanded(child: _buildSavingsProgressCard()),
-              ],
-            ),
+            // Monthly Financial Capacity
+            _buildMonthlyCapacityCard(),
+            
+            const SizedBox(height: 16),
+            
+            // Savings Progress Card
+            _buildSavingsProgressCard(),
+            
+            const SizedBox(height: 24),
+            
+            // Student Level & Health Score
+            _buildStudentInsightsCard(),
             
             const SizedBox(height: 24),
             
@@ -84,29 +89,30 @@ class _DashboardTabState extends State<DashboardTab> {
             
             const SizedBox(height: 24),
             
-            // Recent Activity & Tips Section - Stacked vertically instead of side by side
+            // Recent Activity
             _buildRecentActivityCard(),
             
             const SizedBox(height: 16),
             
-            _buildFinancialTipsCard(),
+            // Student Tips
+            _buildStudentTipsCard(),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildFinancialOverviewCard() {
+  Widget _buildRealFinancialTotalsCard() {
     return Consumer<FinanceProvider>(
       builder: (context, financeProvider, child) {
         if (financeProvider.isLoadingDashboard) {
-          return _buildLoadingCard(height: 200);
+          return _buildLoadingCard(height: 220);
         }
 
         if (financeProvider.dashboardError != null) {
           return ErrorMessage(
             message: financeProvider.dashboardError!,
-            onRetry: () => financeProvider.loadDashboardSummary(),
+            onRetry: () => financeProvider.loadStudentDashboardSummary(),
           );
         }
 
@@ -115,13 +121,12 @@ class _DashboardTabState extends State<DashboardTab> {
           return const EmptyStateWidget(
             icon: Icons.dashboard_outlined,
             title: 'Tidak ada data dashboard',
-            subtitle: 'Data keuangan belum tersedia',
+            subtitle: 'Data keuangan mahasiswa belum tersedia',
           );
         }
 
-        final monthlyTotals = dashboardData['monthly_totals'] ?? {};
-        final savingsSummary = dashboardData['savings_summary'] ?? {};
-        final period = dashboardData['period'] ?? {};
+        final realTotals = dashboardData['real_financial_totals'] ?? {};
+        final monthlyCapacity = dashboardData['monthly_financial_capacity'] ?? {};
 
         return CustomCard(
           child: Column(
@@ -147,13 +152,13 @@ class _DashboardTabState extends State<DashboardTab> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Ringkasan Keuangan',
+                          'Total Tabungan Real-Time',
                           style: AppTextStyles.h6.copyWith(
                             fontWeight: FontWeight.w600,
                           ),
                         ),
                         Text(
-                          period['month_year'] ?? 'Bulan ini',
+                          'Berdasarkan transaksi aktual',
                           style: AppTextStyles.bodySmall.copyWith(
                             color: AppColors.textSecondary,
                           ),
@@ -166,13 +171,61 @@ class _DashboardTabState extends State<DashboardTab> {
               
               const SizedBox(height: 24),
               
-              // Financial metrics
+              // Real Total Savings - Highlighted
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      AppColors.primary.withOpacity(0.1),
+                      AppColors.success.withOpacity(0.1),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: AppColors.primary.withOpacity(0.2),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      'Total Tabungan Anda',
+                      style: AppTextStyles.labelMedium.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      realTotals['formatted_real_total'] ?? 'Rp 0',
+                      style: AppTextStyles.h4.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Tabungan awal + Pemasukan - Pengeluaran',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              const SizedBox(height: 20),
+              
+              // Financial breakdown
               Row(
                 children: [
                   Expanded(
                     child: _buildMetricItem(
-                      'Pemasukan',
-                      monthlyTotals['formatted_income'] ?? 'Rp 0',
+                      'Pemasukan Total',
+                      realTotals['formatted_total_income'] ?? 'Rp 0',
                       Icons.trending_up,
                       AppColors.success,
                     ),
@@ -180,36 +233,10 @@ class _DashboardTabState extends State<DashboardTab> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: _buildMetricItem(
-                      'Pengeluaran',
-                      monthlyTotals['formatted_expense'] ?? 'Rp 0',
+                      'Pengeluaran Total',
+                      realTotals['formatted_total_expense'] ?? 'Rp 0',
                       Icons.trending_down,
                       AppColors.error,
-                    ),
-                  ),
-                ],
-              ),
-              
-              const SizedBox(height: 16),
-              
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildMetricItem(
-                      'Saldo Bersih',
-                      monthlyTotals['formatted_balance'] ?? 'Rp 0',
-                      Icons.account_balance,
-                      monthlyTotals['net_balance'] != null && monthlyTotals['net_balance'] >= 0
-                          ? AppColors.success
-                          : AppColors.error,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildMetricItem(
-                      'Total Tabungan',
-                      savingsSummary['formatted_total_savings'] ?? 'Rp 0',
-                      Icons.savings,
-                      AppColors.primary,
                     ),
                   ),
                 ],
@@ -221,44 +248,75 @@ class _DashboardTabState extends State<DashboardTab> {
     );
   }
 
-  Widget _buildQuickStatCard() {
+  Widget _buildMonthlyCapacityCard() {
     return Consumer<FinanceProvider>(
       builder: (context, financeProvider, child) {
-        if (financeProvider.isLoadingStats) {
-          return _buildLoadingCard(height: 120);
+        if (financeProvider.isLoadingDashboard) {
+          return _buildLoadingCard(height: 160);
         }
 
-        final statsData = financeProvider.statsData;
-        if (statsData == null) return Container();
+        final dashboardData = financeProvider.dashboardData;
+        if (dashboardData == null) return Container();
 
-        final currentMonth = statsData['current_month'] ?? {};
-        final changeData = statsData['month_over_month_change'] ?? {};
+        final monthlyCapacity = dashboardData['monthly_financial_capacity'] ?? {};
 
         return CustomCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.calendar_month,
+                    color: AppColors.info,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Kapasitas Bulanan',
+                    style: AppTextStyles.labelLarge.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              
+              const SizedBox(height: 4),
+              
               Text(
-                'Statistik Cepat',
-                style: AppTextStyles.labelLarge.copyWith(
-                  fontWeight: FontWeight.w600,
+                monthlyCapacity['current_month'] ?? 'Bulan ini',
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.textSecondary,
                 ),
               ),
+              
               const SizedBox(height: 16),
               
               _buildStatRow(
-                'Transaksi Bulan Ini',
-                '${currentMonth['transactions'] ?? 0}',
-                Icons.receipt_long,
+                'Pemasukan',
+                monthlyCapacity['formatted_income'] ?? 'Rp 0',
+                Icons.add_circle_outline,
+                color: AppColors.success,
               ),
               
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               
               _buildStatRow(
-                'Perubahan Pemasukan',
-                '${changeData['income_change_percent'] ?? 0}%',
-                changeData['income_trend'] == 'up' ? Icons.arrow_upward : Icons.arrow_downward,
-                color: changeData['income_trend'] == 'up' ? AppColors.success : AppColors.error,
+                'Pengeluaran',
+                monthlyCapacity['formatted_expense'] ?? 'Rp 0',
+                Icons.remove_circle_outline,
+                color: AppColors.error,
+              ),
+              
+              const SizedBox(height: 8),
+              
+              _buildStatRow(
+                'Saldo Bersih',
+                monthlyCapacity['formatted_actual_savings'] ?? 'Rp 0',
+                Icons.account_balance,
+                color: (monthlyCapacity['actual_monthly_savings'] ?? 0) >= 0 
+                    ? AppColors.success 
+                    : AppColors.error,
               ),
             ],
           ),
@@ -270,31 +328,61 @@ class _DashboardTabState extends State<DashboardTab> {
   Widget _buildSavingsProgressCard() {
     return Consumer<FinanceProvider>(
       builder: (context, financeProvider, child) {
-        if (financeProvider.isLoadingProgress) {
-          return _buildLoadingCard(height: 120);
+        if (financeProvider.isLoadingDashboard) {
+          return _buildLoadingCard(height: 160);
         }
 
-        final progressData = financeProvider.progressData;
-        if (progressData == null) return Container();
+        final dashboardData = financeProvider.dashboardData;
+        if (dashboardData == null) return Container();
 
-        final monthlyProgress = progressData['monthly_savings_progress'] ?? {};
+        final monthlyCapacity = dashboardData['monthly_financial_capacity'] ?? {};
+        final achievementPercentage = monthlyCapacity['achievement_percentage'] ?? 0.0;
+        final status = monthlyCapacity['status'] ?? 'needs_improvement';
+
+        Color statusColor;
+        IconData statusIcon;
+        
+        switch (status) {
+          case 'exceeds_target':
+            statusColor = AppColors.success;
+            statusIcon = Icons.trending_up;
+            break;
+          case 'on_track':
+            statusColor = AppColors.primary;
+            statusIcon = Icons.check_circle;
+            break;
+          default:
+            statusColor = AppColors.warning;
+            statusIcon = Icons.warning;
+        }
 
         return CustomCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Target Tabungan Bulanan',
-                style: AppTextStyles.labelLarge.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+              Row(
+                children: [
+                  Icon(
+                    statusIcon,
+                    color: statusColor,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Target Tabungan',
+                    style: AppTextStyles.labelLarge.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
+              
               const SizedBox(height: 16),
               
               LinearProgressIndicator(
-                value: (monthlyProgress['progress_percentage'] ?? 0) / 100,
+                value: (achievementPercentage / 100).clamp(0.0, 1.0),
                 backgroundColor: AppColors.gray200,
-                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                valueColor: AlwaysStoppedAnimation<Color>(statusColor),
                 minHeight: 8,
               ),
               
@@ -304,20 +392,172 @@ class _DashboardTabState extends State<DashboardTab> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    '${monthlyProgress['progress_percentage'] ?? 0}%',
-                    style: AppTextStyles.labelMedium.copyWith(
-                      color: AppColors.primary,
+                    '${achievementPercentage.toStringAsFixed(1)}%',
+                    style: AppTextStyles.labelLarge.copyWith(
+                      color: statusColor,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   Text(
-                    monthlyProgress['formatted_target'] ?? 'Rp 0',
+                    monthlyCapacity['formatted_target_savings'] ?? 'Rp 0',
                     style: AppTextStyles.labelSmall.copyWith(
                       color: AppColors.textSecondary,
                     ),
                   ),
                 ],
               ),
+              
+              const SizedBox(height: 8),
+              
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  _getStatusText(status),
+                  style: AppTextStyles.caption.copyWith(
+                    color: statusColor,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStudentInsightsCard() {
+    return Consumer<FinanceProvider>(
+      builder: (context, financeProvider, child) {
+        if (financeProvider.isLoadingDashboard) {
+          return _buildLoadingCard(height: 140);
+        }
+
+        final dashboardData = financeProvider.dashboardData;
+        if (dashboardData == null) return Container();
+
+        final insights = dashboardData['student_insights'] ?? {};
+        final healthScore = insights['financial_health_score'] ?? 0.0;
+        final studentLevel = insights['student_level'] ?? 'Pemula';
+        final recommendation = insights['recommendation'] ?? 'needs_improvement';
+
+        Color levelColor;
+        switch (studentLevel) {
+          case 'Expert':
+            levelColor = AppColors.success;
+            break;
+          case 'Mahir':
+            levelColor = AppColors.primary;
+            break;
+          case 'Berkembang':
+            levelColor = AppColors.info;
+            break;
+          default:
+            levelColor = AppColors.warning;
+        }
+
+        return CustomCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.school,
+                    color: AppColors.primary,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Level Keuangan Mahasiswa',
+                    style: AppTextStyles.labelLarge.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              
+              const SizedBox(height: 16),
+              
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Health Score',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${healthScore.toStringAsFixed(0)}/100',
+                          style: AppTextStyles.h6.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Level Mahasiswa',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: levelColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: levelColor.withOpacity(0.3)),
+                          ),
+                          child: Text(
+                            studentLevel,
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: levelColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              
+              const SizedBox(height: 12),
+              
+              if (insights['next_milestone'] != null) ...[
+                Row(
+                  children: [
+                    Icon(
+                      Icons.flag,
+                      size: 16,
+                      color: AppColors.warning,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Target selanjutnya: ${insights['next_milestone']}',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         );
@@ -376,6 +616,13 @@ class _DashboardTabState extends State<DashboardTab> {
                           color: AppColors.textSecondary,
                         ),
                       ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Buat target untuk laptop, HP, atau liburan',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textTertiary,
+                        ),
+                      ),
                     ],
                   ),
                 )
@@ -408,20 +655,55 @@ class _DashboardTabState extends State<DashboardTab> {
   }
 
   Widget _buildSavingsGoalItem(Map<String, dynamic> goal) {
+    final isUrgent = goal['is_urgent'] ?? false;
+    final affordability = goal['affordability'] ?? 'moderate';
+    
+    Color affordabilityColor;
+    switch (affordability) {
+      case 'easy':
+        affordabilityColor = AppColors.success;
+        break;
+      case 'moderate':
+        affordabilityColor = AppColors.primary;
+        break;
+      case 'challenging':
+        affordabilityColor = AppColors.warning;
+        break;
+      default:
+        affordabilityColor = AppColors.error;
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                goal['item_name'] ?? '',
-                style: AppTextStyles.bodyMedium.copyWith(
-                  fontWeight: FontWeight.w500,
+              Expanded(
+                child: Text(
+                  goal['item_name'] ?? '',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
+              if (isUrgent)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'URGENT',
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.error,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              const SizedBox(width: 8),
               Text(
                 '${goal['progress_percentage'] ?? 0}%',
                 style: AppTextStyles.labelMedium.copyWith(
@@ -438,7 +720,7 @@ class _DashboardTabState extends State<DashboardTab> {
             valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
             minHeight: 6,
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -448,11 +730,24 @@ class _DashboardTabState extends State<DashboardTab> {
                   color: AppColors.textSecondary,
                 ),
               ),
-              Text(
-                goal['formatted_target'] ?? 'Rp 0',
-                style: AppTextStyles.caption.copyWith(
-                  color: AppColors.textSecondary,
-                ),
+              Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: affordabilityColor,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    goal['formatted_target'] ?? 'Rp 0',
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -484,23 +779,23 @@ class _DashboardTabState extends State<DashboardTab> {
           ),
           const SizedBox(height: 16),
           
-          // Placeholder for recent transactions
+          // Placeholder recent activities
           _buildActivityItem(
-            'Pengeluaran - Makan Siang',
+            'Pengeluaran - Makan di kantin',
             'Rp 25.000',
             '2 jam lalu',
             Icons.restaurant,
             AppColors.error,
           ),
           _buildActivityItem(
-            'Pemasukan - Freelance',
+            'Pemasukan - Freelance desain',
             'Rp 500.000',
             '1 hari lalu',
             Icons.work,
             AppColors.success,
           ),
           _buildActivityItem(
-            'Pengeluaran - Transport',
+            'Pengeluaran - Ongkos angkot',
             'Rp 15.000',
             '2 hari lalu',
             Icons.directions_bus,
@@ -526,7 +821,7 @@ class _DashboardTabState extends State<DashboardTab> {
     );
   }
 
-  Widget _buildFinancialTipsCard() {
+  Widget _buildStudentTipsCard() {
     return CustomCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -540,7 +835,7 @@ class _DashboardTabState extends State<DashboardTab> {
               ),
               const SizedBox(width: 8),
               Text(
-                'Tips Keuangan',
+                'Tips Keuangan Mahasiswa',
                 style: AppTextStyles.labelLarge.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -562,7 +857,7 @@ class _DashboardTabState extends State<DashboardTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '💡 Tip Hari Ini',
+                  '💡 Tip untuk Mahasiswa',
                   style: AppTextStyles.labelMedium.copyWith(
                     color: AppColors.warning,
                     fontWeight: FontWeight.w600,
@@ -570,7 +865,7 @@ class _DashboardTabState extends State<DashboardTab> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Alokasikan 20% dari pemasukan untuk tabungan darurat. Ini akan membantu Anda menghadapi situasi tak terduga.',
+                  'Alokasikan 15-20% dari uang saku untuk tabungan darurat. Masak sendiri minimal 3x seminggu untuk menghemat pengeluaran makan.',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: AppColors.textPrimary,
                     height: 1.4,
@@ -582,6 +877,17 @@ class _DashboardTabState extends State<DashboardTab> {
         ],
       ),
     );
+  }
+
+  String _getStatusText(String status) {
+    switch (status) {
+      case 'exceeds_target':
+        return 'Melebihi Target!';
+      case 'on_track':
+        return 'Sesuai Target';
+      default:
+        return 'Perlu Ditingkatkan';
+    }
   }
 
   Widget _buildMetricItem(String label, String value, IconData icon, Color color) {

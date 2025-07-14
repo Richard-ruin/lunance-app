@@ -68,6 +68,7 @@ class FinancialSetup(BaseModel):
     """Schema untuk setup keuangan mahasiswa"""
     current_savings: float = Field(..., ge=0)  # Total tabungan saat ini
     monthly_savings_target: float = Field(..., gt=0)  # Target tabungan bulanan
+    emergency_fund: float = Field(..., ge=0)  # Dana darurat saat ini
     primary_bank: str = Field(..., min_length=2, max_length=100)  # Bank/e-wallet utama (wajib)
 
 class UserResponse(BaseModel):

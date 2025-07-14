@@ -229,14 +229,15 @@ async def initial_financial_setup(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Setup keuangan awal mahasiswa dengan integrasi savings goals
+    Setup keuangan awal mahasiswa dengan integrasi savings goals dan emergency fund
     
     - **current_savings**: Total tabungan saat ini (>= 0) *wajib*
     - **monthly_savings_target**: Target tabungan bulanan (> 0) *wajib*
+    - **emergency_fund**: Dana darurat saat ini (>= 0) *wajib*
     - **primary_bank**: Bank atau e-wallet utama *wajib*
     
-    Disesuaikan untuk kebutuhan mahasiswa Indonesia dengan fokus pada tabungan.
-    Otomatis membuat initial savings goals berdasarkan data yang diinput.
+    Disesuaikan untuk kebutuhan mahasiswa Indonesia dengan fokus pada tabungan dan dana darurat.
+    Otomatis membuat initial savings goals dan emergency fund goals berdasarkan data yang diinput.
     """
     try:
         updated_user = await auth_service.setup_financial(current_user.id, financial_data)
@@ -261,7 +262,7 @@ async def initial_financial_setup(
         # 🆕 Get financial dashboard after setup
         financial_overview = await auth_service.get_user_financial_overview(updated_user.id)
         
-        # Hitung proyeksi tabungan untuk insight
+        # Hitung proyeksi untuk mahasiswa
         projected_6_months = financial_data.current_savings + (financial_data.monthly_savings_target * 6)
         projected_1_year = financial_data.current_savings + (financial_data.monthly_savings_target * 12)
         
@@ -274,12 +275,14 @@ async def initial_financial_setup(
                 "projections": {
                     "current_savings": financial_data.current_savings,
                     "monthly_target": financial_data.monthly_savings_target,
+                    "emergency_fund": financial_data.emergency_fund,
                     "projected_6_months": projected_6_months,
                     "projected_1_year": projected_1_year
                 },
                 "next_steps": [
                     "Mulai chat dengan Luna AI untuk tracking keuangan otomatis",
                     "Buat target tabungan untuk barang yang ingin dibeli",
+                    f"{'Pertahankan' if financial_data.emergency_fund > 0 else 'Mulai kumpulkan'} dana darurat untuk keamanan finansial",
                     "Input transaksi harian melalui chat natural",
                     "Pantau progress bulanan di dashboard"
                 ]

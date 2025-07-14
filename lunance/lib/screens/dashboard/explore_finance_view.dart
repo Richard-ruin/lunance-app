@@ -58,7 +58,8 @@ class _ExploreFinanceViewState extends State<ExploreFinanceView>
   Future<void> _initializeData() async {
     if (!_isInitialized) {
       final financeProvider = Provider.of<FinanceProvider>(context, listen: false);
-      await financeProvider.loadAllEssentialData();
+      // Load student-specific data
+      await financeProvider.loadAllStudentEssentialData();
       setState(() {
         _isInitialized = true;
       });
@@ -67,7 +68,8 @@ class _ExploreFinanceViewState extends State<ExploreFinanceView>
 
   Future<void> _refreshData() async {
     final financeProvider = Provider.of<FinanceProvider>(context, listen: false);
-    await financeProvider.loadAllEssentialData();
+    // Refresh all student data
+    await financeProvider.refreshAllStudentData();
   }
 
   @override
@@ -111,14 +113,14 @@ class _ExploreFinanceViewState extends State<ExploreFinanceView>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Jelajahi Keuangan',
+                        'Keuangan Mahasiswa',
                         style: AppTextStyles.h5.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Analisis lengkap kondisi keuangan Anda',
+                        'Analisis keuangan khusus untuk mahasiswa Indonesia',
                         style: AppTextStyles.bodySmall.copyWith(
                           color: AppColors.textSecondary,
                         ),
@@ -130,7 +132,11 @@ class _ExploreFinanceViewState extends State<ExploreFinanceView>
                   builder: (context, financeProvider, child) {
                     final isAnyLoading = financeProvider.isLoadingDashboard ||
                         financeProvider.isLoadingStats ||
-                        financeProvider.isLoadingProgress;
+                        financeProvider.isLoadingProgress ||
+                        financeProvider.isLoadingHistory ||
+                        financeProvider.isLoadingCharts ||
+                        financeProvider.isLoadingInsights ||
+                        financeProvider.isLoadingRecommendations;
 
                     return IconButton(
                       onPressed: isAnyLoading ? null : _refreshData,
@@ -147,7 +153,7 @@ class _ExploreFinanceViewState extends State<ExploreFinanceView>
                               Icons.refresh,
                               color: AppColors.primary,
                             ),
-                      tooltip: 'Refresh Data',
+                      tooltip: 'Refresh Data Mahasiswa',
                     );
                   },
                 ),

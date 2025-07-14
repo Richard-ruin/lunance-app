@@ -159,10 +159,10 @@ class UserPreferences {
     };
   }
 }
-
 class FinancialSettings {
   final double currentSavings;  // Total tabungan saat ini
   final double monthlySavingsTarget;  // Target tabungan bulanan
+  final double emergencyFund;  // Dana darurat saat ini
   final String primaryBank;  // Bank atau e-wallet utama
   final List<String> expenseCategories;
   final List<String> incomeCategories;
@@ -170,6 +170,7 @@ class FinancialSettings {
   FinancialSettings({
     required this.currentSavings,
     required this.monthlySavingsTarget,
+    required this.emergencyFund,
     required this.primaryBank,
     required this.expenseCategories,
     required this.incomeCategories,
@@ -179,6 +180,7 @@ class FinancialSettings {
     return FinancialSettings(
       currentSavings: (json['current_savings'] ?? 0).toDouble(),
       monthlySavingsTarget: (json['monthly_savings_target'] ?? 0).toDouble(),
+      emergencyFund: (json['emergency_fund'] ?? 0).toDouble(),
       primaryBank: json['primary_bank'] ?? '',
       expenseCategories: List<String>.from(json['expense_categories'] ?? [
         "Makanan & Minuman",
@@ -204,6 +206,7 @@ class FinancialSettings {
     return {
       'current_savings': currentSavings,
       'monthly_savings_target': monthlySavingsTarget,
+      'emergency_fund': emergencyFund,
       'primary_bank': primaryBank,
       'expense_categories': expenseCategories,
       'income_categories': incomeCategories,

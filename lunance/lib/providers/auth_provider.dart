@@ -174,6 +174,7 @@ class AuthProvider with ChangeNotifier {
   Future<bool> setupFinancial({
     required double currentSavings,       // Current total savings
     required double monthlySavingsTarget, // Monthly savings target
+    required double emergencyFund, 
     required String primaryBank,          // Primary bank/e-wallet
   }) async {
     _setLoading(true);
@@ -183,6 +184,7 @@ class AuthProvider with ChangeNotifier {
       final response = await _apiService.setupFinancial(
         currentSavings: currentSavings,
         monthlySavingsTarget: monthlySavingsTarget,
+        emergencyFund: emergencyFund,
         primaryBank: primaryBank,
       );
 

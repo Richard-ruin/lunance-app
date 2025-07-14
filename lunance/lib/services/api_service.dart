@@ -163,12 +163,14 @@ class ApiService {
   Future<Map<String, dynamic>> setupFinancial({
     required double currentSavings,       // Current total savings
     required double monthlySavingsTarget, // Monthly savings target
+    required double emergencyFund,
     required String primaryBank,          // Primary bank/e-wallet
   }) async {
     try {
       final body = <String, dynamic>{
         'current_savings': currentSavings,
         'monthly_savings_target': monthlySavingsTarget,
+        'emergency_fund': emergencyFund,
         'primary_bank': primaryBank,
       };
 

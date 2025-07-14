@@ -7,7 +7,6 @@ import '../../../utils/format_utils.dart';
 import '../../../widgets/custom_widgets.dart';
 import '../../../widgets/common_widgets.dart';
 
-
 class HistoryTab extends StatefulWidget {
   const HistoryTab({Key? key}) : super(key: key);
 
@@ -40,7 +39,6 @@ class _HistoryTabState extends State<HistoryTab> {
   @override
   void initState() {
     super.initState();
-    // Use addPostFrameCallback to avoid setState during build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadHistory();
     });
@@ -62,7 +60,7 @@ class _HistoryTabState extends State<HistoryTab> {
       if (financeProvider.isLoadingHistory) return;
       
       try {
-        await financeProvider.loadTransactionHistory(
+        await financeProvider.loadStudentTransactionHistory( // UPDATED: Using student method
           type: _selectedType,
           category: _selectedCategory,
           startDate: _startDate,
@@ -86,7 +84,7 @@ class _HistoryTabState extends State<HistoryTab> {
             _isInitialized = true;
           });
         }
-        debugPrint('Error loading history: $e');
+        debugPrint('Error loading student history: $e');
       }
     }
   }
@@ -157,7 +155,7 @@ class _HistoryTabState extends State<HistoryTab> {
                 child: TextField(
                   controller: _searchController,
                   decoration: InputDecoration(
-                    hintText: 'Cari transaksi...',
+                    hintText: 'Cari transaksi mahasiswa...',
                     hintStyle: AppTextStyles.bodyMedium.copyWith(
                       color: AppColors.textTertiary,
                     ),
@@ -246,7 +244,7 @@ class _HistoryTabState extends State<HistoryTab> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Filter Transaksi',
+            'Filter Transaksi Mahasiswa',
             style: AppTextStyles.labelLarge.copyWith(
               fontWeight: FontWeight.w600,
             ),
@@ -409,7 +407,7 @@ class _HistoryTabState extends State<HistoryTab> {
             child: EmptyStateWidget(
               icon: Icons.history,
               title: 'Tidak ada riwayat transaksi',
-              subtitle: 'Transaksi Anda akan muncul di sini',
+              subtitle: 'Transaksi mahasiswa Anda akan muncul di sini',
             ),
           );
         }
@@ -532,6 +530,7 @@ class _HistoryTabState extends State<HistoryTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Description - Top line
                 Text(
                   description,
                   style: AppTextStyles.bodyMedium.copyWith(
@@ -540,33 +539,31 @@ class _HistoryTabState extends State<HistoryTab> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+                const SizedBox(height: 6),
+                
+                // Category - Second line
+                Text(
+                  category,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Text(
-                      category,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    Text(
-                      ' • ',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.textTertiary,
-                      ),
-                    ),
-                    Text(
-                      relativeDate,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
+                
+                // Time info - Third line
+                Text(
+                  relativeDate,
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textTertiary,
+                  ),
                 ),
               ],
             ),
           ),
           
+          const SizedBox(width: 12),
+          
+          // Amount and date column
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -577,7 +574,7 @@ class _HistoryTabState extends State<HistoryTab> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 6),
               Text(
                 formattedDate,
                 style: AppTextStyles.caption.copyWith(
@@ -756,7 +753,11 @@ class _HistoryTabState extends State<HistoryTab> {
     return Consumer<FinanceProvider>(
       builder: (context, financeProvider, child) {
         final categoriesData = financeProvider.categoriesData;
-        final allCategories = categoriesData?['all_categories'] as List? ?? [];
+        
+        // Student categories from backend
+        final incomeCategories = categoriesData?['income_categories'] as List? ?? [];
+        final expenseCategories = categoriesData?['expense_categories'] as List? ?? [];
+        final allCategories = [...incomeCategories, ...expenseCategories];
         
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,

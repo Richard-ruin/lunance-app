@@ -18,12 +18,14 @@ class _FinancialSetupScreenState extends State<FinancialSetupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _currentSavingsController = TextEditingController();
   final _monthlySavingsTargetController = TextEditingController();
+  final _emergencyFundController = TextEditingController();
   final _primaryBankController = TextEditingController();
 
   @override
   void dispose() {
     _currentSavingsController.dispose();
     _monthlySavingsTargetController.dispose();
+    _emergencyFundController.dispose();
     _primaryBankController.dispose();
     super.dispose();
   }
@@ -35,6 +37,7 @@ class _FinancialSetupScreenState extends State<FinancialSetupScreen> {
       final success = await authProvider.setupFinancial(
         currentSavings: double.parse(_currentSavingsController.text.replaceAll(',', '')),
         monthlySavingsTarget: double.parse(_monthlySavingsTargetController.text.replaceAll(',', '')),
+        emergencyFund: double.parse(_emergencyFundController.text.replaceAll(',', '')),
         primaryBank: _primaryBankController.text.trim(),
       );
 
@@ -250,6 +253,45 @@ class _FinancialSetupScreenState extends State<FinancialSetupScreen> {
                             
                             const SizedBox(height: 24),
                             
+                            // Emergency fund current field (required)
+                            CustomTextField(
+                              label: 'Dana Darurat Saat Ini *',
+                              hintText: '1,000,000',
+                              controller: _emergencyFundController,
+                              keyboardType: TextInputType.number,
+                              prefixIcon: Icons.security_outlined,
+                              onChanged: (value) {
+                                String formatted = _formatCurrency(value);
+                                if (formatted != value) {
+                                  _emergencyFundController.value = TextEditingValue(
+                                    text: formatted,
+                                    selection: TextSelection.collapsed(offset: formatted.length),
+                                  );
+                                }
+                              },
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Dana darurat tidak boleh kosong (minimal 0)';
+                                }
+                                final numValue = double.tryParse(value.replaceAll(',', ''));
+                                if (numValue == null || numValue < 0) {
+                                  return 'Masukkan jumlah dana darurat yang valid';
+                                }
+                                return null;
+                              },
+                            ),
+                            
+                            const SizedBox(height: 8),
+                            
+                            Text(
+                              'Dana cadangan untuk situasi darurat (bisa mulai dari 0 jika belum punya)',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            
+                            const SizedBox(height: 24),
+                            
                             // Primary bank field (required)
                             CustomTextField(
                               label: 'Bank atau E-Wallet Utama *',
@@ -293,7 +335,7 @@ class _FinancialSetupScreenState extends State<FinancialSetupScreen> {
                                       ),
                                       const SizedBox(width: 8),
                                       Text(
-                                        'Tips untuk Mahasiswa',
+                                        'Tips Keuangan untuk Mahasiswa',
                                         style: AppTextStyles.labelLarge.copyWith(
                                           color: AppColors.primary,
                                           fontWeight: FontWeight.w600,
@@ -305,6 +347,7 @@ class _FinancialSetupScreenState extends State<FinancialSetupScreen> {
                                   
                                   Text(
                                     '• Mulai dengan target tabungan yang realistis (10-20% dari uang saku)\n'
+                                    '• Dana darurat berbeda dengan tabungan - khusus untuk kondisi mendesak\n'
                                     '• Gunakan aplikasi digital banking untuk kemudahan tracking\n'
                                     '• Sisihkan uang tabungan setiap kali terima kiriman dari orangtua\n'
                                     '• Coba cari penghasilan tambahan dari part-time atau freelance',
@@ -343,6 +386,12 @@ class _FinancialSetupScreenState extends State<FinancialSetupScreen> {
                                       'Rp ${_monthlySavingsTargetController.text}',
                                       isHighlight: true,
                                     ),
+                                    
+                                    if (_emergencyFundController.text.isNotEmpty)
+                                      _buildCalculationRow(
+                                        'Dana Darurat Saat Ini:',
+                                        'Rp ${_emergencyFundController.text}',
+                                      ),
                                     
                                     Builder(
                                       builder: (context) {
