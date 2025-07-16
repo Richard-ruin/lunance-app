@@ -1,4 +1,4 @@
-# app/services/finance_service_updated.py - Fixed logic untuk tabungan awal
+# app/services/finance_service.py - UPDATED untuk metode 50/30/20
 import re
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
@@ -12,53 +12,192 @@ from ..models.finance import (
 from ..models.user import User, FinancialSettings
 from ..utils.timezone_utils import IndonesiaDatetime, now_for_db
 from .enhanced_financial_parser import EnhancedFinancialParser
+from .financial_categories import IndonesianStudentCategories
 
 class FinanceService:
-    """Enhanced Finance Service dengan logika yang diperbaiki untuk mahasiswa Indonesia"""
+    """Enhanced Finance Service dengan metode 50/30/20 untuk mahasiswa Indonesia"""
     
     def __init__(self):
         self.db = get_database()
         self.parser = EnhancedFinancialParser()
     
-    # === FIXED: User Financial Settings Integration ===
+    # === ENHANCED: 50/30/20 Budget Integration ===
     
-    async def sync_user_financial_settings(self, user_id: str) -> Dict[str, Any]:
+    async def get_current_month_spending_by_budget_type(self, user_id: str) -> Dict[str, float]:
         """
-        Sinkronisasi financial settings dengan logika yang diperbaiki:
-        - current_savings tetap sebagai tabungan awal, BUKAN dari savings goals
-        - Tracking total savings real-time = initial + income - expense
+        Hitung pengeluaran bulan ini berdasarkan budget type (needs/wants/savings)
+        untuk tracking budget 50/30/20
         """
         try:
-            # Calculate real total savings = initial_savings + all_income - all_expense
-            real_total_savings = await self._calculate_real_total_savings(user_id)
+            # Get start of current month
+            now = IndonesiaDatetime.now()
+            start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            start_of_month_utc = IndonesiaDatetime.to_utc(start_of_month).replace(tzinfo=None)
             
-            # Get monthly progress (income - expense this month)
-            monthly_progress = await self._calculate_monthly_savings_progress(user_id)
+            # Get all confirmed transactions this month
+            transactions = self.db.transactions.find({
+                "user_id": user_id,
+                "status": TransactionStatus.CONFIRMED.value,
+                "date": {"$gte": start_of_month_utc},
+                "type": TransactionType.EXPENSE.value  # Only expenses for budget tracking
+            })
             
-            # DON'T update current_savings in user financial settings
-            # Keep it as initial savings amount only
+            spending_by_type = {
+                "needs": 0.0,
+                "wants": 0.0, 
+                "savings": 0.0,
+                "unknown": 0.0
+            }
+            
+            for trans in transactions:
+                category = trans["category"]
+                amount = trans["amount"]
+                
+                # Determine budget type from category
+                budget_type = IndonesianStudentCategories.get_budget_type(category)
+                
+                if budget_type in spending_by_type:
+                    spending_by_type[budget_type] += amount
+                else:
+                    spending_by_type["unknown"] += amount
+            
+            return spending_by_type
+            
+        except Exception as e:
+            print(f"Error calculating current month spending by budget type: {e}")
+            return {"needs": 0.0, "wants": 0.0, "savings": 0.0, "unknown": 0.0}
+    
+    async def get_monthly_budget_performance(self, user_id: str) -> Dict[str, Any]:
+        """
+        Analisis performa budget 50/30/20 untuk bulan ini
+        """
+        try:
+            # Get user's budget allocation
+            user_doc = self.db.users.find_one({"_id": ObjectId(user_id)})
+            if not user_doc or not user_doc.get("financial_settings"):
+                return {
+                    "has_budget": False,
+                    "message": "Budget 50/30/20 belum di-setup"
+                }
+            
+            financial_settings = user_doc["financial_settings"]
+            monthly_income = financial_settings.get("monthly_income", 0)
+            
+            if monthly_income <= 0:
+                return {
+                    "has_budget": False,
+                    "message": "Monthly income belum di-set"
+                }
+            
+            # Calculate budget allocation
+            needs_budget = monthly_income * 0.50
+            wants_budget = monthly_income * 0.30
+            savings_budget = monthly_income * 0.20
+            
+            # Get actual spending this month
+            actual_spending = await self.get_current_month_spending_by_budget_type(user_id)
+            
+            # Calculate performance metrics
+            performance = {
+                "needs": {
+                    "budget": needs_budget,
+                    "spent": actual_spending["needs"],
+                    "remaining": max(needs_budget - actual_spending["needs"], 0),
+                    "percentage_used": (actual_spending["needs"] / needs_budget * 100) if needs_budget > 0 else 0,
+                    "status": "over" if actual_spending["needs"] > needs_budget else "under"
+                },
+                "wants": {
+                    "budget": wants_budget,
+                    "spent": actual_spending["wants"],
+                    "remaining": max(wants_budget - actual_spending["wants"], 0),
+                    "percentage_used": (actual_spending["wants"] / wants_budget * 100) if wants_budget > 0 else 0,
+                    "status": "over" if actual_spending["wants"] > wants_budget else "under"
+                },
+                "savings": {
+                    "budget": savings_budget,
+                    "spent": actual_spending["savings"],
+                    "remaining": max(savings_budget - actual_spending["savings"], 0),
+                    "percentage_used": (actual_spending["savings"] / savings_budget * 100) if savings_budget > 0 else 0,
+                    "status": "over" if actual_spending["savings"] > savings_budget else "under"
+                }
+            }
+            
+            # Overall budget health assessment
+            total_budget = monthly_income
+            total_spent = sum(actual_spending.values())
+            overall_percentage = (total_spent / total_budget * 100) if total_budget > 0 else 0
+            
+            if overall_percentage <= 70:
+                budget_health = "excellent"
+            elif overall_percentage <= 90:
+                budget_health = "good"
+            elif overall_percentage <= 100:
+                budget_health = "warning"
+            else:
+                budget_health = "over_budget"
+            
+            # Generate insights and recommendations
+            insights = []
+            recommendations = []
+            
+            # Needs analysis
+            if performance["needs"]["percentage_used"] > 100:
+                insights.append("🚨 Pengeluaran NEEDS melebihi budget 50%")
+                recommendations.append("Review pengeluaran kebutuhan pokok, cari cara menghemat kos/makan/transport")
+            elif performance["needs"]["percentage_used"] < 30:
+                insights.append("✅ Pengeluaran NEEDS sangat efisien")
+                recommendations.append("Pertimbangkan mengalokasikan surplus ke SAVINGS")
+            
+            # Wants analysis  
+            if performance["wants"]["percentage_used"] > 100:
+                insights.append("⚠️ Pengeluaran WANTS melebihi budget 30%")
+                recommendations.append("Kurangi jajan, hiburan, dan belanja non-esensial")
+            elif performance["wants"]["percentage_used"] < 50:
+                insights.append("💡 Budget WANTS masih banyak tersisa")
+                recommendations.append("Bisa digunakan untuk target tabungan barang atau treat yourself")
+            
+            # Savings analysis
+            if performance["savings"]["percentage_used"] < 50:
+                insights.append("📈 Peluang menabung lebih besar")
+                recommendations.append("Manfaatkan sisa budget SAVINGS untuk dana darurat atau investasi")
+            elif performance["savings"]["percentage_used"] > 100:
+                insights.append("📉 Target tabungan 20% belum tercapai")
+                recommendations.append("Review alokasi budget, mungkin perlu mengurangi WANTS")
             
             return {
-                "success": True,
-                "real_total_savings": real_total_savings,
-                "monthly_progress": monthly_progress,
-                "initial_savings_unchanged": True,
-                "message": "Sinkronisasi berhasil - tabungan awal tetap, total real dihitung dari transaksi"
+                "has_budget": True,
+                "method": "50/30/20 Elizabeth Warren",
+                "period": datetime.now().strftime("%B %Y"),
+                "monthly_income": monthly_income,
+                "budget_allocation": {
+                    "needs_budget": needs_budget,
+                    "wants_budget": wants_budget, 
+                    "savings_budget": savings_budget
+                },
+                "performance": performance,
+                "overall": {
+                    "total_budget": total_budget,
+                    "total_spent": total_spent,
+                    "total_remaining": max(total_budget - total_spent, 0),
+                    "percentage_used": overall_percentage,
+                    "budget_health": budget_health
+                },
+                "insights": insights,
+                "recommendations": recommendations,
+                "reset_info": "Budget di-reset setiap tanggal 1"
             }
             
         except Exception as e:
-            print(f"Error in sync_user_financial_settings: {e}")
+            print(f"Error getting monthly budget performance: {e}")
             return {
-                "success": False,
-                "error": str(e),
-                "real_total_savings": 0.0,
-                "monthly_progress": {}
+                "has_budget": False,
+                "error": str(e)
             }
     
     async def _calculate_real_total_savings(self, user_id: str) -> float:
         """
         Hitung total tabungan real-time:
-        Total = Tabungan awal (dari financial setup) + Semua pemasukan - Semua pengeluaran
+        Total = Tabungan awal + Semua pemasukan - Semua pengeluaran
         """
         try:
             # Get initial savings from user financial settings
@@ -99,93 +238,30 @@ class FinanceService:
             print(f"Error calculating real total savings: {e}")
             return 0.0
     
-    async def _calculate_total_current_savings_from_goals(self, user_id: str) -> float:
-        """
-        Hitung total dari savings goals (untuk tracking target tabungan, bukan total savings)
-        """
-        pipeline = [
-            {"$match": {
-                "user_id": user_id,
-                "status": {"$in": [SavingsGoalStatus.ACTIVE.value, SavingsGoalStatus.COMPLETED.value]}
-            }},
-            {"$group": {
-                "_id": None,
-                "total_current": {"$sum": "$current_amount"}
-            }}
-        ]
-        
-        result = list(self.db.savings_goals.aggregate(pipeline))
-        return result[0]["total_current"] if result else 0.0
-    
-    async def _calculate_monthly_savings_progress(self, user_id: str) -> Dict[str, Any]:
-        """
-        Hitung progress tabungan bulanan = pemasukan - pengeluaran bulan ini
-        """
-        now = IndonesiaDatetime.now()
-        start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        start_of_month_utc = IndonesiaDatetime.to_utc(start_of_month).replace(tzinfo=None)
-        
-        # Get user's monthly target
-        user_doc = self.db.users.find_one({"_id": ObjectId(user_id)})
-        monthly_target = 0.0
-        if user_doc and user_doc.get("financial_settings"):
-            monthly_target = user_doc["financial_settings"].get("monthly_savings_target", 0)
-        
-        # Calculate actual savings this month (income - expense)
-        pipeline = [
-            {"$match": {
-                "user_id": user_id,
-                "status": TransactionStatus.CONFIRMED.value,
-                "date": {"$gte": start_of_month_utc}
-            }},
-            {"$group": {
-                "_id": "$type",
-                "total": {"$sum": "$amount"}
-            }}
-        ]
-        
-        transaction_summary = list(self.db.transactions.aggregate(pipeline))
-        income_this_month = 0.0
-        expense_this_month = 0.0
-        
-        for item in transaction_summary:
-            if item["_id"] == TransactionType.INCOME.value:
-                income_this_month = item["total"]
-            elif item["_id"] == TransactionType.EXPENSE.value:
-                expense_this_month = item["total"]
-        
-        net_savings_this_month = income_this_month - expense_this_month
-        progress_percentage = (net_savings_this_month / monthly_target * 100) if monthly_target > 0 else 0
-        
-        return {
-            "monthly_target": monthly_target,
-            "income_this_month": income_this_month,
-            "expense_this_month": expense_this_month,
-            "net_savings_this_month": net_savings_this_month,
-            "progress_percentage": min(progress_percentage, 100),
-            "remaining_to_target": max(monthly_target - net_savings_this_month, 0),
-            "status": "excellent" if progress_percentage >= 100 else "good" if progress_percentage >= 75 else "needs_improvement"
-        }
-    
-    # === ENHANCED Transaction Management ===
+    # === ENHANCED Transaction Management dengan Budget Type ===
     
     async def create_transaction(self, user_id: str, transaction_data: Dict[str, Any], 
                                chat_context: Dict[str, Any] = None) -> Transaction:
-        """Membuat transaksi baru"""
+        """Membuat transaksi baru dengan enhanced categorization untuk 50/30/20"""
         now = now_for_db()
         
-        # Enhanced category detection using Indonesian student categories
+        # Enhanced category detection menggunakan Indonesian student categories dengan budget type
         category = transaction_data.get("category")
+        budget_type = None
+        
         if not category or category == "lainnya":
-            from .financial_categories import IndonesianStudentCategories
             if transaction_data["type"] == "income":
                 category = IndonesianStudentCategories.get_income_category(
                     transaction_data.get("description", "")
                 )
             else:
-                category = IndonesianStudentCategories.get_expense_category(
+                # Get category with budget type for expenses
+                category, budget_type = IndonesianStudentCategories.get_expense_category_with_budget_type(
                     transaction_data.get("description", "")
                 )
+        else:
+            # Determine budget type from existing category
+            budget_type = IndonesianStudentCategories.get_budget_type(category)
         
         # Prepare transaction data
         trans_data = {
@@ -202,6 +278,10 @@ class FinanceService:
             "created_at": now,
             "updated_at": now
         }
+        
+        # Add budget type for expenses (untuk tracking 50/30/20)
+        if transaction_data["type"] == "expense" and budget_type:
+            trans_data["budget_type"] = budget_type
         
         # Add chat context if available
         if chat_context:
@@ -233,7 +313,7 @@ class FinanceService:
     
     async def get_user_transactions(self, user_id: str, filters: Dict[str, Any] = None,
                                   limit: int = 50, offset: int = 0) -> List[Transaction]:
-        """Mengambil transaksi user dengan filter"""
+        """Mengambil transaksi user dengan filter (enhanced dengan budget_type)"""
         query = {"user_id": user_id}
         
         if filters:
@@ -241,6 +321,8 @@ class FinanceService:
                 query["type"] = filters["type"]
             if filters.get("category"):
                 query["category"] = filters["category"]
+            if filters.get("budget_type"):  # NEW: Filter by budget type (needs/wants/savings)
+                query["budget_type"] = filters["budget_type"]
             if filters.get("status"):
                 query["status"] = filters["status"]
             if filters.get("start_date") or filters.get("end_date"):
@@ -259,11 +341,14 @@ class FinanceService:
         
         return transactions
     
-    # === ENHANCED Savings Goal Management ===
+    # === ENHANCED Savings Goal Management (Target dari 30% Wants) ===
     
-    async def create_savings_goal(self, user_id: str, goal_data: Dict[str, Any],
-                                chat_context: Dict[str, Any] = None) -> SavingsGoal:
-        """Membuat target tabungan baru (BUKAN untuk tabungan awal)"""
+    async def create_savings_goal_from_wants_budget(self, user_id: str, goal_data: Dict[str, Any],
+                                                  chat_context: Dict[str, Any] = None) -> SavingsGoal:
+        """
+        Membuat target tabungan baru (dialokasikan dari 30% wants budget)
+        Ini untuk target tabungan barang spesifik seperti laptop, HP, motor
+        """
         now = now_for_db()
         
         # Prepare goal data
@@ -279,6 +364,7 @@ class FinanceService:
             "source": chat_context.get("source", "manual") if chat_context else "manual",
             "tags": goal_data.get("tags", []),
             "notes": goal_data.get("notes"),
+            "budget_source": "wants",  # NEW: Indicate this comes from wants budget (30%)
             "created_at": now,
             "updated_at": now
         }
@@ -294,12 +380,14 @@ class FinanceService:
         result = self.db.savings_goals.insert_one(goal_data_prepared)
         goal_id = str(result.inserted_id)
         
+        print(f"✅ Savings goal created from WANTS budget (30%): {goal_data['item_name']}")
+        
         # Return goal object
         goal_data_prepared["_id"] = goal_id
         return SavingsGoal.from_mongo(goal_data_prepared)
     
     async def add_savings_to_goal(self, goal_id: str, user_id: str, amount: float) -> bool:
-        """Menambah tabungan ke target"""
+        """Menambah tabungan ke target (dari wants budget allocation)"""
         # Get current goal
         goal_doc = self.db.savings_goals.find_one({
             "_id": ObjectId(goal_id),
@@ -343,96 +431,154 @@ class FinanceService:
         
         return goals
     
-    # === ENHANCED Financial Dashboard ===
+    # === ENHANCED Financial Dashboard dengan metode 50/30/20 ===
     
-    async def get_financial_dashboard(self, user_id: str) -> Dict[str, Any]:
-        """Mendapatkan dashboard keuangan dengan logika yang diperbaiki"""
-        # Get user financial settings
-        user_doc = self.db.users.find_one({"_id": ObjectId(user_id)})
-        financial_settings = user_doc.get("financial_settings", {}) if user_doc else {}
-        
-        # Get real total savings (initial + income - expense)
-        real_total_savings = await self._calculate_real_total_savings(user_id)
-        
-        # Get monthly progress
-        monthly_progress = await self._calculate_monthly_savings_progress(user_id)
-        
-        # Get savings goals summary (separate from total savings)
-        goals_total = await self._calculate_total_current_savings_from_goals(user_id)
-        active_goals = await self.get_user_savings_goals(user_id, "active")
-        
-        # Get recent transactions
-        recent_transactions = await self.get_user_transactions(
-            user_id, {"status": "confirmed"}, 5, 0
-        )
-        
-        # Get monthly summary
-        monthly_summary = await self.get_financial_summary(user_id, "monthly")
-        
-        return {
-            "user_financial_settings": {
-                "initial_savings": financial_settings.get("current_savings", 0),  # Keep as initial amount
-                "monthly_savings_target": financial_settings.get("monthly_savings_target", 0),
-                "emergency_fund": financial_settings.get("emergency_fund", 0),
-                "primary_bank": financial_settings.get("primary_bank", "")
-            },
-            "calculated_totals": {
-                "actual_current_savings": real_total_savings,  # Real total = initial + income - expense
-                "initial_savings": financial_settings.get("current_savings", 0),
-                "total_income": monthly_summary.total_income,
-                "total_expense": monthly_summary.total_expense,
-                "net_balance": monthly_summary.net_balance
-            },
-            "monthly_progress": monthly_progress,
-            "savings_goals_summary": {
-                "total_in_goals": goals_total,  # Money allocated to specific goals
-                "active_goals_count": len(active_goals),
-                "goals": [goal.dict() for goal in active_goals[:3]],  # Top 3 goals
-                "total_target": sum(goal.target_amount for goal in active_goals),
-                "available_for_allocation": max(real_total_savings - goals_total - financial_settings.get("emergency_fund", 0), 0)
-            },
-            "recent_activity": {
-                "transactions": [trans.dict() for trans in recent_transactions],
-                "monthly_summary": monthly_summary.dict()
-            },
-            "sync_status": {
-                "last_synced": now_for_db(),
-                "logic_fixed": True,
-                "description": "Total tabungan = tabungan awal + pemasukan - pengeluaran"
+    async def get_financial_dashboard_50_30_20(self, user_id: str) -> Dict[str, Any]:
+        """Mendapatkan dashboard keuangan dengan fokus pada metode 50/30/20"""
+        try:
+            # Get user financial settings
+            user_doc = self.db.users.find_one({"_id": ObjectId(user_id)})
+            financial_settings = user_doc.get("financial_settings", {}) if user_doc else {}
+            
+            if not financial_settings.get("monthly_income"):
+                return {
+                    "error": "Monthly income belum di-set untuk budget 50/30/20"
+                }
+            
+            # Get budget performance untuk bulan ini
+            budget_performance = await self.get_monthly_budget_performance(user_id)
+            
+            # Get real total savings
+            real_total_savings = await self._calculate_real_total_savings(user_id)
+            
+            # Get savings goals yang dialokasikan dari wants budget
+            wants_based_goals = await self.get_user_savings_goals(user_id, "active")
+            wants_goals_summary = []
+            
+            for goal in wants_based_goals[:5]:  # Top 5 goals
+                days_remaining = None
+                is_urgent = False
+                
+                if goal.target_date:
+                    days_remaining = (goal.target_date - datetime.now()).days
+                    is_urgent = days_remaining <= 30 and days_remaining > 0
+                
+                wants_goals_summary.append({
+                    "id": goal.id,
+                    "item_name": goal.item_name,
+                    "target_amount": goal.target_amount,
+                    "current_amount": goal.current_amount,
+                    "progress_percentage": goal.progress_percentage,
+                    "target_date": goal.target_date.isoformat() if goal.target_date else None,
+                    "days_remaining": days_remaining,
+                    "is_urgent": is_urgent,
+                    "budget_source": "wants_30_percent"
+                })
+            
+            # Get recent transactions dengan budget type breakdown
+            recent_transactions = await self.get_user_transactions(
+                user_id, {"status": "confirmed"}, 10, 0
+            )
+            
+            recent_with_budget_type = []
+            for trans in recent_transactions:
+                trans_dict = trans.dict()
+                if trans.type == "expense":
+                    trans_dict["budget_type"] = IndonesianStudentCategories.get_budget_type(trans.category)
+                recent_with_budget_type.append(trans_dict)
+            
+            return {
+                "method": "50/30/20 Elizabeth Warren",
+                "user_financial_settings": {
+                    "monthly_income": financial_settings.get("monthly_income", 0),
+                    "initial_savings": financial_settings.get("current_savings", 0),
+                    "primary_bank": financial_settings.get("primary_bank", ""),
+                    "last_budget_reset": financial_settings.get("last_budget_reset")
+                },
+                "budget_performance": budget_performance,
+                "real_total_savings": real_total_savings,
+                "wants_budget_goals": {
+                    "total_goals": len(wants_based_goals),
+                    "goals": wants_goals_summary,
+                    "total_allocated": sum(goal.current_amount for goal in wants_based_goals),
+                    "total_target": sum(goal.target_amount for goal in wants_based_goals)
+                },
+                "recent_activity": {
+                    "transactions": recent_with_budget_type,
+                    "transaction_count": len(recent_transactions)
+                },
+                "insights": {
+                    "budget_health": budget_performance.get("overall", {}).get("budget_health", "unknown"),
+                    "strongest_category": self._get_strongest_budget_category(budget_performance),
+                    "needs_attention": self._get_category_needs_attention(budget_performance),
+                    "monthly_savings_on_track": budget_performance.get("performance", {}).get("savings", {}).get("percentage_used", 0) >= 80
+                },
+                "next_reset": "Tanggal 1 bulan depan",
+                "methodology": {
+                    "needs_50": "Kebutuhan pokok wajib",
+                    "wants_30": "Keinginan & target tabungan barang", 
+                    "savings_20": "Tabungan masa depan",
+                    "flexibility": "Proporsi bisa disesuaikan situasi"
+                }
             }
-        }
+            
+        except Exception as e:
+            print(f"Error getting financial dashboard 50/30/20: {e}")
+            return {
+                "error": f"Gagal mengambil dashboard: {str(e)}",
+                "method": "50/30/20 Elizabeth Warren"
+            }
     
-    # === Pending Data Management (unchanged) ===
+    def _get_strongest_budget_category(self, budget_performance: Dict) -> str:
+        """Tentukan kategori budget yang paling baik performanya"""
+        if not budget_performance.get("has_budget"):
+            return "unknown"
+        
+        performance = budget_performance.get("performance", {})
+        
+        # Category dengan percentage_used paling mendekati target (70-90%)
+        best_category = "needs"
+        best_score = float('inf')
+        
+        for category in ["needs", "wants", "savings"]:
+            if category in performance:
+                percentage = performance[category]["percentage_used"]
+                # Ideal range: 70-90%
+                score = abs(percentage - 80)  # 80% is ideal
+                if score < best_score:
+                    best_score = score
+                    best_category = category
+        
+        return best_category
     
-    async def create_pending_financial_data(self, user_id: str, conversation_id: str,
-                                          message_id: str, parsed_data: Dict[str, Any],
-                                          original_message: str, luna_response: str) -> PendingFinancialData:
-        """Membuat data keuangan yang menunggu konfirmasi"""
-        now = now_for_db()
-        expires_at = now + timedelta(hours=24)
+    def _get_category_needs_attention(self, budget_performance: Dict) -> str:
+        """Tentukan kategori budget yang perlu perhatian"""
+        if not budget_performance.get("has_budget"):
+            return "none"
         
-        pending_data = {
-            "user_id": user_id,
-            "conversation_id": conversation_id,
-            "chat_message_id": message_id,
-            "data_type": parsed_data.get("data_type", "transaction"),
-            "parsed_data": parsed_data,
-            "original_message": original_message,
-            "luna_response": luna_response,
-            "is_confirmed": False,
-            "expires_at": expires_at,
-            "created_at": now
-        }
+        performance = budget_performance.get("performance", {})
         
-        result = self.db.pending_financial_data.insert_one(pending_data)
-        pending_id = str(result.inserted_id)
+        # Priority: over budget > under utilized
+        for category in ["needs", "wants", "savings"]:
+            if category in performance:
+                percentage = performance[category]["percentage_used"]
+                if percentage > 100:  # Over budget
+                    return category
         
-        pending_data["_id"] = pending_id
-        return PendingFinancialData.from_mongo(pending_data)
+        # Check for under-utilization (< 30%)
+        for category in ["savings", "wants", "needs"]:
+            if category in performance:
+                percentage = performance[category]["percentage_used"]
+                if percentage < 30:
+                    return category
+        
+        return "none"
+    
+    # === Existing methods (updated dengan budget integration) ===
     
     def confirm_pending_data(self, pending_id: str, user_id: str, 
                            confirmed: bool, modifications: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Konfirmasi atau batalkan data keuangan yang pending - FIXED sync method"""
+        """Konfirmasi atau batalkan data keuangan yang pending dengan budget type"""
         # Get pending data
         pending_doc = self.db.pending_financial_data.find_one({
             "_id": ObjectId(pending_id),
@@ -458,7 +604,7 @@ class FinanceService:
             try:
                 # Save to appropriate collection
                 if pending.data_type == "transaction" or pending.data_type in ["income", "expense"]:
-                    # Create transaction using SYNCHRONOUS method
+                    # Create transaction with budget type detection
                     transaction_data = {
                         "type": data_to_save.get("type", pending.data_type),
                         "amount": data_to_save["amount"],
@@ -474,21 +620,23 @@ class FinanceService:
                         except:
                             transaction_data["date"] = now_for_db()
                     
-                    # Create transaction DIRECTLY in database (synchronous)
                     now = now_for_db()
                     
-                    # Enhanced category detection
+                    # Enhanced category detection dengan budget type
                     category = transaction_data.get("category")
+                    budget_type = None
+                    
                     if not category or category == "lainnya":
-                        from .financial_categories import IndonesianStudentCategories
                         if transaction_data["type"] == "income":
                             category = IndonesianStudentCategories.get_income_category(
                                 transaction_data.get("description", "")
                             )
                         else:
-                            category = IndonesianStudentCategories.get_expense_category(
+                            category, budget_type = IndonesianStudentCategories.get_expense_category_with_budget_type(
                                 transaction_data.get("description", "")
                             )
+                    else:
+                        budget_type = IndonesianStudentCategories.get_budget_type(category)
                     
                     # Prepare transaction data for database
                     trans_data = {
@@ -509,6 +657,10 @@ class FinanceService:
                         "confirmed_at": now
                     }
                     
+                    # Add budget type for expenses
+                    if transaction_data["type"] == "expense" and budget_type:
+                        trans_data["budget_type"] = budget_type
+                    
                     # Insert to database
                     result = self.db.transactions.insert_one(trans_data)
                     transaction_id = str(result.inserted_id)
@@ -521,11 +673,12 @@ class FinanceService:
                         "category": trans_data["category"],
                         "description": trans_data["description"],
                         "date": trans_data["date"],
-                        "status": trans_data["status"]
+                        "status": trans_data["status"],
+                        "budget_type": trans_data.get("budget_type")  # Include budget type in response
                     }
                     
                 elif pending.data_type == "savings_goal":
-                    # Create savings goal DIRECTLY in database (synchronous)
+                    # Create savings goal from wants budget
                     goal_data = {
                         "item_name": data_to_save["item_name"],
                         "target_amount": data_to_save["target_amount"],
@@ -555,6 +708,7 @@ class FinanceService:
                         "source": "chat",
                         "tags": [],
                         "notes": "Dibuat melalui chat Luna AI",
+                        "budget_source": "wants",  # Indicate from wants budget (30%)
                         "chat_message_id": pending.chat_message_id,
                         "conversation_id": pending.conversation_id,
                         "created_at": now,
@@ -572,7 +726,8 @@ class FinanceService:
                         "target_amount": goal_data_prepared["target_amount"],
                         "current_amount": goal_data_prepared["current_amount"],
                         "target_date": goal_data_prepared["target_date"],
-                        "status": goal_data_prepared["status"]
+                        "status": goal_data_prepared["status"],
+                        "budget_source": "wants"
                     }
                 
                 # Mark as confirmed
@@ -586,7 +741,7 @@ class FinanceService:
                 
                 return {
                     "success": True,
-                    "message": "Data berhasil disimpan",
+                    "message": "Data berhasil disimpan dengan kategori budget 50/30/20",
                     "data": created_object,
                     "type": pending.data_type
                 }
@@ -598,6 +753,8 @@ class FinanceService:
             # Mark as cancelled (delete)
             self.db.pending_financial_data.delete_one({"_id": ObjectId(pending_id)})
             return {"success": True, "message": "Data dibatalkan"}
+    
+    # === Continue with other existing methods ===
     
     async def get_user_pending_data(self, user_id: str) -> List[PendingFinancialData]:
         """Mengambil data pending user"""
@@ -621,11 +778,9 @@ class FinanceService:
         
         return pending_data
     
-    # === Financial Analysis ===
-    
     async def get_financial_summary(self, user_id: str, period: str = "monthly",
                                   start_date: datetime = None, end_date: datetime = None) -> FinancialSummary:
-        """Generate ringkasan keuangan"""
+        """Generate ringkasan keuangan dengan breakdown budget 50/30/20"""
         if not start_date or not end_date:
             now = IndonesiaDatetime.now()
             if period == "daily":
@@ -656,13 +811,21 @@ class FinanceService:
             "date": {"$gte": start_date_utc, "$lt": end_date_utc}
         })
         
-        # Calculate summary
+        # Calculate summary dengan budget type breakdown
         total_income = 0.0
         total_expense = 0.0
         income_count = 0
         expense_count = 0
         income_categories = {}
         expense_categories = {}
+        
+        # NEW: Budget type breakdown untuk tracking 50/30/20
+        budget_type_breakdown = {
+            "needs": 0.0,    # 50%
+            "wants": 0.0,    # 30%
+            "savings": 0.0,  # 20%
+            "unknown": 0.0
+        }
         
         for trans in transactions:
             if trans["type"] == TransactionType.INCOME.value:
@@ -675,6 +838,13 @@ class FinanceService:
                 expense_count += 1
                 category = trans["category"]
                 expense_categories[category] = expense_categories.get(category, 0) + trans["amount"]
+                
+                # Categorize by budget type untuk 50/30/20 tracking
+                budget_type = trans.get("budget_type") or IndonesianStudentCategories.get_budget_type(category)
+                if budget_type in budget_type_breakdown:
+                    budget_type_breakdown[budget_type] += trans["amount"]
+                else:
+                    budget_type_breakdown["unknown"] += trans["amount"]
         
         # Get savings goals summary
         active_goals = self.db.savings_goals.count_documents({
@@ -693,7 +863,8 @@ class FinanceService:
             total_savings_target += goal["target_amount"]
             total_savings_current += goal["current_amount"]
         
-        return FinancialSummary(
+        # Create enhanced summary dengan budget breakdown
+        summary = FinancialSummary(
             user_id=user_id,
             period=period,
             total_income=total_income,
@@ -709,155 +880,31 @@ class FinanceService:
             start_date=start_date_utc,
             end_date=end_date_utc
         )
+        
+        # Add budget type breakdown (as metadata)
+        summary.metadata = {
+            "budget_type_breakdown": budget_type_breakdown,
+            "method": "50/30/20 Elizabeth Warren"
+        }
+        
+        return summary
     
     # === Chat Integration ===
     
     def parse_financial_message(self, message: str) -> Dict[str, Any]:
-        """Parse pesan chat untuk mengekstrak data keuangan"""
-        return self.parser.parse_financial_data(message)
-    
-    # === Student-Specific Financial Methods ===
-    
-    async def get_student_financial_recommendations(self, user_id: str) -> List[Dict[str, Any]]:
-        """Rekomendasi keuangan khusus mahasiswa Indonesia"""
-        try:
-            recommendations = []
-            
-            # Get financial data
-            real_total_savings = await self._calculate_real_total_savings(user_id)
-            monthly_progress = await self._calculate_monthly_savings_progress(user_id)
-            monthly_summary = await self.get_financial_summary(user_id, "monthly")
-            
-            # Emergency fund recommendation
-            if real_total_savings < 500000:  # Less than 500k
-                recommendations.append({
-                    "type": "emergency_fund",
-                    "priority": "high",
-                    "title": "Bangun Dana Darurat",
-                    "description": "Mahasiswa perlu dana darurat minimal Rp 500.000 untuk situasi mendesak seperti biaya kesehatan atau keperluan kuliah mendadak.",
-                    "action": "Sisihkan Rp 25.000 per minggu sampai mencapai Rp 500.000",
-                    "target_amount": 500000,
-                    "current_amount": real_total_savings,
-                    "weekly_target": 25000
-                })
-            
-            # Savings rate recommendation
-            if monthly_progress["progress_percentage"] < 50:
-                recommendations.append({
-                    "type": "savings_rate",
-                    "priority": "medium",
-                    "title": "Tingkatkan Tingkat Tabungan",
-                    "description": "Target tabungan bulanan Anda baru tercapai {:.1f}%. Ideal untuk mahasiswa adalah 15-20% dari pemasukan.".format(monthly_progress["progress_percentage"]),
-                    "action": "Review pengeluaran harian dan kurangi kategori hiburan atau jajan",
-                    "current_rate": monthly_progress["progress_percentage"],
-                    "target_rate": 20
-                })
-            
-            # Food expense optimization
-            food_expense = monthly_summary.expense_categories.get("Makanan & Minuman", 0)
-            if food_expense > monthly_progress["income_this_month"] * 0.4:  # More than 40%
-                recommendations.append({
-                    "type": "expense_optimization",
-                    "priority": "medium",
-                    "title": "Optimalkan Pengeluaran Makan",
-                    "description": "Pengeluaran makan Anda {:.1f}% dari pemasukan. Ideal untuk mahasiswa adalah 30-35%.".format((food_expense / monthly_progress["income_this_month"]) * 100),
-                    "action": "Coba masak sendiri, beli bahan makanan bareng teman kos, atau cari tempat makan dengan harga mahasiswa",
-                    "current_percentage": (food_expense / monthly_progress["income_this_month"]) * 100,
-                    "target_percentage": 35
-                })
-            
-            # Part-time job recommendation
-            if monthly_progress["income_this_month"] < 1000000 and not monthly_summary.income_categories.get("Part-time Job"):
-                recommendations.append({
-                    "type": "income_increase",
-                    "priority": "low",
-                    "title": "Pertimbangkan Kerja Sampingan",
-                    "description": "Pemasukan bulanan bisa ditingkatkan dengan pekerjaan paruh waktu yang fleksibel dengan jadwal kuliah.",
-                    "action": "Cari part-time job online seperti freelance writing, design, atau les private",
-                    "current_income": monthly_progress["income_this_month"],
-                    "potential_additional": 500000
-                })
-            
-            # Savings goal recommendation
-            active_goals = await self.get_user_savings_goals(user_id, "active")
-            if len(active_goals) == 0 and real_total_savings > 1000000:
-                recommendations.append({
-                    "type": "savings_goal",
-                    "priority": "low",
-                    "title": "Buat Target Tabungan",
-                    "description": "Anda sudah punya tabungan yang cukup. Saatnya membuat target untuk barang atau keperluan spesifik.",
-                    "action": "Buat target tabungan untuk laptop, HP baru, atau liburan. Contoh: 'Mau nabung buat beli laptop 10 juta pada tanggal 22 januari 2026'",
-                    "suggested_targets": ["Laptop untuk kuliah", "Smartphone baru", "Dana liburan", "Kursus online"]
-                })
-            
-            return recommendations
-            
-        except Exception as e:
-            print(f"Error getting student recommendations: {e}")
-            return []
-    
-    async def calculate_goal_affordability(self, user_id: str, target_amount: float, target_date: datetime = None) -> Dict[str, Any]:
-        """Hitung apakah target tabungan realistis untuk mahasiswa"""
-        try:
-            real_total_savings = await self._calculate_real_total_savings(user_id)
-            monthly_progress = await self._calculate_monthly_savings_progress(user_id)
-            
-            # Calculate available for new goals
-            user_doc = self.db.users.find_one({"_id": ObjectId(user_id)})
-            emergency_fund = 0.0
-            if user_doc and user_doc.get("financial_settings"):
-                emergency_fund = user_doc["financial_settings"].get("emergency_fund", 0)
-            
-            # Reserve emergency fund and 1 month of average expenses
-            reserved_amount = emergency_fund + monthly_progress["expense_this_month"]
-            available_now = max(real_total_savings - reserved_amount, 0)
-            
-            # Calculate monthly savings capacity
-            monthly_capacity = monthly_progress["net_savings_this_month"]
-            
-            result = {
-                "target_amount": target_amount,
-                "available_now": available_now,
-                "monthly_capacity": monthly_capacity,
-                "can_afford_now": available_now >= target_amount,
-                "affordability_status": "",
-                "recommended_strategy": "",
-                "time_needed_months": 0,
-                "suggested_monthly_allocation": 0
-            }
-            
-            if target_date:
-                months_until_target = max((target_date - datetime.now()).days / 30, 1)
-                needed_monthly = (target_amount - available_now) / months_until_target
-                
-                result["target_date"] = target_date
-                result["months_until_target"] = months_until_target
-                result["needed_monthly"] = needed_monthly
-                
-                if needed_monthly <= monthly_capacity * 0.5:  # Only use 50% of capacity
-                    result["affordability_status"] = "realistic"
-                    result["recommended_strategy"] = f"Sisihkan Rp {needed_monthly:,.0f} per bulan dari tabungan bulanan Anda"
-                elif needed_monthly <= monthly_capacity:
-                    result["affordability_status"] = "challenging"
-                    result["recommended_strategy"] = f"Perlu disiplin tinggi - sisihkan Rp {needed_monthly:,.0f} per bulan"
-                else:
-                    result["affordability_status"] = "unrealistic"
-                    result["recommended_strategy"] = f"Target terlalu tinggi. Pertimbangkan memperpanjang waktu atau mengurangi target"
-            else:
-                # No target date, calculate optimal time
-                if monthly_capacity > 0:
-                    optimal_months = (target_amount - available_now) / (monthly_capacity * 0.3)  # Use 30% of capacity
-                    result["time_needed_months"] = max(optimal_months, 1)
-                    result["suggested_monthly_allocation"] = (target_amount - available_now) / optimal_months
-                    result["affordability_status"] = "feasible"
-                    result["recommended_strategy"] = f"Target bisa dicapai dalam {optimal_months:.1f} bulan dengan alokasi Rp {result['suggested_monthly_allocation']:,.0f} per bulan"
-            
-            return result
-            
-        except Exception as e:
-            print(f"Error calculating goal affordability: {e}")
-            return {
-                "target_amount": target_amount,
-                "affordability_status": "error",
-                "recommended_strategy": "Tidak dapat menghitung, coba lagi nanti"
-            }
+        """Parse pesan chat untuk mengekstrak data keuangan dengan enhanced categorization"""
+        result = self.parser.parse_financial_data(message)
+        
+        # Enhance result dengan budget type info
+        if result["is_financial_data"] and result["parsed_data"]:
+            if result["data_type"] in ["expense"]:
+                category = result["parsed_data"]["category"]
+                budget_type = IndonesianStudentCategories.get_budget_type(category)
+                result["parsed_data"]["budget_type"] = budget_type
+                result["budget_guidance"] = {
+                    "needs": "50% budget - Kebutuhan pokok yang wajib",
+                    "wants": "30% budget - Keinginan dan target tabungan barang",
+                    "savings": "20% budget - Tabungan masa depan"
+                }.get(budget_type, "Kategori tidak dikenali")
+        
+        return result

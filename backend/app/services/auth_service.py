@@ -1,4 +1,4 @@
-# app/services/auth_service_fixed.py - Fixed logic untuk tabungan awal
+# app/services/auth_service.py - UPDATED untuk metode 50/30/20
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from fastapi import HTTPException, status
@@ -20,7 +20,8 @@ from ..schemas.auth_schemas import (
     ProfileSetup, 
     FinancialSetup,
     ChangePassword,
-    UpdateProfile
+    UpdateProfile,
+    UpdateFinancialSettings
 )
 
 class AuthService:
@@ -105,6 +106,19 @@ class AuthService:
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Akun tidak aktif"
                 )
+            
+            # Update budget jika perlu (reset tanggal 1)
+            budget_updated = user.update_budget_if_needed()
+            if budget_updated:
+                # Save updated budget to database
+                self.users_collection.update_one(
+                    {"_id": ObjectId(user.id)},
+                    {"$set": {
+                        "financial_settings": user.financial_settings.dict() if user.financial_settings else None,
+                        "updated_at": datetime.utcnow()
+                    }}
+                )
+                print(f"✅ Budget 50/30/20 reset untuk user {user.id}")
             
             return user
             
@@ -209,23 +223,31 @@ class AuthService:
     
     async def setup_financial(self, user_id: str, financial_data: FinancialSetup) -> User:
         """
-        FIXED: Setup keuangan awal mahasiswa dengan logika yang diperbaiki
-        - current_savings = tabungan awal, TIDAK berubah otomatis
-        - TIDAK membuat savings goal untuk tabungan awal
-        - Total tabungan real-time dihitung di finance service
+        Setup keuangan awal mahasiswa dengan metode 50/30/20 Elizabeth Warren
+        
+        Input:
+        - current_savings: Tabungan awal
+        - monthly_income: Pemasukan bulanan (untuk calculate budget 50/30/20)
+        - primary_bank: Bank/e-wallet utama
+        
+        Output: Otomatis calculate budget allocation 50/30/20
         """
         
         try:
-            # Buat financial settings dengan enhanced categories untuk mahasiswa
+            # Buat financial settings dengan metode 50/30/20
             financial_settings = FinancialSettings(
-                current_savings=financial_data.current_savings,  # Simpan sebagai tabungan AWAL saja
-                monthly_savings_target=financial_data.monthly_savings_target,
-                emergency_fund=financial_data.emergency_fund,
+                current_savings=financial_data.current_savings,
+                monthly_income=financial_data.monthly_income,
                 primary_bank=financial_data.primary_bank,
-                # Categories sudah ada di default FinancialSettings untuk mahasiswa
-                semester_system=True,  # Default untuk mahasiswa
-                academic_year_start=7  # Juli (tahun akademik Indonesia)
+                budget_method="50/30/20",
+                last_budget_reset=datetime.utcnow(),
+                budget_cycle="monthly",
+                semester_system=True,
+                academic_year_start=7,  # Juli (tahun akademik Indonesia)
             )
+            
+            # Calculate dan set budget allocation 50/30/20
+            financial_settings.update_budget_allocation(financial_data.monthly_income)
             
             # Update user di database
             update_data = {
@@ -250,16 +272,13 @@ class AuthService:
                     detail="User tidak ditemukan"
                 )
             
-            # FIXED: TIDAK membuat initial savings goals
-            # Tabungan awal tetap sebagai current_savings di financial_settings
-            # Total tabungan real-time akan dihitung di finance service
-            
-            print(f"✅ Financial setup completed for user {user_id}")
-            print(f"💰 Initial savings: Rp {financial_data.current_savings:,.0f}")
-            print(f"🎯 Monthly target: Rp {financial_data.monthly_savings_target:,.0f}")
-            print(f"🚨 Emergency fund: Rp {financial_data.emergency_fund:,.0f}")
-            print(f"🏦 Primary bank: {financial_data.primary_bank}")
-            print(f"📝 Logic: Tabungan awal tersimpan, tidak dibuat savings goal")
+            print(f"✅ Financial setup 50/30/20 completed for user {user_id}")
+            print(f"💰 Monthly Income: Rp {financial_data.monthly_income:,.0f}")
+            print(f"🟢 Needs Budget (50%): Rp {financial_settings.needs_budget:,.0f}")
+            print(f"🟡 Wants Budget (30%): Rp {financial_settings.wants_budget:,.0f}")
+            print(f"🔵 Savings Budget (20%): Rp {financial_settings.savings_budget:,.0f}")
+            print(f"🏦 Primary Bank: {financial_data.primary_bank}")
+            print(f"📅 Budget reset setiap tanggal 1")
             
             # Ambil user yang sudah diupdate
             updated_user = self.users_collection.find_one({"_id": ObjectId(user_id)})
@@ -403,26 +422,52 @@ class AuthService:
                 detail="Gagal update profil"
             )
     
-    # === ENHANCED METHODS: Financial Settings Management ===
+    # === NEW METHODS: Financial Settings Management untuk 50/30/20 ===
     
-    async def update_financial_settings(self, user_id: str, financial_data: Dict[str, Any]) -> User:
-        """Update financial settings mahasiswa"""
+    async def update_financial_settings(self, user_id: str, financial_data: UpdateFinancialSettings) -> User:
+        """Update financial settings dengan recalculate budget 50/30/20"""
         try:
+            # Get current user
+            user_doc = self.users_collection.find_one({"_id": ObjectId(user_id)})
+            if not user_doc:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="User tidak ditemukan"
+                )
+            
+            user = User.from_mongo(user_doc)
+            
+            if not user.financial_settings:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Financial settings belum di-setup"
+                )
+            
             financial_updates = {}
+            recalculate_budget = False
             
             # Update financial settings fields
-            if "current_savings" in financial_data:
-                # FIXED: current_savings tetap sebagai tabungan awal
-                financial_updates["financial_settings.current_savings"] = financial_data["current_savings"]
-                print(f"⚠️  Updated initial savings to: Rp {financial_data['current_savings']:,.0f}")
-                print(f"📝 Note: Ini mengubah tabungan AWAL, bukan total real-time")
+            if financial_data.current_savings is not None:
+                financial_updates["financial_settings.current_savings"] = financial_data.current_savings
+                print(f"💰 Updated initial savings to: Rp {financial_data.current_savings:,.0f}")
                 
-            if "monthly_savings_target" in financial_data:
-                financial_updates["financial_settings.monthly_savings_target"] = financial_data["monthly_savings_target"]
-            if "emergency_fund" in financial_data:
-                financial_updates["financial_settings.emergency_fund"] = financial_data["emergency_fund"]
-            if "primary_bank" in financial_data:
-                financial_updates["financial_settings.primary_bank"] = financial_data["primary_bank"]
+            if financial_data.monthly_income is not None:
+                financial_updates["financial_settings.monthly_income"] = financial_data.monthly_income
+                # Recalculate budget allocation jika monthly income berubah
+                new_allocation = user.financial_settings.calculate_budget_allocation(financial_data.monthly_income)
+                financial_updates["financial_settings.needs_budget"] = new_allocation["needs_budget"]
+                financial_updates["financial_settings.wants_budget"] = new_allocation["wants_budget"]
+                financial_updates["financial_settings.savings_budget"] = new_allocation["savings_budget"]
+                recalculate_budget = True
+                
+                print(f"📊 Updated monthly income & budget allocation:")
+                print(f"   Monthly Income: Rp {financial_data.monthly_income:,.0f}")
+                print(f"   Needs (50%): Rp {new_allocation['needs_budget']:,.0f}")
+                print(f"   Wants (30%): Rp {new_allocation['wants_budget']:,.0f}")
+                print(f"   Savings (20%): Rp {new_allocation['savings_budget']:,.0f}")
+                
+            if financial_data.primary_bank is not None:
+                financial_updates["financial_settings.primary_bank"] = financial_data.primary_bank
             
             if financial_updates:
                 financial_updates["updated_at"] = datetime.utcnow()
@@ -452,7 +497,7 @@ class AuthService:
             )
     
     async def get_user_financial_overview(self, user_id: str) -> Dict[str, Any]:
-        """Mendapatkan overview keuangan lengkap mahasiswa dengan logika yang diperbaiki"""
+        """Mendapatkan overview keuangan lengkap mahasiswa dengan metode 50/30/20"""
         try:
             user = await self.get_user_by_id(user_id)
             if not user or not user.financial_settings:
@@ -461,10 +506,17 @@ class AuthService:
                     "message": "Financial setup belum dilakukan"
                 }
             
-            # Get REAL financial dashboard dari finance service
-            from ..services.finance_service import FinanceService
-            finance_service = FinanceService()
-            dashboard = await finance_service.get_financial_dashboard(user_id)
+            # Get budget allocation 50/30/20
+            budget_allocation = user.get_current_budget_allocation()
+            
+            # Get financial dashboard dari finance service
+            try:
+                from ..services.finance_service import FinanceService
+                finance_service = FinanceService()
+                dashboard = await finance_service.get_financial_dashboard_50_30_20(user_id)
+            except Exception as e:
+                print(f"Error getting dashboard: {e}")
+                dashboard = {"error": "Could not load dashboard"}
             
             # Calculate student-specific insights
             student_context = user.get_student_context()
@@ -472,20 +524,23 @@ class AuthService:
             
             return {
                 "has_financial_setup": True,
+                "budget_method": "50/30/20 Elizabeth Warren",
                 "user_profile": {
                     "full_name": user.profile.full_name if user.profile else "",
                     "university": user.profile.university if user.profile else "",
                     "city": user.profile.city if user.profile else "",
                     "is_student": user.is_student
                 },
-                "financial_overview": dashboard,
+                "budget_allocation": budget_allocation,
+                "financial_dashboard": dashboard,
                 "student_context": student_context,
                 "student_tips": financial_tips,
-                "logic_explanation": {
-                    "initial_savings": "Tabungan awal saat setup (tidak berubah otomatis)",
-                    "real_total_savings": "Tabungan awal + total pemasukan - total pengeluaran",
-                    "monthly_progress": "Pemasukan - pengeluaran bulan ini",
-                    "savings_goals": "Target tabungan untuk barang spesifik (terpisah dari total tabungan)"
+                "method_explanation": {
+                    "needs_50": "Kebutuhan pokok: kos, makan, transport, pendidikan",
+                    "wants_30": "Keinginan & lifestyle: hiburan, jajan, target tabungan barang",
+                    "savings_20": "Tabungan masa depan: dana darurat, investasi, modal usaha",
+                    "reset_schedule": "Budget di-reset setiap tanggal 1",
+                    "flexibility": "Proporsi bisa disesuaikan tapi maintain 50/30/20 ratio"
                 }
             }
             
@@ -493,6 +548,128 @@ class AuthService:
             print(f"Error getting financial overview: {e}")
             return {
                 "has_financial_setup": False,
+                "error": str(e)
+            }
+    
+    async def reset_monthly_budget(self, user_id: str) -> Dict[str, Any]:
+        """Manual reset budget bulanan (untuk testing atau emergency)"""
+        try:
+            user = await self.get_user_by_id(user_id)
+            if not user or not user.financial_settings:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Financial settings belum di-setup"
+                )
+            
+            # Force reset budget
+            user.financial_settings.last_budget_reset = datetime.utcnow()
+            
+            # Update di database
+            result = self.users_collection.update_one(
+                {"_id": ObjectId(user_id)},
+                {"$set": {
+                    "financial_settings.last_budget_reset": datetime.utcnow(),
+                    "updated_at": datetime.utcnow()
+                }}
+            )
+            
+            if result.modified_count > 0:
+                return {
+                    "success": True,
+                    "message": "Budget berhasil di-reset untuk bulan baru",
+                    "reset_time": datetime.utcnow().isoformat(),
+                    "budget_allocation": user.get_current_budget_allocation()
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": "Gagal reset budget"
+                }
+                
+        except Exception as e:
+            print(f"Error resetting monthly budget: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    async def get_budget_status(self, user_id: str) -> Dict[str, Any]:
+        """Cek status budget 50/30/20 current month"""
+        try:
+            user = await self.get_user_by_id(user_id)
+            if not user or not user.financial_settings:
+                return {
+                    "has_budget": False,
+                    "message": "Budget belum di-setup"
+                }
+            
+            # Calculate budget status untuk bulan ini
+            from ..services.finance_service import FinanceService
+            finance_service = FinanceService()
+            
+            current_month_spending = await finance_service.get_current_month_spending_by_budget_type(user_id)
+            budget_allocation = user.get_current_budget_allocation()
+            
+            if not budget_allocation["has_budget"]:
+                return budget_allocation
+            
+            allocation = budget_allocation["allocation"]
+            
+            # Calculate remaining budget
+            remaining_budget = {
+                "needs": max(allocation["needs_budget"] - current_month_spending["needs"], 0),
+                "wants": max(allocation["wants_budget"] - current_month_spending["wants"], 0),
+                "savings": max(allocation["savings_budget"] - current_month_spending["savings"], 0)
+            }
+            
+            # Calculate percentage used
+            percentage_used = {
+                "needs": (current_month_spending["needs"] / allocation["needs_budget"] * 100) if allocation["needs_budget"] > 0 else 0,
+                "wants": (current_month_spending["wants"] / allocation["wants_budget"] * 100) if allocation["wants_budget"] > 0 else 0,
+                "savings": (current_month_spending["savings"] / allocation["savings_budget"] * 100) if allocation["savings_budget"] > 0 else 0
+            }
+            
+            # Determine overall budget health
+            avg_usage = (percentage_used["needs"] + percentage_used["wants"] + percentage_used["savings"]) / 3
+            
+            if avg_usage <= 70:
+                budget_health = "excellent"
+            elif avg_usage <= 90:
+                budget_health = "good"
+            elif avg_usage <= 100:
+                budget_health = "warning"
+            else:
+                budget_health = "over_budget"
+            
+            # Generate recommendations
+            recommendations = []
+            if percentage_used["needs"] > 90:
+                recommendations.append("⚠️ Budget NEEDS hampir habis. Review pengeluaran kebutuhan pokok.")
+            if percentage_used["wants"] > 100:
+                recommendations.append("🚨 Budget WANTS sudah over. Kurangi pengeluaran hiburan dan jajan.")
+            if percentage_used["savings"] < 50:
+                recommendations.append("💡 Budget SAVINGS masih banyak. Pertimbangkan untuk menabung lebih atau investasi.")
+            
+            if not recommendations:
+                recommendations.append("✅ Budget management Anda sudah baik! Pertahankan pola ini.")
+            
+            return {
+                "has_budget": True,
+                "method": "50/30/20 Elizabeth Warren",
+                "current_month": datetime.now().strftime("%B %Y"),
+                "budget_allocation": allocation,
+                "current_spending": current_month_spending,
+                "remaining_budget": remaining_budget,
+                "percentage_used": percentage_used,
+                "budget_health": budget_health,
+                "recommendations": recommendations,
+                "reset_date": "Tanggal 1 setiap bulan"
+            }
+            
+        except Exception as e:
+            print(f"Error getting budget status: {e}")
+            return {
+                "has_budget": False,
                 "error": str(e)
             }
     

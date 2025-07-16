@@ -1,3 +1,4 @@
+# app/schemas/auth_schemas.py - UPDATED untuk metode 50/30/20
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
@@ -65,11 +66,33 @@ class ProfileSetup(BaseModel):
     dark_mode: bool = False
 
 class FinancialSetup(BaseModel):
-    """Schema untuk setup keuangan mahasiswa"""
-    current_savings: float = Field(..., ge=0)  # Total tabungan saat ini
-    monthly_savings_target: float = Field(..., gt=0)  # Target tabungan bulanan
-    emergency_fund: float = Field(..., ge=0)  # Dana darurat saat ini
-    primary_bank: str = Field(..., min_length=2, max_length=100)  # Bank/e-wallet utama (wajib)
+    """
+    Schema untuk setup keuangan mahasiswa dengan metode 50/30/20 Elizabeth Warren
+    
+    Metode 50/30/20:
+    - 50% Needs (Kebutuhan): Kos, makan, transport, pendidikan
+    - 30% Wants (Keinginan): Hiburan, jajan, shopping, target tabungan barang
+    - 20% Savings (Tabungan): Tabungan umum untuk masa depan
+    """
+    current_savings: float = Field(..., ge=0, description="Total tabungan awal saat ini")
+    monthly_income: float = Field(..., gt=0, description="Pemasukan bulanan (uang saku/gaji)")
+    primary_bank: str = Field(..., min_length=2, max_length=100, description="Bank/e-wallet utama")
+    
+    @field_validator('monthly_income')
+    @classmethod
+    def validate_monthly_income(cls, v):
+        if v < 100000:  # Minimal 100rb per bulan untuk mahasiswa Indonesia
+            raise ValueError('Pemasukan bulanan minimal Rp 100.000')
+        if v > 50000000:  # Maksimal 50 juta (sanity check)
+            raise ValueError('Pemasukan bulanan maksimal Rp 50.000.000')
+        return v
+    
+    @field_validator('current_savings')
+    @classmethod
+    def validate_current_savings(cls, v):
+        if v > 1000000000:  # Maksimal 1 miliar (sanity check)
+            raise ValueError('Tabungan awal maksimal Rp 1.000.000.000')
+        return v
 
 class UserResponse(BaseModel):
     """Schema untuk response user data"""
@@ -125,9 +148,64 @@ class UpdateProfile(BaseModel):
     dark_mode: Optional[bool] = None
     auto_categorization: Optional[bool] = None
 
+class UpdateFinancialSettings(BaseModel):
+    """Schema untuk update financial settings 50/30/20"""
+    current_savings: Optional[float] = Field(None, ge=0, description="Update tabungan awal")
+    monthly_income: Optional[float] = Field(None, gt=0, description="Update pemasukan bulanan")
+    primary_bank: Optional[str] = Field(None, min_length=2, max_length=100, description="Update bank utama")
+    
+    @field_validator('monthly_income')
+    @classmethod
+    def validate_monthly_income(cls, v):
+        if v is not None:
+            if v < 100000:
+                raise ValueError('Pemasukan bulanan minimal Rp 100.000')
+            if v > 50000000:
+                raise ValueError('Pemasukan bulanan maksimal Rp 50.000.000')
+        return v
+
+class UpdateFinancialSettings(BaseModel):
+    """Schema untuk update financial settings 50/30/20"""
+    current_savings: Optional[float] = Field(None, ge=0, description="Update tabungan awal")
+    monthly_income: Optional[float] = Field(None, gt=0, description="Update pemasukan bulanan")
+    primary_bank: Optional[str] = Field(None, min_length=2, max_length=100, description="Update bank utama")
+    
+    @field_validator('monthly_income')
+    @classmethod
+    def validate_monthly_income(cls, v):
+        if v is not None:
+            if v < 100000:
+                raise ValueError('Pemasukan bulanan minimal Rp 100.000')
+            if v > 50000000:
+                raise ValueError('Pemasukan bulanan maksimal Rp 50.000.000')
+        return v
+
 class ApiResponse(BaseModel):
     """Schema untuk standard API response"""
     success: bool
     message: str
     data: Optional[dict] = None
     errors: Optional[list] = None
+
+# NEW: Budget allocation response schema
+class BudgetAllocationResponse(BaseModel):
+    """Schema untuk response alokasi budget 50/30/20"""
+    monthly_income: float
+    needs_budget: float      # 50%
+    wants_budget: float      # 30% 
+    savings_budget: float    # 20%
+    needs_percentage: float = 50.0
+    wants_percentage: float = 30.0
+    savings_percentage: float = 20.0
+    method: str = "50/30/20 Elizabeth Warren"
+    reset_date: str  # Tanggal 1 setiap bulan
+    
+class MonthlyBudgetStatus(BaseModel):
+    """Schema untuk status budget bulanan"""
+    period: str  # "Januari 2025"
+    budget_allocation: BudgetAllocationResponse
+    actual_spending: dict  # {"needs": amount, "wants": amount, "savings": amount}
+    remaining_budget: dict  # {"needs": amount, "wants": amount, "savings": amount}
+    percentage_used: dict  # {"needs": %, "wants": %, "savings": %}
+    budget_health: str  # "excellent", "good", "warning", "over_budget"
+    recommendations: list  # Tips untuk mengoptimalkan budget

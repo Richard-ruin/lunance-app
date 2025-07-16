@@ -1,10 +1,142 @@
-# app/services/financial_categories.py - New file for Indonesian student categories
-from typing import Dict, List
+# app/services/financial_categories.py - UPDATED untuk metode 50/30/20
+from typing import Dict, List, Any
 
 class IndonesianStudentCategories:
-    """Kategori keuangan yang disesuaikan untuk mahasiswa Indonesia"""
+    """
+    Kategori keuangan yang disesuaikan untuk mahasiswa Indonesia dengan metode 50/30/20
     
-    # Kategori pemasukan untuk mahasiswa Indonesia
+    Metode 50/30/20 Elizabeth Warren:
+    - 50% NEEDS (Kebutuhan): Hal-hal yang HARUS dibayar untuk bertahan hidup
+    - 30% WANTS (Keinginan): Hal-hal yang ingin dibeli tapi tidak wajib
+    - 20% SAVINGS (Tabungan): Tabungan dan investasi untuk masa depan
+    """
+    
+    # ===== 50% NEEDS - KEBUTUHAN POKOK MAHASISWA =====
+    NEEDS_CATEGORIES = {
+        "makanan_pokok": {
+            "name": "Makanan Pokok",
+            "keywords": ["makan", "nasi", "lauk", "sayur", "buah", "groceries", "beras", "minyak", "garam", "gula", "telur", "daging", "ikan", "tahu", "tempe", "masak", "dapur"],
+            "description": "Makanan sehari-hari dan bahan pokok untuk kebutuhan gizi",
+            "budget_type": "needs",
+            "essential": True
+        },
+        "tempat_tinggal": {
+            "name": "Kos/Tempat Tinggal", 
+            "keywords": ["kos", "kost", "sewa", "kontrakan", "boarding house", "asrama", "indekos", "listrik", "air", "wifi kos", "kamar"],
+            "description": "Biaya tempat tinggal dan utilitasnya",
+            "budget_type": "needs", 
+            "essential": True
+        },
+        "transportasi_wajib": {
+            "name": "Transportasi Wajib",
+            "keywords": ["transport", "angkot", "bus", "kereta", "ojol kuliah", "grab kampus", "gojek kuliah", "bensin motor", "parkir kampus"],
+            "description": "Transportasi untuk ke kampus dan kebutuhan wajib",
+            "budget_type": "needs",
+            "essential": True
+        },
+        "pendidikan": {
+            "name": "Pendidikan",
+            "keywords": ["buku", "alat tulis", "fotocopy", "print", "tugas", "ukt", "spp", "praktikum", "lab", "seminar", "wisuda", "skripsi", "thesis"],
+            "description": "Keperluan pendidikan dan kuliah yang wajib",
+            "budget_type": "needs",
+            "essential": True
+        },
+        "komunikasi_wajib": {
+            "name": "Internet & Komunikasi",
+            "keywords": ["internet", "wifi", "pulsa", "paket data", "kuota", "zoom", "google meet", "kuliah online"],
+            "description": "Internet dan komunikasi untuk kuliah",
+            "budget_type": "needs",
+            "essential": True
+        },
+        "kesehatan_dasar": {
+            "name": "Kesehatan & Kebersihan",
+            "keywords": ["obat", "dokter", "puskesmas", "klinik", "vitamin wajib", "shampo", "sabun", "pasta gigi", "sikat gigi", "detergen"],
+            "description": "Kesehatan dan kebersihan dasar yang wajib",
+            "budget_type": "needs",
+            "essential": True
+        }
+    }
+    
+    # ===== 30% WANTS - KEINGINAN DAN LIFESTYLE =====
+    WANTS_CATEGORIES = {
+        "hiburan": {
+            "name": "Hiburan & Sosial",
+            "keywords": ["nonton", "bioskop", "cinema", "game", "netflix", "spotify", "hangout", "nongkrong", "cafe", "mall", "jalan-jalan", "konser"],
+            "description": "Hiburan dan kegiatan sosial yang menyenangkan",
+            "budget_type": "wants",
+            "essential": False
+        },
+        "jajan": {
+            "name": "Jajan & Snack",
+            "keywords": ["jajan", "snack", "es", "kopi", "bubble tea", "martabak", "bakso", "soto", "gado-gado", "foodcourt", "delivery", "gofood", "grabfood"],
+            "description": "Jajan dan makanan di luar kebutuhan pokok",
+            "budget_type": "wants", 
+            "essential": False
+        },
+        "pakaian_gaya": {
+            "name": "Pakaian & Aksesoris",
+            "keywords": ["baju", "celana", "sepatu", "sandal", "kaos", "kemeja", "jaket", "tas", "dompet", "jam", "aksesoris", "fashion"],
+            "description": "Pakaian dan aksesoris di luar kebutuhan dasar",
+            "budget_type": "wants",
+            "essential": False
+        },
+        "organisasi_sosial": {
+            "name": "Organisasi & Event",
+            "keywords": ["ormawa", "organisasi", "himpunan", "ukm", "bem", "kegiatan kampus", "event", "seminar", "workshop", "gathering"],
+            "description": "Kegiatan organisasi dan event sosial kampus",
+            "budget_type": "wants",
+            "essential": False
+        },
+        "target_barang": {
+            "name": "Target Tabungan Barang",
+            "keywords": ["nabung", "tabung", "target", "ingin beli", "mau beli", "pengen beli", "laptop", "hp", "handphone", "gadget", "motor", "sepeda"],
+            "description": "Menabung dari budget wants untuk barang yang diinginkan",
+            "budget_type": "wants",
+            "essential": False,
+            "is_savings_goal": True
+        },
+        "lainnya_wants": {
+            "name": "Lainnya (Wants)",
+            "keywords": [],
+            "description": "Keinginan lainnya yang tidak masuk kategori di atas",
+            "budget_type": "wants",
+            "essential": False
+        }
+    }
+    
+    # ===== 20% SAVINGS - TABUNGAN MASA DEPAN =====
+    SAVINGS_CATEGORIES = {
+        "tabungan_umum": {
+            "name": "Tabungan Umum",
+            "keywords": ["tabungan", "saving", "simpan", "deposito", "rekening", "menabung umum"],
+            "description": "Tabungan tanpa tujuan spesifik untuk masa depan",
+            "budget_type": "savings",
+            "essential": True
+        },
+        "dana_darurat": {
+            "name": "Dana Darurat",
+            "keywords": ["dana darurat", "emergency", "darurat", "cadangan", "emergency fund"],
+            "description": "Dana untuk situasi mendesak dan tak terduga",
+            "budget_type": "savings",
+            "essential": True
+        },
+        "investasi": {
+            "name": "Investasi Masa Depan",
+            "keywords": ["investasi", "reksadana", "saham", "obligasi", "sbn", "crypto", "bitcoin", "ethereum", "trading"],
+            "description": "Investasi untuk pertumbuhan kekayaan jangka panjang",
+            "budget_type": "savings",
+            "essential": False
+        },
+        "tabungan_jangka_panjang": {
+            "name": "Tabungan Jangka Panjang",
+            "keywords": ["modal usaha", "setelah lulus", "karir", "menikah", "rumah", "masa depan", "pensiun"],
+            "description": "Tabungan untuk tujuan besar setelah lulus",
+            "budget_type": "savings",
+            "essential": False
+        }
+    }
+    
+    # ===== INCOME CATEGORIES (tidak berubah) =====
     INCOME_CATEGORIES = {
         "uang_saku": {
             "name": "Uang Saku/Kiriman Ortu",
@@ -38,59 +170,31 @@ class IndonesianStudentCategories:
         }
     }
     
-    # Kategori pengeluaran untuk mahasiswa Indonesia
-    EXPENSE_CATEGORIES = {
-        "makanan": {
-            "name": "Makanan & Minuman",
-            "keywords": ["makan", "minum", "nasi", "ayam", "soto", "gado-gado", "warteg", "indomie", "kopi", "es teh", "jajan", "snack", "kantin", "foodcourt"],
-            "description": "Pengeluaran untuk makanan dan minuman sehari-hari"
-        },
-        "transportasi": {
-            "name": "Transportasi",
-            "keywords": ["transport", "angkot", "bus", "ojol", "grab", "gojek", "bensin", "parkir", "tol", "kereta", "motor", "mobil"],
-            "description": "Biaya transportasi dan perjalanan"
-        },
-        "pendidikan": {
-            "name": "Pendidikan",
-            "keywords": ["buku", "alat tulis", "fotocopy", "print", "tugas", "ukt", "spp", "praktikum", "lab", "seminar", "wisuda"],
-            "description": "Keperluan pendidikan dan kuliah"
-        },
-        "tempat_tinggal": {
-            "name": "Kos/Tempat Tinggal",
-            "keywords": ["kos", "kost", "sewa", "kontrakan", "boarding house", "asrama", "indekos"],
-            "description": "Biaya tempat tinggal"
-        },
-        "komunikasi": {
-            "name": "Internet & Komunikasi",
-            "keywords": ["internet", "wifi", "pulsa", "paket data", "kuota", "telkomsel", "xl", "indosat", "tri", "smartfren"],
-            "description": "Biaya internet, pulsa, dan komunikasi"
-        },
-        "hiburan": {
-            "name": "Hiburan & Sosial",
-            "keywords": ["nonton", "bioskop", "game", "netflix", "spotify", "hangout", "nongkrong", "cafe", "mall", "jalan-jalan"],
-            "description": "Hiburan dan kegiatan sosial"
-        },
-        "kesehatan": {
-            "name": "Kesehatan & Kebersihan",
-            "keywords": ["obat", "dokter", "puskesmas", "klinik", "vitamin", "shampo", "sabun", "pasta gigi", "skincare"],
-            "description": "Kesehatan dan produk kebersihan"
-        },
-        "pakaian": {
-            "name": "Pakaian & Aksesoris",
-            "keywords": ["baju", "celana", "sepatu", "sandal", "kaos", "kemeja", "jaket", "tas", "dompet", "jam"],
-            "description": "Pakaian dan aksesoris"
-        },
-        "organisasi": {
-            "name": "Organisasi & Kegiatan",
-            "keywords": ["ormawa", "organisasi", "himpunan", "ukm", "bem", "kegiatan kampus", "event", "seminar"],
-            "description": "Kegiatan organisasi dan kampus"
-        },
-        "lainnya": {
-            "name": "Lainnya",
-            "keywords": [],
-            "description": "Pengeluaran lainnya"
-        }
-    }
+    @classmethod
+    def get_expense_category_with_budget_type(cls, text: str) -> tuple:
+        """
+        Deteksi kategori pengeluaran dan budget type (needs/wants/savings)
+        Returns: (category_name, budget_type)
+        """
+        text_lower = text.lower()
+        
+        # Check NEEDS categories first (priority)
+        for category_id, category_data in cls.NEEDS_CATEGORIES.items():
+            if any(keyword in text_lower for keyword in category_data["keywords"]):
+                return category_data["name"], "needs"
+        
+        # Check WANTS categories
+        for category_id, category_data in cls.WANTS_CATEGORIES.items():
+            if any(keyword in text_lower for keyword in category_data["keywords"]):
+                return category_data["name"], "wants"
+        
+        # Check SAVINGS categories
+        for category_id, category_data in cls.SAVINGS_CATEGORIES.items():
+            if any(keyword in text_lower for keyword in category_data["keywords"]):
+                return category_data["name"], "savings"
+        
+        # Default ke wants jika tidak dapat dikategorikan
+        return "Lainnya (Wants)", "wants"
     
     @classmethod
     def get_income_category(cls, text: str) -> str:
@@ -105,14 +209,45 @@ class IndonesianStudentCategories:
     
     @classmethod
     def get_expense_category(cls, text: str) -> str:
-        """Deteksi kategori pengeluaran berdasarkan teks"""
-        text_lower = text.lower()
+        """Deteksi kategori pengeluaran (backward compatibility)"""
+        category_name, _ = cls.get_expense_category_with_budget_type(text)
+        return category_name
+    
+    @classmethod
+    def get_budget_type(cls, category_name: str) -> str:
+        """Tentukan budget type dari nama kategori"""
+        # Search in NEEDS
+        for category_data in cls.NEEDS_CATEGORIES.values():
+            if category_data["name"] == category_name:
+                return "needs"
         
-        for category_id, category_data in cls.EXPENSE_CATEGORIES.items():
-            if any(keyword in text_lower for keyword in category_data["keywords"]):
-                return category_data["name"]
+        # Search in WANTS  
+        for category_data in cls.WANTS_CATEGORIES.values():
+            if category_data["name"] == category_name:
+                return "wants"
         
-        return cls.EXPENSE_CATEGORIES["lainnya"]["name"]
+        # Search in SAVINGS
+        for category_data in cls.SAVINGS_CATEGORIES.values():
+            if category_data["name"] == category_name:
+                return "savings"
+        
+        # Default
+        return "wants"
+    
+    @classmethod
+    def get_all_needs_categories(cls) -> List[str]:
+        """Dapatkan semua kategori NEEDS (50%)"""
+        return [cat["name"] for cat in cls.NEEDS_CATEGORIES.values()]
+    
+    @classmethod
+    def get_all_wants_categories(cls) -> List[str]:
+        """Dapatkan semua kategori WANTS (30%)"""
+        return [cat["name"] for cat in cls.WANTS_CATEGORIES.values()]
+    
+    @classmethod
+    def get_all_savings_categories(cls) -> List[str]:
+        """Dapatkan semua kategori SAVINGS (20%)"""
+        return [cat["name"] for cat in cls.SAVINGS_CATEGORIES.values()]
     
     @classmethod
     def get_all_income_categories(cls) -> List[str]:
@@ -121,26 +256,113 @@ class IndonesianStudentCategories:
     
     @classmethod
     def get_all_expense_categories(cls) -> List[str]:
-        """Dapatkan semua nama kategori pengeluaran"""
-        return [cat["name"] for cat in cls.EXPENSE_CATEGORIES.values()]
+        """Dapatkan semua nama kategori pengeluaran (needs + wants + savings)"""
+        categories = []
+        categories.extend(cls.get_all_needs_categories())
+        categories.extend(cls.get_all_wants_categories()) 
+        categories.extend(cls.get_all_savings_categories())
+        return categories
+    
+    @classmethod
+    def get_categories_by_budget_type(cls) -> Dict[str, List[str]]:
+        """Dapatkan kategori yang digroup berdasarkan budget type 50/30/20"""
+        return {
+            "needs": cls.get_all_needs_categories(),
+            "wants": cls.get_all_wants_categories(),
+            "savings": cls.get_all_savings_categories(),
+            "income": cls.get_all_income_categories()
+        }
     
     @classmethod
     def get_category_suggestions(cls, category_type: str) -> Dict[str, str]:
-        """Dapatkan saran kategori dengan deskripsi"""
-        if category_type == "income":
+        """Dapatkan saran kategori dengan deskripsi berdasarkan budget type"""
+        if category_type == "needs":
+            return {cat["name"]: cat["description"] for cat in cls.NEEDS_CATEGORIES.values()}
+        elif category_type == "wants":
+            return {cat["name"]: cat["description"] for cat in cls.WANTS_CATEGORIES.values()}
+        elif category_type == "savings":
+            return {cat["name"]: cat["description"] for cat in cls.SAVINGS_CATEGORIES.values()}
+        elif category_type == "income":
             return {cat["name"]: cat["description"] for cat in cls.INCOME_CATEGORIES.values()}
-        elif category_type == "expense":
-            return {cat["name"]: cat["description"] for cat in cls.EXPENSE_CATEGORIES.values()}
         else:
             return {}
     
     @classmethod
-    def suggest_similar_categories(cls, user_input: str, category_type: str) -> List[str]:
-        """Berikan saran kategori yang mirip dengan input user"""
+    def get_budget_allocation_guide(cls) -> Dict[str, Any]:
+        """Panduan alokasi budget 50/30/20 untuk mahasiswa Indonesia"""
+        return {
+            "method": "50/30/20 Elizabeth Warren",
+            "description": "Metode budgeting yang membagi pemasukan menjadi 3 kategori utama",
+            "allocation": {
+                "needs": {
+                    "percentage": 50,
+                    "description": "Kebutuhan pokok yang HARUS dibayar untuk bertahan hidup",
+                    "categories": cls.get_all_needs_categories(),
+                    "examples": [
+                        "Sewa kos Rp 800.000",
+                        "Makan sehari-hari Rp 500.000", 
+                        "Transport ke kampus Rp 300.000",
+                        "Buku dan alat kuliah Rp 200.000"
+                    ],
+                    "tips": [
+                        "Prioritaskan kategori ini sebelum yang lain",
+                        "Jika lebih dari 50%, cari cara untuk menghemat",
+                        "Focus pada efisiensi, bukan elimination"
+                    ]
+                },
+                "wants": {
+                    "percentage": 30,
+                    "description": "Keinginan dan lifestyle yang membuat hidup lebih menyenangkan",
+                    "categories": cls.get_all_wants_categories(),
+                    "examples": [
+                        "Nongkrong di cafe Rp 200.000",
+                        "Beli baju baru Rp 300.000",
+                        "Nonton bioskop Rp 100.000", 
+                        "Nabung buat laptop Rp 400.000"
+                    ],
+                    "tips": [
+                        "Dari 30% ini bisa untuk target tabungan barang",
+                        "Boleh fleksibel, tapi jangan sampai lebih dari 30%",
+                        "Gunakan untuk menjaga mental health dan socializing"
+                    ]
+                },
+                "savings": {
+                    "percentage": 20,
+                    "description": "Tabungan dan investasi untuk masa depan",
+                    "categories": cls.get_all_savings_categories(),
+                    "examples": [
+                        "Tabungan umum Rp 300.000",
+                        "Dana darurat Rp 200.000",
+                        "Investasi reksadana Rp 100.000",
+                        "Modal usaha masa depan Rp 400.000"
+                    ],
+                    "tips": [
+                        "Minimal 20% untuk membangun wealth jangka panjang",
+                        "Prioritaskan dana darurat dulu sebelum investasi",
+                        "Konsisten lebih penting daripada jumlah besar"
+                    ]
+                }
+            },
+            "reset_schedule": "Setiap tanggal 1 untuk budget bulanan baru",
+            "flexibility": "Budget bisa disesuaikan kebutuhan, tapi tetap maintain proporsi 50/30/20"
+        }
+    
+    @classmethod
+    def suggest_similar_categories(cls, user_input: str, budget_type: str = None) -> List[str]:
+        """Berikan saran kategori yang mirip dengan input user berdasarkan budget type"""
         user_input_lower = user_input.lower()
         suggestions = []
         
-        categories = cls.INCOME_CATEGORIES if category_type == "income" else cls.EXPENSE_CATEGORIES
+        # Tentukan categories yang akan dicari
+        if budget_type == "needs":
+            categories = cls.NEEDS_CATEGORIES
+        elif budget_type == "wants":
+            categories = cls.WANTS_CATEGORIES
+        elif budget_type == "savings":
+            categories = cls.SAVINGS_CATEGORIES
+        else:
+            # Search all expense categories
+            categories = {**cls.NEEDS_CATEGORIES, **cls.WANTS_CATEGORIES, **cls.SAVINGS_CATEGORIES}
         
         for category_data in categories.values():
             # Check if any keyword partially matches

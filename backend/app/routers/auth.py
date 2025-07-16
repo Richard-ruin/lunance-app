@@ -1,4 +1,4 @@
-# app/routers/auth.py (Enhanced Version with Financial Integration)
+# app/routers/auth.py - UPDATED untuk metode 50/30/20 Elizabeth Warren
 from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
@@ -15,7 +15,10 @@ from ..schemas.auth_schemas import (
     UserResponse,
     ChangePassword,
     UpdateProfile,
-    ApiResponse
+    UpdateFinancialSettings,
+    ApiResponse,
+    BudgetAllocationResponse,
+    MonthlyBudgetStatus
 )
 from ..utils.security import verify_token
 from ..models.user import User
@@ -68,6 +71,7 @@ async def register(user_data: UserRegister):
                 "user_id": new_user.id,
                 "username": new_user.username,
                 "email": new_user.email,
+                "is_student": new_user.is_student,
                 "created_at": new_user.created_at.isoformat()
             }
         )
@@ -83,12 +87,13 @@ async def register(user_data: UserRegister):
 @router.post("/login", response_model=ApiResponse)
 async def login(login_data: UserLogin):
     """
-    Login mahasiswa
+    Login mahasiswa dengan auto budget reset
     
     - **email**: Email terdaftar
     - **password**: Password yang sesuai
     
-    Mengembalikan access token dan refresh token untuk autentikasi.
+    Mengembalikan access token, refresh token, dan budget allocation 50/30/20.
+    Budget otomatis di-reset jika sudah lewat tanggal 1.
     """
     try:
         # Autentikasi user
@@ -120,21 +125,24 @@ async def login(login_data: UserLogin):
             last_login=user.last_login
         )
         
-        # 🆕 Get financial overview if setup completed
+        # Get financial overview with budget 50/30/20 if setup completed
         financial_overview = None
+        budget_status = None
         if user.onboarding_completed:
             try:
                 financial_overview = await auth_service.get_user_financial_overview(user.id)
+                budget_status = await auth_service.get_budget_status(user.id)
             except Exception as e:
                 print(f"Warning: Could not get financial overview: {e}")
         
         return ApiResponse(
             success=True,
-            message="Login berhasil!",
+            message="Login berhasil! Budget 50/30/20 siap digunakan." if user.onboarding_completed else "Login berhasil!",
             data={
                 "tokens": tokens,
                 "user": user_response.dict(),
-                "financial_overview": financial_overview
+                "financial_overview": financial_overview,
+                "budget_status": budget_status
             }
         )
         
@@ -211,7 +219,7 @@ async def setup_profile(
         
         return ApiResponse(
             success=True,
-            message="Profil berhasil disimpan! Silakan lanjutkan setup keuangan.",
+            message="Profil berhasil disimpan! Silakan lanjutkan setup keuangan dengan metode 50/30/20.",
             data={"user": user_response.dict()}
         )
         
@@ -223,21 +231,24 @@ async def setup_profile(
             detail=f"Terjadi kesalahan dalam setup profil: {str(e)}"
         )
 
-@router.post("/initial-financial-setup", response_model=ApiResponse)
-async def initial_financial_setup(
+@router.post("/setup-financial-50-30-20", response_model=ApiResponse)
+async def setup_financial_50_30_20(
     financial_data: FinancialSetup,
     current_user: User = Depends(get_current_user)
 ):
     """
-    Setup keuangan awal mahasiswa dengan integrasi savings goals dan emergency fund
+    Setup keuangan awal mahasiswa dengan metode 50/30/20 Elizabeth Warren
     
-    - **current_savings**: Total tabungan saat ini (>= 0) *wajib*
-    - **monthly_savings_target**: Target tabungan bulanan (> 0) *wajib*
-    - **emergency_fund**: Dana darurat saat ini (>= 0) *wajib*
+    - **current_savings**: Total tabungan awal saat ini (>= 0) *wajib*
+    - **monthly_income**: Pemasukan bulanan (uang saku/gaji) (> 100.000) *wajib*
     - **primary_bank**: Bank atau e-wallet utama *wajib*
     
-    Disesuaikan untuk kebutuhan mahasiswa Indonesia dengan fokus pada tabungan dan dana darurat.
-    Otomatis membuat initial savings goals dan emergency fund goals berdasarkan data yang diinput.
+    Metode 50/30/20:
+    - 50% NEEDS: Kos, makan, transport, pendidikan
+    - 30% WANTS: Hiburan, jajan, shopping, target tabungan barang
+    - 20% SAVINGS: Tabungan umum untuk masa depan
+    
+    Budget otomatis di-reset setiap tanggal 1.
     """
     try:
         updated_user = await auth_service.setup_financial(current_user.id, financial_data)
@@ -259,32 +270,37 @@ async def initial_financial_setup(
             last_login=updated_user.last_login
         )
         
-        # 🆕 Get financial dashboard after setup
+        # Get financial overview after setup
         financial_overview = await auth_service.get_user_financial_overview(updated_user.id)
         
-        # Hitung proyeksi untuk mahasiswa
-        projected_6_months = financial_data.current_savings + (financial_data.monthly_savings_target * 6)
-        projected_1_year = financial_data.current_savings + (financial_data.monthly_savings_target * 12)
+        # Calculate budget allocation
+        budget_allocation = updated_user.get_current_budget_allocation()
         
         return ApiResponse(
             success=True,
-            message="Setup keuangan berhasil! Selamat datang di Lunance - AI finansial untuk mahasiswa Indonesia!",
+            message="Setup keuangan 50/30/20 berhasil! Selamat datang di Lunance - AI finansial untuk mahasiswa Indonesia!",
             data={
                 "user": user_response.dict(),
                 "financial_overview": financial_overview,
-                "projections": {
-                    "current_savings": financial_data.current_savings,
-                    "monthly_target": financial_data.monthly_savings_target,
-                    "emergency_fund": financial_data.emergency_fund,
-                    "projected_6_months": projected_6_months,
-                    "projected_1_year": projected_1_year
+                "budget_allocation": budget_allocation,
+                "method_explanation": {
+                    "method": "50/30/20 Elizabeth Warren",
+                    "needs_50": "Kebutuhan pokok: kos, makan, transport, pendidikan",
+                    "wants_30": "Keinginan & lifestyle: hiburan, jajan, target tabungan barang",
+                    "savings_20": "Tabungan masa depan: dana darurat, investasi, modal usaha",
+                    "reset_schedule": "Budget di-reset setiap tanggal 1",
+                    "categories": {
+                        "needs": updated_user.financial_settings.needs_categories,
+                        "wants": updated_user.financial_settings.wants_categories,
+                        "savings": updated_user.financial_settings.savings_categories
+                    }
                 },
                 "next_steps": [
                     "Mulai chat dengan Luna AI untuk tracking keuangan otomatis",
-                    "Buat target tabungan untuk barang yang ingin dibeli",
-                    f"{'Pertahankan' if financial_data.emergency_fund > 0 else 'Mulai kumpulkan'} dana darurat untuk keamanan finansial",
-                    "Input transaksi harian melalui chat natural",
-                    "Pantau progress bulanan di dashboard"
+                    "Input transaksi harian sesuai kategori 50/30/20",
+                    "Monitor budget usage di dashboard", 
+                    "Atur target tabungan untuk barang yang diinginkan (dari budget WANTS 30%)",
+                    "Pantau kesehatan keuangan bulanan"
                 ]
             }
         )
@@ -300,7 +316,7 @@ async def initial_financial_setup(
 @router.get("/me", response_model=ApiResponse)
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """
-    Mendapatkan informasi mahasiswa yang sedang login dengan financial overview
+    Mendapatkan informasi mahasiswa yang sedang login dengan budget 50/30/20 overview
     """
     try:
         user_response = UserResponse(
@@ -320,17 +336,24 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
             last_login=current_user.last_login
         )
         
-        # 🆕 Get financial overview if setup completed
+        # Get financial overview and budget status if setup completed
         financial_overview = None
+        budget_status = None
+        student_context = None
+        
         if current_user.onboarding_completed:
             financial_overview = await auth_service.get_user_financial_overview(current_user.id)
+            budget_status = await auth_service.get_budget_status(current_user.id)
+            student_context = current_user.get_student_context()
         
         return ApiResponse(
             success=True,
             message="Data user berhasil diambil",
             data={
                 "user": user_response.dict(),
-                "financial_overview": financial_overview
+                "financial_overview": financial_overview,
+                "budget_status": budget_status,
+                "student_context": student_context
             }
         )
         
@@ -448,21 +471,21 @@ async def update_profile(
             detail=f"Terjadi kesalahan dalam update profil: {str(e)}"
         )
 
-# 🆕 NEW ENDPOINTS: Financial Settings Management
+# === NEW ENDPOINTS: Financial Settings Management untuk 50/30/20 ===
 
 @router.put("/financial-settings", response_model=ApiResponse)
 async def update_financial_settings(
-    financial_data: dict,
+    financial_data: UpdateFinancialSettings,
     current_user: User = Depends(get_current_user)
 ):
     """
-    Update financial settings dengan sinkronisasi savings goals
+    Update financial settings dengan recalculate budget 50/30/20
     
-    - **current_savings**: Update total tabungan saat ini
-    - **monthly_savings_target**: Update target tabungan bulanan  
+    - **current_savings**: Update tabungan awal saat ini
+    - **monthly_income**: Update pemasukan bulanan (akan recalculate budget 50/30/20)
     - **primary_bank**: Update bank/e-wallet utama
     
-    Akan otomatis sinkronisasi dengan data savings goals.
+    Jika monthly_income berubah, budget allocation akan otomatis di-recalculate.
     """
     try:
         updated_user = await auth_service.update_financial_settings(current_user.id, financial_data)
@@ -484,15 +507,17 @@ async def update_financial_settings(
             last_login=updated_user.last_login
         )
         
-        # Get updated financial overview
+        # Get updated financial overview and budget allocation
         financial_overview = await auth_service.get_user_financial_overview(updated_user.id)
+        budget_allocation = updated_user.get_current_budget_allocation()
         
         return ApiResponse(
             success=True,
-            message="Financial settings berhasil diperbarui dan disinkronisasi",
+            message="Financial settings berhasil diperbarui dan budget 50/30/20 telah di-recalculate",
             data={
                 "user": user_response.dict(),
-                "financial_overview": financial_overview
+                "financial_overview": financial_overview,
+                "budget_allocation": budget_allocation
             }
         )
         
@@ -509,21 +534,21 @@ async def get_financial_overview(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Mendapatkan overview keuangan lengkap user
+    Mendapatkan overview keuangan lengkap dengan metode 50/30/20
     
     Menampilkan:
-    - Financial settings user
+    - Budget allocation 50/30/20
     - Dashboard keuangan real-time
-    - Sync status antara settings dan data aktual
-    - Monthly progress
-    - Active savings goals
+    - Student context dan tips
+    - Financial health level
+    - Method explanation
     """
     try:
         financial_overview = await auth_service.get_user_financial_overview(current_user.id)
         
         return ApiResponse(
             success=True,
-            message="Financial overview berhasil diambil",
+            message="Financial overview 50/30/20 berhasil diambil",
             data=financial_overview
         )
         
@@ -533,41 +558,137 @@ async def get_financial_overview(
             detail=f"Terjadi kesalahan mengambil financial overview: {str(e)}"
         )
 
-@router.post("/sync-financial-data", response_model=ApiResponse)
-async def sync_financial_data(
+@router.get("/budget-status", response_model=ApiResponse)
+async def get_budget_status(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Sinkronisasi manual antara user financial settings dengan data savings goals
+    Cek status budget 50/30/20 untuk bulan ini
     
-    Berguna jika ada perbedaan antara:
-    - current_savings di user settings vs total current_amount di savings goals
-    - Data tidak sinkron karena import atau perubahan manual
+    Menampilkan:
+    - Budget allocation vs actual spending
+    - Remaining budget per kategori (needs/wants/savings)
+    - Percentage used per kategori
+    - Budget health status
+    - Recommendations untuk optimasi budget
     """
     try:
-        # Import finance service
-        from ..services.finance_service import FinanceService
-        finance_service = FinanceService()
-        
-        # Sync financial settings
-        sync_result = await finance_service.sync_user_financial_settings(current_user.id)
-        
-        # Get updated overview
-        financial_overview = await auth_service.get_user_financial_overview(current_user.id)
+        budget_status = await auth_service.get_budget_status(current_user.id)
         
         return ApiResponse(
             success=True,
-            message="Sinkronisasi financial data berhasil dilakukan",
+            message="Budget status 50/30/20 berhasil diambil",
+            data=budget_status
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Terjadi kesalahan mengambil budget status: {str(e)}"
+        )
+
+@router.post("/reset-monthly-budget", response_model=ApiResponse)
+async def reset_monthly_budget(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Manual reset budget bulanan 50/30/20 (untuk testing atau emergency)
+    
+    Normally budget otomatis reset setiap tanggal 1, tapi endpoint ini
+    bisa digunakan untuk force reset manual.
+    """
+    try:
+        reset_result = await auth_service.reset_monthly_budget(current_user.id)
+        
+        return ApiResponse(
+            success=reset_result["success"],
+            message=reset_result["message"],
+            data=reset_result
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Terjadi kesalahan dalam reset budget: {str(e)}"
+        )
+
+@router.get("/budget-categories", response_model=ApiResponse)
+async def get_budget_categories(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Mendapatkan daftar kategori budget 50/30/20 untuk mahasiswa Indonesia
+    
+    Menampilkan:
+    - NEEDS categories (50%)
+    - WANTS categories (30%)
+    - SAVINGS categories (20%)
+    - Income categories
+    """
+    try:
+        if not current_user.financial_settings:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Financial settings belum di-setup"
+            )
+        
+        categories = {
+            "needs_categories": current_user.financial_settings.needs_categories,
+            "wants_categories": current_user.financial_settings.wants_categories,
+            "savings_categories": current_user.financial_settings.savings_categories,
+            "income_categories": current_user.financial_settings.income_categories,
+            "method": "50/30/20 Elizabeth Warren",
+            "explanation": {
+                "needs_50": "Kebutuhan pokok yang wajib dipenuhi",
+                "wants_30": "Keinginan dan lifestyle yang bisa dikontrol",
+                "savings_20": "Tabungan untuk masa depan dan investasi"
+            }
+        }
+        
+        return ApiResponse(
+            success=True,
+            message="Kategori budget 50/30/20 berhasil diambil",
+            data=categories
+        )
+        
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Terjadi kesalahan mengambil kategori budget: {str(e)}"
+        )
+
+@router.get("/student-financial-tips", response_model=ApiResponse)
+async def get_student_financial_tips(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Mendapatkan tips keuangan khusus mahasiswa dengan metode 50/30/20
+    
+    Tips disesuaikan berdasarkan:
+    - Financial health level user
+    - University location
+    - Budget allocation status
+    """
+    try:
+        tips = current_user.get_student_financial_tips()
+        student_context = current_user.get_student_context()
+        
+        return ApiResponse(
+            success=True,
+            message="Tips keuangan mahasiswa berhasil diambil",
             data={
-                "sync_result": sync_result,
-                "financial_overview": financial_overview
+                "tips": tips,
+                "student_context": student_context,
+                "method": "50/30/20 Elizabeth Warren"
             }
         )
         
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Terjadi kesalahan dalam sinkronisasi: {str(e)}"
+            detail=f"Terjadi kesalahan mengambil tips: {str(e)}"
         )
 
 @router.get("/onboarding-status", response_model=ApiResponse)
@@ -585,6 +706,7 @@ async def get_onboarding_status(
             "profile_setup_completed": current_user.profile_setup_completed,
             "financial_setup_completed": current_user.financial_setup_completed,
             "onboarding_completed": current_user.onboarding_completed,
+            "budget_method": "50/30/20 Elizabeth Warren",
             "next_steps": []
         }
         
@@ -601,9 +723,9 @@ async def get_onboarding_status(
         if not current_user.financial_setup_completed:
             status_data["next_steps"].append({
                 "step": "financial_setup", 
-                "title": "Setup Keuangan",
-                "description": "Atur tabungan awal dan target bulanan",
-                "endpoint": "/api/v1/auth/initial-financial-setup",
+                "title": "Setup Keuangan 50/30/20",
+                "description": "Atur pemasukan bulanan dan tabungan awal untuk budget 50/30/20",
+                "endpoint": "/api/v1/auth/setup-financial-50-30-20",
                 "priority": 2
             })
         
@@ -611,7 +733,7 @@ async def get_onboarding_status(
             status_data["next_steps"].append({
                 "step": "start_using",
                 "title": "Mulai Gunakan Lunance",
-                "description": "Chat dengan Luna AI untuk tracking keuangan otomatis",
+                "description": "Chat dengan Luna AI untuk tracking keuangan otomatis dengan budget 50/30/20",
                 "endpoint": "/api/v1/chat/ws/{user_id}",
                 "priority": 3
             })
