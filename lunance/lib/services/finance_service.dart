@@ -4,7 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config/app_config.dart';
 
 class FinanceService {
-  static const String baseUrl = 'http://192.168.101.8:8000/api/v1'; // Ganti dengan IP backend Anda
+  static const String baseUrl = 'http://192.168.101.8:8000/api/v1';
   static const _storage = FlutterSecureStorage();
 
   Future<Map<String, String>> get _authHeaders async {
@@ -15,46 +15,60 @@ class FinanceService {
     };
   }
 
-  // 1. Student Dashboard Summary (UPDATED ENDPOINT)
-  Future<Map<String, dynamic>> getStudentDashboardSummary() async {
+  // ===== 50/30/20 METHOD - UPDATED ENDPOINTS =====
+
+  // 1. Dashboard dengan 50/30/20 Method
+  Future<Map<String, dynamic>> getStudentDashboard() async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/finance/student-dashboard'),
+        Uri.parse('$baseUrl/finance/dashboard'),
         headers: await _authHeaders,
       );
       return _handleResponse(response);
     } catch (e) {
       return {
         'success': false,
-        'message': 'Gagal mengambil dashboard mahasiswa: ${e.toString()}',
+        'message': 'Gagal mengambil dashboard 50/30/20: ${e.toString()}',
       };
     }
   }
 
-  // 2. Student Categories (NEW ENDPOINT)
-  Future<Map<String, dynamic>> getStudentCategories() async {
+  // 2. Analytics dengan Budget Type Analysis
+  Future<Map<String, dynamic>> getAnalytics({
+    String period = 'monthly',
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
     try {
+      final queryParams = <String, String>{
+        'period': period,
+      };
+
+      if (startDate != null) queryParams['start_date'] = startDate.toIso8601String();
+      if (endDate != null) queryParams['end_date'] = endDate.toIso8601String();
+
+      final uri = Uri.parse('$baseUrl/finance/analytics').replace(queryParameters: queryParams);
+      
       final response = await http.get(
-        Uri.parse('$baseUrl/finance/student-categories'),
+        uri,
         headers: await _authHeaders,
       );
       return _handleResponse(response);
     } catch (e) {
       return {
         'success': false,
-        'message': 'Gagal mengambil kategori mahasiswa: ${e.toString()}',
+        'message': 'Gagal mengambil analytics: ${e.toString()}',
       };
     }
   }
 
-  // 3. Student Transaction History (UPDATED ENDPOINT)
-  Future<Map<String, dynamic>> getStudentTransactionHistory({
+  // 3. History dengan Budget Type Filter
+  Future<Map<String, dynamic>> getHistory({
     String? type,
+    String? budgetType, // NEW: needs/wants/savings
     String? category,
     DateTime? startDate,
     DateTime? endDate,
-    double? minAmount,
-    double? maxAmount,
     String? search,
     int page = 1,
     int limit = 20,
@@ -70,14 +84,13 @@ class FinanceService {
       };
 
       if (type != null) queryParams['type'] = type;
+      if (budgetType != null) queryParams['budget_type'] = budgetType;
       if (category != null) queryParams['category'] = category;
       if (startDate != null) queryParams['start_date'] = startDate.toIso8601String();
       if (endDate != null) queryParams['end_date'] = endDate.toIso8601String();
-      if (minAmount != null) queryParams['min_amount'] = minAmount.toString();
-      if (maxAmount != null) queryParams['max_amount'] = maxAmount.toString();
       if (search != null) queryParams['search'] = search;
 
-      final uri = Uri.parse('$baseUrl/finance/student-history').replace(queryParameters: queryParams);
+      final uri = Uri.parse('$baseUrl/finance/history').replace(queryParameters: queryParams);
       
       final response = await http.get(
         uri,
@@ -87,113 +100,61 @@ class FinanceService {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Gagal mengambil history mahasiswa: ${e.toString()}',
+        'message': 'Gagal mengambil history: ${e.toString()}',
       };
     }
   }
 
-  // 4. Student Financial Insights (NEW ENDPOINT)
-  Future<Map<String, dynamic>> getStudentInsights({
-    String period = 'monthly',
-  }) async {
+  // 4. Budget Status 50/30/20
+  Future<Map<String, dynamic>> getBudgetStatus() async {
     try {
-      final queryParams = <String, String>{
-        'period': period,
-      };
-
-      final uri = Uri.parse('$baseUrl/finance/student-insights').replace(queryParameters: queryParams);
-      
       final response = await http.get(
-        uri,
+        Uri.parse('$baseUrl/finance/budget-status'),
         headers: await _authHeaders,
       );
       return _handleResponse(response);
     } catch (e) {
       return {
         'success': false,
-        'message': 'Gagal mengambil insight mahasiswa: ${e.toString()}',
+        'message': 'Gagal mengambil status budget: ${e.toString()}',
       };
     }
   }
 
-  // 5. Student Financial Recommendations (NEW ENDPOINT)
-  Future<Map<String, dynamic>> getStudentRecommendations() async {
+  // 5. Categories dengan Budget Type Classification
+  Future<Map<String, dynamic>> getCategories() async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/finance/recommendations'),
+        Uri.parse('$baseUrl/finance/categories'),
         headers: await _authHeaders,
       );
       return _handleResponse(response);
     } catch (e) {
       return {
         'success': false,
-        'message': 'Gagal mengambil rekomendasi: ${e.toString()}',
+        'message': 'Gagal mengambil kategori: ${e.toString()}',
       };
     }
   }
 
-  // 6. Charts Data - Time Series (UNCHANGED)
-  Future<Map<String, dynamic>> getTimeSeriesChartData({
-    String period = 'monthly',
-    DateTime? startDate,
-    DateTime? endDate,
-  }) async {
+  // 6. Basic Stats dengan Budget Breakdown
+  Future<Map<String, dynamic>> getStats() async {
     try {
-      final queryParams = <String, String>{
-        'period': period,
-      };
-
-      if (startDate != null) queryParams['start_date'] = startDate.toIso8601String();
-      if (endDate != null) queryParams['end_date'] = endDate.toIso8601String();
-
-      final uri = Uri.parse('$baseUrl/finance/charts/time-series').replace(queryParameters: queryParams);
-      
       final response = await http.get(
-        uri,
+        Uri.parse('$baseUrl/finance/stats'),
         headers: await _authHeaders,
       );
       return _handleResponse(response);
     } catch (e) {
       return {
         'success': false,
-        'message': 'Gagal mengambil data chart time series: ${e.toString()}',
+        'message': 'Gagal mengambil statistik: ${e.toString()}',
       };
     }
   }
 
-  // 7. Charts Data - By Category (UNCHANGED)
-  Future<Map<String, dynamic>> getCategoryChartData({
-    String type = 'expense',
-    String period = 'monthly',
-    DateTime? startDate,
-    DateTime? endDate,
-  }) async {
-    try {
-      final queryParams = <String, String>{
-        'type': type,
-        'period': period,
-      };
-
-      if (startDate != null) queryParams['start_date'] = startDate.toIso8601String();
-      if (endDate != null) queryParams['end_date'] = endDate.toIso8601String();
-
-      final uri = Uri.parse('$baseUrl/finance/charts/by-category').replace(queryParameters: queryParams);
-      
-      final response = await http.get(
-        uri,
-        headers: await _authHeaders,
-      );
-      return _handleResponse(response);
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'Gagal mengambil data chart kategori: ${e.toString()}',
-      };
-    }
-  }
-
-  // 8. Progress Data (UNCHANGED)
-  Future<Map<String, dynamic>> getProgressData() async {
+  // 7. Progress Data dengan Savings Goals
+  Future<Map<String, dynamic>> getProgress() async {
     try {
       final response = await http.get(
         Uri.parse('$baseUrl/finance/progress'),
@@ -203,13 +164,13 @@ class FinanceService {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Gagal mengambil data progress: ${e.toString()}',
+        'message': 'Gagal mengambil progress: ${e.toString()}',
       };
     }
   }
 
-  // 9. Financial Predictions (UNCHANGED)
-  Future<Map<String, dynamic>> getFinancialPredictions({
+  // 8. Financial Predictions
+  Future<Map<String, dynamic>> getPredictions({
     int daysAhead = 30,
     String type = 'both',
   }) async {
@@ -229,30 +190,15 @@ class FinanceService {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Gagal mengambil prediksi keuangan: ${e.toString()}',
+        'message': 'Gagal mengambil prediksi: ${e.toString()}',
       };
     }
   }
 
-  // 10. Basic Stats (UNCHANGED)
-  Future<Map<String, dynamic>> getBasicStats() async {
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/finance/stats'),
-        headers: await _authHeaders,
-      );
-      return _handleResponse(response);
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'Gagal mengambil statistik dasar: ${e.toString()}',
-      };
-    }
-  }
-
-  // 11. Export Financial Data (NEW ENDPOINT)
-  Future<Map<String, dynamic>> exportFinancialData({
+  // 9. Export Data
+  Future<Map<String, dynamic>> exportData({
     String format = 'csv',
+    String? type,
     DateTime? startDate,
     DateTime? endDate,
   }) async {
@@ -261,10 +207,11 @@ class FinanceService {
         'format': format,
       };
 
+      if (type != null) queryParams['type'] = type;
       if (startDate != null) queryParams['start_date'] = startDate.toIso8601String();
       if (endDate != null) queryParams['end_date'] = endDate.toIso8601String();
 
-      final uri = Uri.parse('$baseUrl/finance/export').replace(queryParameters: queryParams);
+      final uri = Uri.parse('$baseUrl/finance/history/export').replace(queryParameters: queryParams);
       
       final response = await http.get(
         uri,
@@ -279,22 +226,113 @@ class FinanceService {
     }
   }
 
-  // LEGACY ENDPOINTS (for backward compatibility)
-  
-  // Dashboard Summary (redirects to student dashboard)
-  @Deprecated('Use getStudentDashboardSummary() instead')
+  // ===== AUTH ENDPOINTS - 50/30/20 Financial Setup =====
+
+  // 10. Financial Overview
+  Future<Map<String, dynamic>> getFinancialOverview() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/auth/financial-overview'),
+        headers: await _authHeaders,
+      );
+      return _handleResponse(response);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Gagal mengambil overview keuangan: ${e.toString()}',
+      };
+    }
+  }
+
+  // 11. Update Financial Settings
+  Future<Map<String, dynamic>> updateFinancialSettings({
+    double? currentSavings,
+    double? monthlyIncome,
+    String? primaryBank,
+  }) async {
+    try {
+      final Map<String, dynamic> body = {};
+      
+      if (currentSavings != null) body['current_savings'] = currentSavings;
+      if (monthlyIncome != null) body['monthly_income'] = monthlyIncome;
+      if (primaryBank != null) body['primary_bank'] = primaryBank;
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/auth/financial-settings'),
+        headers: await _authHeaders,
+        body: jsonEncode(body),
+      );
+      return _handleResponse(response);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Gagal update pengaturan keuangan: ${e.toString()}',
+      };
+    }
+  }
+
+  // 12. Reset Monthly Budget
+  Future<Map<String, dynamic>> resetMonthlyBudget() async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/reset-monthly-budget'),
+        headers: await _authHeaders,
+      );
+      return _handleResponse(response);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Gagal reset budget bulanan: ${e.toString()}',
+      };
+    }
+  }
+
+  // 13. Budget Categories
+  Future<Map<String, dynamic>> getBudgetCategories() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/auth/budget-categories'),
+        headers: await _authHeaders,
+      );
+      return _handleResponse(response);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Gagal mengambil kategori budget: ${e.toString()}',
+      };
+    }
+  }
+
+  // 14. Student Financial Tips
+  Future<Map<String, dynamic>> getStudentFinancialTips() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/auth/student-financial-tips'),
+        headers: await _authHeaders,
+      );
+      return _handleResponse(response);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Gagal mengambil tips keuangan: ${e.toString()}',
+      };
+    }
+  }
+
+  // ===== LEGACY SUPPORT =====
+
+  // Legacy methods for backward compatibility
+  @Deprecated('Use getStudentDashboard() instead')
   Future<Map<String, dynamic>> getDashboardSummary() async {
-    return await getStudentDashboardSummary();
+    return await getStudentDashboard();
   }
 
-  // Available Categories (redirects to student categories)
-  @Deprecated('Use getStudentCategories() instead')
+  @Deprecated('Use getCategories() instead')
   Future<Map<String, dynamic>> getAvailableCategories() async {
-    return await getStudentCategories();
+    return await getCategories();
   }
 
-  // Transaction History (redirects to student history)
-  @Deprecated('Use getStudentTransactionHistory() instead')
+  @Deprecated('Use getHistory() instead')
   Future<Map<String, dynamic>> getTransactionHistory({
     String? type,
     String? category,
@@ -308,13 +346,11 @@ class FinanceService {
     String sortBy = 'date',
     String sortOrder = 'desc',
   }) async {
-    return await getStudentTransactionHistory(
+    return await getHistory(
       type: type,
       category: category,
       startDate: startDate,
       endDate: endDate,
-      minAmount: minAmount,
-      maxAmount: maxAmount,
       search: search,
       page: page,
       limit: limit,

@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 import '../../../providers/finance_provider.dart';
 import '../../../utils/app_colors.dart';
 import '../../../utils/app_text_styles.dart';
-import '../../../utils/format_utils.dart';
-import '../../../widgets/custom_widgets.dart';
+import '../../../utils/format_eksplore.dart';
+
 import '../../../widgets/common_widgets.dart';
 
 class HistoryTab extends StatefulWidget {
