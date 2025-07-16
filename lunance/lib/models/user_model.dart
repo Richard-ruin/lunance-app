@@ -159,57 +159,171 @@ class UserPreferences {
     };
   }
 }
+
 class FinancialSettings {
-  final double currentSavings;  // Total tabungan saat ini
-  final double monthlySavingsTarget;  // Target tabungan bulanan
-  final double emergencyFund;  // Dana darurat saat ini
-  final String primaryBank;  // Bank atau e-wallet utama
-  final List<String> expenseCategories;
+  final double? currentSavings;  // Tabungan awal
+  final double? monthlyIncome;   // Pemasukan bulanan  
+  final String? primaryBank;     // Bank/e-wallet utama
+  
+  // 50/30/20 budget allocation (calculated automatically)
+  final double? needsBudget;     // 50% untuk kebutuhan
+  final double? wantsBudget;     // 30% untuk keinginan
+  final double? savingsBudget;   // 20% untuk tabungan
+  
+  // Budget method and categories
+  final String budgetMethod;     // "50/30/20"
+  final List<String> needsCategories;
+  final List<String> wantsCategories;
+  final List<String> savingsCategories;
   final List<String> incomeCategories;
+  
+  // Budget tracking
+  final DateTime? lastBudgetReset;
+  final String budgetCycle;      // "monthly"
 
   FinancialSettings({
-    required this.currentSavings,
-    required this.monthlySavingsTarget,
-    required this.emergencyFund,
-    required this.primaryBank,
-    required this.expenseCategories,
-    required this.incomeCategories,
+    this.currentSavings,
+    this.monthlyIncome,
+    this.primaryBank,
+    this.needsBudget,
+    this.wantsBudget,
+    this.savingsBudget,
+    this.budgetMethod = "50/30/20",
+    this.needsCategories = const [
+      "Makanan Pokok",
+      "Kos/Tempat Tinggal", 
+      "Transportasi Wajib",
+      "Pendidikan",
+      "Internet & Komunikasi",
+      "Kesehatan & Kebersihan"
+    ],
+    this.wantsCategories = const [
+      "Hiburan & Sosial",
+      "Jajan & Snack",
+      "Pakaian & Aksesoris",
+      "Organisasi & Event",
+      "Target Tabungan Barang",
+      "Lainnya (Wants)"
+    ],
+    this.savingsCategories = const [
+      "Tabungan Umum",
+      "Dana Darurat",
+      "Investasi Masa Depan",
+      "Tabungan Jangka Panjang"
+    ],
+    this.incomeCategories = const [
+      "Uang Saku/Kiriman Ortu",
+      "Part-time Job",
+      "Freelance/Project",
+      "Beasiswa",
+      "Hadiah/Bonus",
+      "Lainnya"
+    ],
+    this.lastBudgetReset,
+    this.budgetCycle = "monthly",
   });
 
   factory FinancialSettings.fromJson(Map<String, dynamic> json) {
     return FinancialSettings(
-      currentSavings: (json['current_savings'] ?? 0).toDouble(),
-      monthlySavingsTarget: (json['monthly_savings_target'] ?? 0).toDouble(),
-      emergencyFund: (json['emergency_fund'] ?? 0).toDouble(),
-      primaryBank: json['primary_bank'] ?? '',
-      expenseCategories: List<String>.from(json['expense_categories'] ?? [
-        "Makanan & Minuman",
-        "Transportasi", 
-        "Buku & Alat Tulis",
-        "Hiburan",
-        "Kesehatan",
-        "Kos/Tempat Tinggal",
-        "Internet & Pulsa",
-        "Lainnya"
+      currentSavings: json['current_savings']?.toDouble(),
+      monthlyIncome: json['monthly_income']?.toDouble(),
+      primaryBank: json['primary_bank'],
+      needsBudget: json['needs_budget']?.toDouble(),
+      wantsBudget: json['wants_budget']?.toDouble(),
+      savingsBudget: json['savings_budget']?.toDouble(),
+      budgetMethod: json['budget_method'] ?? "50/30/20",
+      needsCategories: List<String>.from(json['needs_categories'] ?? [
+        "Makanan Pokok",
+        "Kos/Tempat Tinggal", 
+        "Transportasi Wajib",
+        "Pendidikan",
+        "Internet & Komunikasi",
+        "Kesehatan & Kebersihan"
+      ]),
+      wantsCategories: List<String>.from(json['wants_categories'] ?? [
+        "Hiburan & Sosial",
+        "Jajan & Snack",
+        "Pakaian & Aksesoris",
+        "Organisasi & Event",
+        "Target Tabungan Barang",
+        "Lainnya (Wants)"
+      ]),
+      savingsCategories: List<String>.from(json['savings_categories'] ?? [
+        "Tabungan Umum",
+        "Dana Darurat",
+        "Investasi Masa Depan",
+        "Tabungan Jangka Panjang"
       ]),
       incomeCategories: List<String>.from(json['income_categories'] ?? [
         "Uang Saku/Kiriman Ortu",
         "Part-time Job",
-        "Freelance",
+        "Freelance/Project",
         "Beasiswa",
+        "Hadiah/Bonus",
         "Lainnya"
       ]),
+      lastBudgetReset: json['last_budget_reset'] != null 
+          ? DateTime.parse(json['last_budget_reset']) 
+          : null,
+      budgetCycle: json['budget_cycle'] ?? "monthly",
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'current_savings': currentSavings,
-      'monthly_savings_target': monthlySavingsTarget,
-      'emergency_fund': emergencyFund,
+      'monthly_income': monthlyIncome,
       'primary_bank': primaryBank,
-      'expense_categories': expenseCategories,
+      'needs_budget': needsBudget,
+      'wants_budget': wantsBudget,
+      'savings_budget': savingsBudget,
+      'budget_method': budgetMethod,
+      'needs_categories': needsCategories,
+      'wants_categories': wantsCategories,
+      'savings_categories': savingsCategories,
       'income_categories': incomeCategories,
+      'last_budget_reset': lastBudgetReset?.toIso8601String(),
+      'budget_cycle': budgetCycle,
     };
+  }
+
+  // Calculate budget allocation based on monthly income
+  Map<String, double> calculateBudgetAllocation() {
+    if (monthlyIncome == null || monthlyIncome! <= 0) {
+      return {
+        'needs_budget': 0,
+        'wants_budget': 0,
+        'savings_budget': 0,
+      };
+    }
+    
+    return {
+      'needs_budget': monthlyIncome! * 0.5,   // 50%
+      'wants_budget': monthlyIncome! * 0.3,   // 30%
+      'savings_budget': monthlyIncome! * 0.2, // 20%
+    };
+  }
+
+  // Get category type for a given category name
+  String getCategoryType(String category) {
+    if (needsCategories.contains(category)) return 'needs';
+    if (wantsCategories.contains(category)) return 'wants'; 
+    if (savingsCategories.contains(category)) return 'savings';
+    return 'unknown';
+  }
+
+  // Check if budget needs reset (monthly cycle)
+  bool shouldResetBudget() {
+    if (lastBudgetReset == null) return true;
+    
+    final now = DateTime.now();
+    final currentMonthStart = DateTime(now.year, now.month, 1);
+    final lastResetMonthStart = DateTime(
+      lastBudgetReset!.year, 
+      lastBudgetReset!.month, 
+      1
+    );
+    
+    return currentMonthStart.isAfter(lastResetMonthStart);
   }
 }

@@ -159,25 +159,225 @@ class ApiService {
     }
   }
 
-  /// Setup financial - Updated for Indonesian students
-  Future<Map<String, dynamic>> setupFinancial({
-    required double currentSavings,       // Current total savings
-    required double monthlySavingsTarget, // Monthly savings target
-    required double emergencyFund,
-    required String primaryBank,          // Primary bank/e-wallet
+  /// Setup financial with 50/30/20 method
+  Future<Map<String, dynamic>> setupFinancial50302({
+    required double currentSavings,
+    required double monthlyIncome,
+    required String primaryBank,
   }) async {
     try {
       final body = <String, dynamic>{
         'current_savings': currentSavings,
-        'monthly_savings_target': monthlySavingsTarget,
-        'emergency_fund': emergencyFund,
+        'monthly_income': monthlyIncome,
         'primary_bank': primaryBank,
       };
 
       final response = await http.post(
-        Uri.parse('$baseUrl/auth/initial-financial-setup'),
+        Uri.parse('$baseUrl/auth/setup-financial-50-30-20'),
         headers: await _authHeaders,
         body: jsonEncode(body),
+      );
+
+      return _handleResponse(response);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Gagal terhubung ke server: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Update financial settings
+  Future<Map<String, dynamic>> updateFinancialSettings({
+    double? currentSavings,
+    double? monthlyIncome,
+    String? primaryBank,
+  }) async {
+    try {
+      final body = <String, dynamic>{};
+
+      if (currentSavings != null) {
+        body['current_savings'] = currentSavings;
+      }
+      if (monthlyIncome != null) {
+        body['monthly_income'] = monthlyIncome;
+      }
+      if (primaryBank != null) {
+        body['primary_bank'] = primaryBank;
+      }
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/auth/financial-settings'),
+        headers: await _authHeaders,
+        body: jsonEncode(body),
+      );
+
+      return _handleResponse(response);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Gagal terhubung ke server: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Get financial overview
+  Future<Map<String, dynamic>> getFinancialOverview() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/auth/financial-overview'),
+        headers: await _authHeaders,
+      );
+
+      return _handleResponse(response);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Gagal terhubung ke server: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Get budget status
+  Future<Map<String, dynamic>> getBudgetStatus() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/auth/budget-status'),
+        headers: await _authHeaders,
+      );
+
+      return _handleResponse(response);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Gagal terhubung ke server: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Reset monthly budget
+  Future<Map<String, dynamic>> resetMonthlyBudget() async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/reset-monthly-budget'),
+        headers: await _authHeaders,
+      );
+
+      return _handleResponse(response);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Gagal terhubung ke server: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Get budget categories
+  Future<Map<String, dynamic>> getBudgetCategories() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/auth/budget-categories'),
+        headers: await _authHeaders,
+      );
+
+      return _handleResponse(response);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Gagal terhubung ke server: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Get student financial tips
+  Future<Map<String, dynamic>> getStudentFinancialTips() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/auth/student-financial-tips'),
+        headers: await _authHeaders,
+      );
+
+      return _handleResponse(response);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Gagal terhubung ke server: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Get onboarding status
+  Future<Map<String, dynamic>> getOnboardingStatus() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/auth/onboarding-status'),
+        headers: await _authHeaders,
+      );
+
+      return _handleResponse(response);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Gagal terhubung ke server: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Update profile
+  Future<Map<String, dynamic>> updateProfile({
+    String? fullName,
+    String? phoneNumber,
+    String? university,
+    String? city,
+    String? occupation,
+    bool? notificationsEnabled,
+    bool? voiceEnabled,
+    bool? darkMode,
+    bool? autoCategorization,
+  }) async {
+    try {
+      final body = <String, dynamic>{};
+
+      if (fullName != null) body['full_name'] = fullName;
+      if (phoneNumber != null) body['phone_number'] = phoneNumber;
+      if (university != null) body['university'] = university;
+      if (city != null) body['city'] = city;
+      if (occupation != null) body['occupation'] = occupation;
+      if (notificationsEnabled != null) body['notifications_enabled'] = notificationsEnabled;
+      if (voiceEnabled != null) body['voice_enabled'] = voiceEnabled;
+      if (darkMode != null) body['dark_mode'] = darkMode;
+      if (autoCategorization != null) body['auto_categorization'] = autoCategorization;
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/auth/update-profile'),
+        headers: await _authHeaders,
+        body: jsonEncode(body),
+      );
+
+      return _handleResponse(response);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Gagal terhubung ke server: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Change password
+  Future<Map<String, dynamic>> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/change-password'),
+        headers: await _authHeaders,
+        body: jsonEncode({
+          'current_password': currentPassword,
+          'new_password': newPassword,
+          'confirm_password': confirmPassword,
+        }),
       );
 
       return _handleResponse(response);
