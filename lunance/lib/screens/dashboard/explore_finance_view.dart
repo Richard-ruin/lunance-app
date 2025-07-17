@@ -4,7 +4,7 @@ import '../../providers/finance_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/app_text_styles.dart';
-import '../../utils/format_utils.dart';
+import '../../utils/format_eksplore.dart';
 import '../../widgets/custom_widgets.dart';
 import '../../widgets/common_widgets.dart';
 import 'finance/dashboard_tab.dart';
@@ -23,6 +23,8 @@ class _ExploreFinanceViewState extends State<ExploreFinanceView>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _isInitialized = false;
+  bool _hasError = false;
+  String? _errorMessage;
 
   final List<Tab> _tabs = [
     const Tab(
@@ -48,9 +50,9 @@ class _ExploreFinanceViewState extends State<ExploreFinanceView>
     super.initState();
     _tabController = TabController(length: _tabs.length, vsync: this);
     
-    // FIX: Use addPostFrameCallback to avoid setState during build
+    // FIXED: Add error handling for initialization
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initializeData();
+      _safeInitializeData();
     });
   }
 
@@ -60,17 +62,53 @@ class _ExploreFinanceViewState extends State<ExploreFinanceView>
     super.dispose();
   }
 
-  // FIX: Make this method more robust and prevent multiple calls
-  Future<void> _initializeData() async {
+  // FIXED: Safe initialization with comprehensive error handling
+  Future<void> _safeInitializeData() async {
     if (_isInitialized || !mounted) return;
     
     try {
+      setState(() {
+        _hasError = false;
+        _errorMessage = null;
+      });
+
+      // Check auth state first
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final user = authProvider.user;
+      
+      if (user == null) {
+        if (mounted) {
+          setState(() {
+            _hasError = true;
+            _errorMessage = 'User tidak ditemukan. Silakan login kembali.';
+            _isInitialized = true;
+          });
+        }
+        return;
+      }
+
+      // Check financial setup
+      final hasFinancialSetup = user.financialSetupCompleted ?? false;
+      if (!hasFinancialSetup) {
+        if (mounted) {
+          setState(() {
+            _isInitialized = true;
+          });
+        }
+        return; // Will show setup required view
+      }
+
+      // Initialize finance provider with error handling
       final financeProvider = Provider.of<FinanceProvider>(context, listen: false);
       
-      // Load essential data untuk 50/30/20 only if not already loaded
-      if (financeProvider.dashboardData == null && 
-          financeProvider.budgetStatusData == null) {
-        await financeProvider.loadAllEssentialData();
+      // Only load if not already loaded and not currently loading
+      if (financeProvider.dashboardData == null && !financeProvider.isLoadingDashboard) {
+        try {
+          await financeProvider.loadDashboard();
+        } catch (e) {
+          debugPrint('Error loading dashboard: $e');
+          // Don't throw error here, let the UI handle it
+        }
       }
       
       if (mounted) {
@@ -79,28 +117,49 @@ class _ExploreFinanceViewState extends State<ExploreFinanceView>
         });
       }
     } catch (e) {
-      // Handle error gracefully
+      debugPrint('Error in _safeInitializeData: $e');
       if (mounted) {
         setState(() {
-          _isInitialized = true; // Still set to true to prevent infinite loops
+          _hasError = true;
+          _errorMessage = 'Terjadi kesalahan saat memuat data: ${e.toString()}';
+          _isInitialized = true;
         });
       }
     }
   }
 
-  Future<void> _refreshData() async {
+  // FIXED: Safe refresh with error handling
+  Future<void> _safeRefreshData() async {
     if (!mounted) return;
     
     try {
       final financeProvider = Provider.of<FinanceProvider>(context, listen: false);
+      
+      // Clear any existing errors
+      setState(() {
+        _hasError = false;
+        _errorMessage = null;
+      });
+      
       await financeProvider.refreshAllData();
+      
     } catch (e) {
-      // Handle error silently or show snackbar
+      debugPrint('Error in _safeRefreshData: $e');
       if (mounted) {
+        setState(() {
+          _hasError = true;
+          _errorMessage = 'Gagal memuat data: ${e.toString()}';
+        });
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Gagal memuat data: ${e.toString()}'),
             backgroundColor: AppColors.error,
+            action: SnackBarAction(
+              label: 'Coba Lagi',
+              textColor: AppColors.white,
+              onPressed: _safeRefreshData,
+            ),
           ),
         );
       }
@@ -109,10 +168,20 @@ class _ExploreFinanceViewState extends State<ExploreFinanceView>
 
   @override
   Widget build(BuildContext context) {
+    // FIXED: Show error state if initialization failed
+    if (_hasError && _errorMessage != null) {
+      return _buildErrorView();
+    }
+
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
         final user = authProvider.user;
-        final hasFinancialSetup = user?.financialSetupCompleted ?? false;
+        
+        if (user == null) {
+          return _buildUserNotFoundView();
+        }
+        
+        final hasFinancialSetup = user.financialSetupCompleted ?? false;
         
         if (!hasFinancialSetup) {
           return _buildSetupRequiredView();
@@ -122,28 +191,227 @@ class _ExploreFinanceViewState extends State<ExploreFinanceView>
           backgroundColor: AppColors.background,
           body: Column(
             children: [
-              // Header dengan 50/30/20 Info
-              _buildHeader(),
-              
               // Tab Bar
               _buildTabBar(),
               
-              // Tab Content
+              // Tab Content with Error Boundary
               Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: const [
-                    DashboardTab(),
-                    AnalyticsTab(),
-                    HistoryTab(),
-                    PredictionsTab(),
-                  ],
-                ),
+                child: _buildTabContent(),
               ),
             ],
           ),
         );
       },
+    );
+  }
+
+  // FIXED: Error boundary for tab content
+  Widget _buildTabContent() {
+    return Consumer<FinanceProvider>(
+      builder: (context, financeProvider, child) {
+        // Show loading during initialization
+        if (!_isInitialized) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Memuat data keuangan...',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // Wrap TabBarView with error handling
+        return TabBarView(
+          controller: _tabController,
+          children: [
+            _buildSafeTab(const DashboardTab()),
+            _buildSafeTab(const AnalyticsTab()),
+            _buildSafeTab(const HistoryTab()),
+            _buildSafeTab(const PredictionsTab()),
+          ],
+        );
+      },
+    );
+  }
+
+  // FIXED: Safe tab wrapper with error boundary
+  Widget _buildSafeTab(Widget child) {
+    return Builder(
+      builder: (context) {
+        try {
+          return child;
+        } catch (e) {
+          debugPrint('Error in tab: $e');
+          return _buildTabErrorView(e.toString());
+        }
+      },
+    );
+  }
+
+  Widget _buildTabErrorView(String error) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: AppColors.error,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Terjadi Kesalahan',
+              style: AppTextStyles.h6.copyWith(
+                color: AppColors.error,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              error,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _safeRefreshData,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: AppColors.white,
+              ),
+              child: Text('Coba Lagi'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorView() {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 80,
+                color: AppColors.error,
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Terjadi Kesalahan',
+                style: AppTextStyles.h5.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.error,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                _errorMessage ?? 'Kesalahan tidak diketahui',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textSecondary,
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('Kembali'),
+                  ),
+                  const SizedBox(width: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _isInitialized = false;
+                        _hasError = false;
+                        _errorMessage = null;
+                      });
+                      _safeInitializeData();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: AppColors.white,
+                    ),
+                    child: Text('Coba Lagi'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUserNotFoundView() {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.person_off_outlined,
+                size: 80,
+                color: AppColors.warning,
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'User Tidak Ditemukan',
+                style: AppTextStyles.h5.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Silakan login kembali untuk mengakses fitur keuangan.',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textSecondary,
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pushReplacementNamed(context, '/login');
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: AppColors.white,
+                ),
+                child: Text('Login'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -227,305 +495,17 @@ class _ExploreFinanceViewState extends State<ExploreFinanceView>
               
               const SizedBox(height: 32),
               
-              ElevatedButton(
+              CustomButton(
+                text: 'Setup Keuangan Sekarang',
+                icon: Icons.settings_outlined,
                 onPressed: () {
-                  // Navigate to financial setup
                   Navigator.pushNamed(context, '/financial-setup');
                 },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 32,
-                    vertical: 16,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: Text(
-                  'Setup Keuangan Sekarang',
-                  style: AppTextStyles.labelLarge.copyWith(
-                    color: AppColors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
               ),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Consumer<FinanceProvider>(
-      builder: (context, financeProvider, child) {
-        final budgetStatus = financeProvider.budgetStatusData;
-        final hasbudget = budgetStatus?['has_budget'] ?? false;
-        
-        return Container(
-          color: AppColors.white,
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              // Title & Refresh Button
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Icon(
-                                Icons.account_balance_wallet_outlined,
-                                color: AppColors.primary,
-                                size: 20,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Flexible( // PERBAIKAN: Gunakan Flexible
-                              child: Text(
-                                'Keuangan Mahasiswa',
-                                style: AppTextStyles.h5.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Metode 50/30/20 Elizabeth Warren untuk mahasiswa Indonesia',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                  
-                  // Refresh Button
-                  Consumer<FinanceProvider>(
-                    builder: (context, provider, child) {
-                      final isAnyLoading = provider.isLoadingDashboard ||
-                          provider.isLoadingAnalytics ||
-                          provider.isLoadingHistory ||
-                          provider.isLoadingStats ||
-                          provider.isLoadingProgress;
-
-                      return IconButton(
-                        onPressed: isAnyLoading ? null : _refreshData,
-                        icon: isAnyLoading
-                            ? SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-                                ),
-                              )
-                            : Icon(
-                                Icons.refresh,
-                                color: AppColors.primary,
-                              ),
-                        tooltip: 'Refresh Data',
-                      );
-                    },
-                  ),
-                ],
-              ),
-              
-              const SizedBox(height: 20),
-              
-              // Budget Status Summary
-              if (hasbudget) _buildBudgetSummary(budgetStatus),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildBudgetSummary(Map<String, dynamic>? budgetStatus) {
-    if (budgetStatus == null) return Container();
-    
-    final budgetHealth = budgetStatus['budget_health'] ?? 'unknown';
-    final currentMonth = budgetStatus['current_month'] ?? 'Bulan ini';
-    final budgetAllocation = budgetStatus['budget_allocation'] ?? {};
-    final percentageUsed = budgetStatus['percentage_used'] ?? {};
-    
-    final needsUsed = (percentageUsed['needs'] ?? 0.0) as double;
-    final wantsUsed = (percentageUsed['wants'] ?? 0.0) as double;
-    final savingsUsed = (percentageUsed['savings'] ?? 0.0) as double;
-    
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppColors.primary.withOpacity(0.1),
-            AppColors.success.withOpacity(0.05),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.primary.withOpacity(0.2),
-        ),
-      ),
-      child: Column(
-        children: [
-          // PERBAIKAN: Header dengan Flexible
-          Row(
-            children: [
-              Icon(
-                Icons.track_changes,
-                color: AppColors.primary,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Expanded( // PERBAIKAN: Gunakan Expanded
-                child: Text(
-                  'Budget Status - $currentMonth',
-                  style: AppTextStyles.labelLarge.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), // Kurangi padding
-                decoration: BoxDecoration(
-                  color: _getBudgetHealthColor(budgetHealth).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _getBudgetHealthColor(budgetHealth).withOpacity(0.3),
-                  ),
-                ),
-                child: Text(
-                  _getBudgetHealthText(budgetHealth),
-                  style: AppTextStyles.caption.copyWith( // Gunakan caption untuk text yang lebih kecil
-                    color: _getBudgetHealthColor(budgetHealth),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          
-          const SizedBox(height: 16),
-          
-          // PERBAIKAN: Budget Bars dengan layout yang lebih responsive
-          LayoutBuilder(
-            builder: (context, constraints) {
-              // Jika width terlalu kecil, gunakan column layout
-              if (constraints.maxWidth < 300) {
-                return Column(
-                  children: [
-                    _buildBudgetBar('Kebutuhan', '50%', needsUsed, AppColors.success, '🏠'),
-                    const SizedBox(height: 12),
-                    _buildBudgetBar('Keinginan', '30%', wantsUsed, AppColors.warning, '🎯'),
-                    const SizedBox(height: 12),
-                    _buildBudgetBar('Tabungan', '20%', savingsUsed, AppColors.primary, '💰'),
-                  ],
-                );
-              } else {
-                return Row(
-                  children: [
-                    Expanded(
-                      child: _buildBudgetBar('Kebutuhan', '50%', needsUsed, AppColors.success, '🏠'),
-                    ),
-                    const SizedBox(width: 8), // Kurangi spacing
-                    Expanded(
-                      child: _buildBudgetBar('Keinginan', '30%', wantsUsed, AppColors.warning, '🎯'),
-                    ),
-                    const SizedBox(width: 8), // Kurangi spacing
-                    Expanded(
-                      child: _buildBudgetBar('Tabungan', '20%', savingsUsed, AppColors.primary, '💰'),
-                    ),
-                  ],
-                );
-              }
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  // PERBAIKAN: Budget Bar dengan text yang lebih compact
-  Widget _buildBudgetBar(String title, String target, double percentageUsed, Color color, String emoji) {
-    return Column(
-      children: [
-        // PERBAIKAN: Title dengan Flexible
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                emoji,
-                style: const TextStyle(fontSize: 14), // Kecilkan emoji
-              ),
-              const SizedBox(width: 4),
-              Text(
-                title,
-                style: AppTextStyles.caption.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          height: 6, // Kecilkan tinggi bar
-          decoration: BoxDecoration(
-            color: AppColors.gray200,
-            borderRadius: BorderRadius.circular(3),
-          ),
-          child: FractionallySizedBox(
-            alignment: Alignment.centerLeft,
-            widthFactor: (percentageUsed / 100).clamp(0.0, 1.0),
-            child: Container(
-              decoration: BoxDecoration(
-                color: percentageUsed > 100 ? AppColors.error : color,
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          '${percentageUsed.toStringAsFixed(0)}%',
-          style: AppTextStyles.caption.copyWith(
-            color: percentageUsed > 100 ? AppColors.error : color,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        Text(
-          target,
-          style: AppTextStyles.caption.copyWith(
-            color: AppColors.textTertiary,
-            fontSize: 10, // Kecilkan font size
-          ),
-        ),
-      ],
     );
   }
 
@@ -535,6 +515,45 @@ class _ExploreFinanceViewState extends State<ExploreFinanceView>
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         children: [
+          const SizedBox(height: 24),
+          
+          // Tab Bar Header
+          Row(
+            children: [
+              Icon(
+                Icons.account_balance_wallet_outlined,
+                color: AppColors.primary,
+                size: 24,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Keuangan Mahasiswa',
+                style: AppTextStyles.h6.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              
+              // Refresh Button
+              IconButton(
+                onPressed: _safeRefreshData,
+                icon: Icon(
+                  Icons.refresh,
+                  color: AppColors.textSecondary,
+                ),
+                style: IconButton.styleFrom(
+                  backgroundColor: AppColors.gray100,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Tab Bar
           Container(
             decoration: BoxDecoration(
               color: AppColors.gray100,
@@ -559,39 +578,42 @@ class _ExploreFinanceViewState extends State<ExploreFinanceView>
               tabs: _tabs,
             ),
           ),
+          
+          const SizedBox(height: 16),
+          
+          // Method Badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.success.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: AppColors.success.withOpacity(0.3),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.check_circle_outline,
+                  size: 16,
+                  color: AppColors.success,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Metode 50/30/20 Elizabeth Warren',
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.success,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
           const SizedBox(height: 16),
         ],
       ),
     );
-  }
-
-  Color _getBudgetHealthColor(String health) {
-    switch (health) {
-      case 'excellent':
-        return AppColors.success;
-      case 'good':
-        return AppColors.primary;
-      case 'warning':
-        return AppColors.warning;
-      case 'over_budget':
-        return AppColors.error;
-      default:
-        return AppColors.gray500;
-    }
-  }
-
-  String _getBudgetHealthText(String health) {
-    switch (health) {
-      case 'excellent':
-        return 'Sangat Baik';
-      case 'good':
-        return 'Baik';
-      case 'warning':
-        return 'Perlu Perhatian';
-      case 'over_budget':
-        return 'Over Budget';
-      default:
-        return 'Unknown';
-    }
   }
 }

@@ -5,88 +5,44 @@ import '../services/finance_service.dart';
 class FinanceProvider with ChangeNotifier {
   final FinanceService _financeService = FinanceService();
 
-  // ===== 50/30/20 METHOD - LOADING STATES =====
+  // ===== LOADING STATES =====
   bool _isLoadingDashboard = false;
   bool _isLoadingAnalytics = false;
   bool _isLoadingHistory = false;
-  bool _isLoadingBudgetStatus = false;
-  bool _isLoadingCategories = false;
-  bool _isLoadingStats = false;
-  bool _isLoadingProgress = false;
-  bool _isLoadingPredictions = false;
-  bool _isLoadingFinancialOverview = false;
-  bool _isLoadingTips = false;
 
-  // ===== 50/30/20 METHOD - DATA STORAGE =====
+  // ===== DATA STORAGE - TYPE SAFE =====
   Map<String, dynamic>? _dashboardData;
   Map<String, dynamic>? _analyticsData;
   Map<String, dynamic>? _historyData;
-  Map<String, dynamic>? _budgetStatusData;
-  Map<String, dynamic>? _categoriesData;
-  Map<String, dynamic>? _statsData;
-  Map<String, dynamic>? _progressData;
-  Map<String, dynamic>? _predictionsData;
-  Map<String, dynamic>? _financialOverviewData;
-  Map<String, dynamic>? _tipsData;
 
-  // ===== 50/30/20 METHOD - ERROR HANDLING =====
+  // ===== ERROR HANDLING =====
   String? _dashboardError;
   String? _analyticsError;
   String? _historyError;
-  String? _budgetStatusError;
-  String? _categoriesError;
-  String? _statsError;
-  String? _progressError;
-  String? _predictionsError;
-  String? _financialOverviewError;
-  String? _tipsError;
 
-  // ===== GETTERS FOR LOADING STATES =====
+  // ===== GETTERS =====
   bool get isLoadingDashboard => _isLoadingDashboard;
   bool get isLoadingAnalytics => _isLoadingAnalytics;
   bool get isLoadingHistory => _isLoadingHistory;
-  bool get isLoadingBudgetStatus => _isLoadingBudgetStatus;
-  bool get isLoadingCategories => _isLoadingCategories;
-  bool get isLoadingStats => _isLoadingStats;
-  bool get isLoadingProgress => _isLoadingProgress;
-  bool get isLoadingPredictions => _isLoadingPredictions;
-  bool get isLoadingFinancialOverview => _isLoadingFinancialOverview;
-  bool get isLoadingTips => _isLoadingTips;
 
-  // ===== GETTERS FOR DATA =====
   Map<String, dynamic>? get dashboardData => _dashboardData;
   Map<String, dynamic>? get analyticsData => _analyticsData;
   Map<String, dynamic>? get historyData => _historyData;
-  Map<String, dynamic>? get budgetStatusData => _budgetStatusData;
-  Map<String, dynamic>? get categoriesData => _categoriesData;
-  Map<String, dynamic>? get statsData => _statsData;
-  Map<String, dynamic>? get progressData => _progressData;
-  Map<String, dynamic>? get predictionsData => _predictionsData;
-  Map<String, dynamic>? get financialOverviewData => _financialOverviewData;
-  Map<String, dynamic>? get tipsData => _tipsData;
 
-  // ===== GETTERS FOR ERRORS =====
   String? get dashboardError => _dashboardError;
   String? get analyticsError => _analyticsError;
   String? get historyError => _historyError;
-  String? get budgetStatusError => _budgetStatusError;
-  String? get categoriesError => _categoriesError;
-  String? get statsError => _statsError;
-  String? get progressError => _progressError;
-  String? get predictionsError => _predictionsError;
-  String? get financialOverviewError => _financialOverviewError;
-  String? get tipsError => _tipsError;
 
-  // ===== 50/30/20 METHOD - MAIN METHODS =====
+  // ===== MAIN METHODS WITH TYPE SAFETY =====
 
-  // 1. Load Dashboard 50/30/20
+  // 1. Load Dashboard - TYPE SAFE
   Future<void> loadDashboard() async {
     if (_isLoadingDashboard) return;
     
     _isLoadingDashboard = true;
     _dashboardError = null;
     
-    // FIX: Use addPostFrameCallback to avoid setState during build
+    // Use addPostFrameCallback to avoid setState during build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       notifyListeners();
     });
@@ -95,15 +51,21 @@ class FinanceProvider with ChangeNotifier {
       final response = await _financeService.getStudentDashboard();
       
       if (response['success'] == true) {
-        _dashboardData = response['data'];
+        // FIXED: Type-safe data handling
+        final data = response['data'];
+        _dashboardData = _convertToTypeSafeMap(data);
         _dashboardError = null;
+        
+        debugPrint('Dashboard loaded successfully');
       } else {
-        _dashboardError = response['message'] ?? 'Gagal memuat dashboard';
+        _dashboardError = response['message']?.toString() ?? 'Gagal memuat dashboard';
         _dashboardData = null;
+        debugPrint('Dashboard loading failed: $_dashboardError');
       }
     } catch (e) {
       _dashboardError = 'Terjadi kesalahan: ${e.toString()}';
       _dashboardData = null;
+      debugPrint('Dashboard loading error: $e');
     } finally {
       _isLoadingDashboard = false;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -112,7 +74,7 @@ class FinanceProvider with ChangeNotifier {
     }
   }
 
-  // 2. Load Analytics dengan Budget Analysis
+  // 2. Load Analytics - TYPE SAFE
   Future<void> loadAnalytics({
     String period = 'monthly',
     DateTime? startDate,
@@ -135,15 +97,21 @@ class FinanceProvider with ChangeNotifier {
       );
       
       if (response['success'] == true) {
-        _analyticsData = response['data'];
+        // FIXED: Type-safe data handling
+        final data = response['data'];
+        _analyticsData = _convertToTypeSafeMap(data);
         _analyticsError = null;
+        
+        debugPrint('Analytics loaded successfully');
       } else {
-        _analyticsError = response['message'] ?? 'Gagal memuat analytics';
+        _analyticsError = response['message']?.toString() ?? 'Gagal memuat analytics';
         _analyticsData = null;
+        debugPrint('Analytics loading failed: $_analyticsError');
       }
     } catch (e) {
       _analyticsError = 'Terjadi kesalahan: ${e.toString()}';
       _analyticsData = null;
+      debugPrint('Analytics loading error: $e');
     } finally {
       _isLoadingAnalytics = false;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -152,7 +120,7 @@ class FinanceProvider with ChangeNotifier {
     }
   }
 
-  // 3. Load History dengan Budget Type Filter
+  // 3. Load History - TYPE SAFE
   Future<void> loadHistory({
     String? type,
     String? budgetType,
@@ -189,15 +157,21 @@ class FinanceProvider with ChangeNotifier {
       );
       
       if (response['success'] == true) {
-        _historyData = response['data'];
+        // FIXED: Type-safe data handling
+        final data = response['data'];
+        _historyData = _convertToTypeSafeMap(data);
         _historyError = null;
+        
+        debugPrint('History loaded successfully');
       } else {
-        _historyError = response['message'] ?? 'Gagal memuat history';
+        _historyError = response['message']?.toString() ?? 'Gagal memuat history';
         _historyData = null;
+        debugPrint('History loading failed: $_historyError');
       }
     } catch (e) {
       _historyError = 'Terjadi kesalahan: ${e.toString()}';
       _historyData = null;
+      debugPrint('History loading error: $e');
     } finally {
       _isLoadingHistory = false;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -206,435 +180,177 @@ class FinanceProvider with ChangeNotifier {
     }
   }
 
-  // 4. Load Budget Status 50/30/20
-  Future<void> loadBudgetStatus() async {
-    if (_isLoadingBudgetStatus) return;
-    
-    _isLoadingBudgetStatus = true;
-    _budgetStatusError = null;
-    
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      notifyListeners();
-    });
+  // ===== TYPE SAFETY HELPER METHODS =====
 
+  /// FIXED: Convert dynamic data to type-safe Map<String, dynamic>
+  Map<String, dynamic>? _convertToTypeSafeMap(dynamic data) {
+    if (data == null) return null;
+    
     try {
-      final response = await _financeService.getBudgetStatus();
-      
-      if (response['success'] == true) {
-        _budgetStatusData = response['data'];
-        _budgetStatusError = null;
+      if (data is Map<String, dynamic>) {
+        // Already correct type
+        return _deepConvertMap(data);
+      } else if (data is Map<dynamic, dynamic>) {
+        // Convert Map<dynamic, dynamic> to Map<String, dynamic>
+        return _deepConvertMap(data.map((key, value) => MapEntry(key.toString(), value)));
+      } else if (data is Map) {
+        // Convert other Map types
+        return _deepConvertMap(data.map((key, value) => MapEntry(key.toString(), value)));
       } else {
-        _budgetStatusError = response['message'] ?? 'Gagal memuat status budget';
-        _budgetStatusData = null;
+        debugPrint('Unexpected data type: ${data.runtimeType}');
+        return null;
       }
     } catch (e) {
-      _budgetStatusError = 'Terjadi kesalahan: ${e.toString()}';
-      _budgetStatusData = null;
-    } finally {
-      _isLoadingBudgetStatus = false;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        notifyListeners();
-      });
+      debugPrint('Error converting data to type-safe map: $e');
+      return null;
     }
   }
 
-  // 5. Load Categories dengan Budget Type
-  Future<void> loadCategories() async {
-    if (_isLoadingCategories) return;
+  /// FIXED: Deep convert map to ensure all nested maps are type-safe
+  Map<String, dynamic> _deepConvertMap(Map map) {
+    final result = <String, dynamic>{};
     
-    _isLoadingCategories = true;
-    _categoriesError = null;
+    for (final entry in map.entries) {
+      final key = entry.key.toString();
+      final value = entry.value;
+      
+      if (value is Map<dynamic, dynamic>) {
+        result[key] = _deepConvertMap(value);
+      } else if (value is Map) {
+        result[key] = _deepConvertMap(value);
+      } else if (value is List) {
+        result[key] = _deepConvertList(value);
+      } else {
+        result[key] = value;
+      }
+    }
     
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      notifyListeners();
-    });
+    return result;
+  }
 
+  /// FIXED: Deep convert list to ensure all nested maps are type-safe
+  List<dynamic> _deepConvertList(List list) {
+    return list.map((item) {
+      if (item is Map<dynamic, dynamic>) {
+        return _deepConvertMap(item);
+      } else if (item is Map) {
+        return _deepConvertMap(item);
+      } else if (item is List) {
+        return _deepConvertList(item);
+      } else {
+        return item;
+      }
+    }).toList();
+  }
+
+  // ===== HELPER METHODS =====
+
+  /// Load Categories (untuk History Tab dropdown)
+  Future<void> loadCategories() async {
     try {
       final response = await _financeService.getCategories();
-      
-      if (response['success'] == true) {
-        _categoriesData = response['data'];
-        _categoriesError = null;
-      } else {
-        _categoriesError = response['message'] ?? 'Gagal memuat kategori';
-        _categoriesData = null;
-      }
+      debugPrint('Categories loaded: ${response['success']}');
     } catch (e) {
-      _categoriesError = 'Terjadi kesalahan: ${e.toString()}';
-      _categoriesData = null;
-    } finally {
-      _isLoadingCategories = false;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        notifyListeners();
-      });
+      debugPrint('Error loading categories: $e');
     }
   }
 
-  // 6. Load Stats dengan Budget Breakdown
+  /// Load Stats (untuk Dashboard Tab)
   Future<void> loadStats() async {
-    if (_isLoadingStats) return;
-    
-    _isLoadingStats = true;
-    _statsError = null;
-    
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      notifyListeners();
-    });
-
     try {
       final response = await _financeService.getStats();
-      
-      if (response['success'] == true) {
-        _statsData = response['data'];
-        _statsError = null;
-      } else {
-        _statsError = response['message'] ?? 'Gagal memuat statistik';
-        _statsData = null;
-      }
+      debugPrint('Stats loaded: ${response['success']}');
     } catch (e) {
-      _statsError = 'Terjadi kesalahan: ${e.toString()}';
-      _statsData = null;
-    } finally {
-      _isLoadingStats = false;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        notifyListeners();
-      });
+      debugPrint('Error loading stats: $e');
     }
   }
 
-  // 7. Load Progress dengan Savings Goals
-  Future<void> loadProgress() async {
-    if (_isLoadingProgress) return;
-    
-    _isLoadingProgress = true;
-    _progressError = null;
-    
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      notifyListeners();
-    });
-
-    try {
-      final response = await _financeService.getProgress();
-      
-      if (response['success'] == true) {
-        _progressData = response['data'];
-        _progressError = null;
-      } else {
-        _progressError = response['message'] ?? 'Gagal memuat progress';
-        _progressData = null;
-      }
-    } catch (e) {
-      _progressError = 'Terjadi kesalahan: ${e.toString()}';
-      _progressData = null;
-    } finally {
-      _isLoadingProgress = false;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        notifyListeners();
-      });
-    }
-  }
-
-  // 8. Load Predictions
-  Future<void> loadPredictions({
-    int daysAhead = 30,
-    String type = 'both',
-  }) async {
-    if (_isLoadingPredictions) return;
-    
-    _isLoadingPredictions = true;
-    _predictionsError = null;
-    
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      notifyListeners();
-    });
-
-    try {
-      final response = await _financeService.getPredictions(
-        daysAhead: daysAhead,
-        type: type,
-      );
-      
-      if (response['success'] == true) {
-        _predictionsData = response['data'];
-        _predictionsError = null;
-      } else {
-        _predictionsError = response['message'] ?? 'Gagal memuat prediksi';
-        _predictionsData = null;
-      }
-    } catch (e) {
-      _predictionsError = 'Terjadi kesalahan: ${e.toString()}';
-      _predictionsData = null;
-    } finally {
-      _isLoadingPredictions = false;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        notifyListeners();
-      });
-    }
-  }
-
-  // 9. Load Financial Overview
-  Future<void> loadFinancialOverview() async {
-    if (_isLoadingFinancialOverview) return;
-    
-    _isLoadingFinancialOverview = true;
-    _financialOverviewError = null;
-    
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      notifyListeners();
-    });
-
-    try {
-      final response = await _financeService.getFinancialOverview();
-      
-      if (response['success'] == true) {
-        _financialOverviewData = response['data'];
-        _financialOverviewError = null;
-      } else {
-        _financialOverviewError = response['message'] ?? 'Gagal memuat overview';
-        _financialOverviewData = null;
-      }
-    } catch (e) {
-      _financialOverviewError = 'Terjadi kesalahan: ${e.toString()}';
-      _financialOverviewData = null;
-    } finally {
-      _isLoadingFinancialOverview = false;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        notifyListeners();
-      });
-    }
-  }
-
-  // 10. Load Student Tips
-  Future<void> loadStudentTips() async {
-    if (_isLoadingTips) return;
-    
-    _isLoadingTips = true;
-    _tipsError = null;
-    
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      notifyListeners();
-    });
-
-    try {
-      final response = await _financeService.getStudentFinancialTips();
-      
-      if (response['success'] == true) {
-        _tipsData = response['data'];
-        _tipsError = null;
-      } else {
-        _tipsError = response['message'] ?? 'Gagal memuat tips';
-        _tipsData = null;
-      }
-    } catch (e) {
-      _tipsError = 'Terjadi kesalahan: ${e.toString()}';
-      _tipsData = null;
-    } finally {
-      _isLoadingTips = false;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        notifyListeners();
-      });
-    }
-  }
-
-  // ===== 50/30/20 METHOD - UTILITY METHODS =====
-
-  // Update Financial Settings
-  Future<bool> updateFinancialSettings({
-    double? currentSavings,
-    double? monthlyIncome,
-    String? primaryBank,
-  }) async {
-    try {
-      final response = await _financeService.updateFinancialSettings(
-        currentSavings: currentSavings,
-        monthlyIncome: monthlyIncome,
-        primaryBank: primaryBank,
-      );
-      
-      if (response['success'] == true) {
-        // Refresh related data
-        await loadDashboard();
-        await loadBudgetStatus();
-        return true;
-      } else {
-        return false;
-      }
-    } catch (e) {
-      return false;
-    }
-  }
-
-  // Reset Monthly Budget
-  Future<bool> resetMonthlyBudget() async {
-    try {
-      final response = await _financeService.resetMonthlyBudget();
-      
-      if (response['success'] == true) {
-        // Refresh budget-related data
-        await loadBudgetStatus();
-        await loadDashboard();
-        return true;
-      } else {
-        return false;
-      }
-    } catch (e) {
-      return false;
-    }
-  }
-
-  // Load All Essential Data (50/30/20)
+  /// Load Essential Data (untuk initialization)
   Future<void> loadAllEssentialData() async {
     try {
-      // Load categories first as they're needed by other components
-      await loadCategories();
-      
-      // Load essential data in parallel
       final futures = <Future<void>>[];
       
       if (_dashboardData == null && !_isLoadingDashboard) {
         futures.add(loadDashboard());
       }
       
-      if (_budgetStatusData == null && !_isLoadingBudgetStatus) {
-        futures.add(loadBudgetStatus());
-      }
-      
-      if (_statsData == null && !_isLoadingStats) {
-        futures.add(loadStats());
-      }
-      
-      if (_progressData == null && !_isLoadingProgress) {
-        futures.add(loadProgress());
-      }
-      
       // Wait for all to complete
       await Future.wait(futures, eagerError: false);
+      debugPrint('All essential data loaded');
     } catch (e) {
       debugPrint('Error loading essential data: $e');
     }
   }
 
-  // Refresh All Data
+  /// Refresh All Data
   Future<void> refreshAllData() async {
+    debugPrint('Refreshing all finance data...');
     clearAllData();
     await loadAllEssentialData();
   }
 
-  // Clear All Data
+  /// Clear All Data
   void clearAllData() {
     _dashboardData = null;
     _analyticsData = null;
     _historyData = null;
-    _budgetStatusData = null;
-    _categoriesData = null;
-    _statsData = null;
-    _progressData = null;
-    _predictionsData = null;
-    _financialOverviewData = null;
-    _tipsData = null;
     
-    clearAllErrors();
+    _dashboardError = null;
+    _analyticsError = null;
+    _historyError = null;
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       notifyListeners();
     });
   }
 
-  // Clear All Errors
-  void clearAllErrors() {
-    _dashboardError = null;
-    _analyticsError = null;
-    _historyError = null;
-    _budgetStatusError = null;
-    _categoriesError = null;
-    _statsError = null;
-    _progressError = null;
-    _predictionsError = null;
-    _financialOverviewError = null;
-    _tipsError = null;
-  }
+  // ===== UTILITY METHODS =====
 
-  // Export Data
-  Future<Map<String, dynamic>?> exportData({
-    String format = 'csv',
-    String? type,
-    DateTime? startDate,
-    DateTime? endDate,
-  }) async {
-    try {
-      final response = await _financeService.exportData(
-        format: format,
-        type: type,
-        startDate: startDate,
-        endDate: endDate,
-      );
-      
-      if (response['success'] == true) {
-        return response['data'];
-      } else {
-        return null;
-      }
-    } catch (e) {
-      return null;
-    }
-  }
-
-  // ===== HELPER METHODS =====
-
-  // Safe double conversion
-  double _safeDouble(dynamic value) {
-    if (value == null) return 0.0;
-    if (value is double) return value;
-    if (value is int) return value.toDouble();
-    if (value is String) return double.tryParse(value) ?? 0.0;
-    return 0.0;
-  }
-
-  // Get Budget Health Color
+  /// Get Budget Health Color
   Color getBudgetHealthColor(String? health) {
     switch (health) {
       case 'excellent':
-        return const Color(0xFF10B981); // Success green
+        return const Color(0xFF10B981);
       case 'good':
-        return const Color(0xFF3B82F6); // Primary blue
+        return const Color(0xFF3B82F6);
       case 'warning':
-        return const Color(0xFFF59E0B); // Warning yellow
+        return const Color(0xFFF59E0B);
       case 'over_budget':
-        return const Color(0xFFEF4444); // Error red
+        return const Color(0xFFEF4444);
       default:
-        return const Color(0xFF6B7280); // Gray
+        return const Color(0xFF6B7280);
     }
   }
 
-  // Get Budget Type Color
+  /// Get Budget Type Color
   Color getBudgetTypeColor(String? budgetType) {
     switch (budgetType) {
       case 'needs':
-        return const Color(0xFF22C55E); // Green
+        return const Color(0xFF22C55E);
       case 'wants':
-        return const Color(0xFFF59E0B); // Orange
+        return const Color(0xFFF59E0B);
       case 'savings':
-        return const Color(0xFF3B82F6); // Blue
+        return const Color(0xFF3B82F6);
       default:
-        return const Color(0xFF6B7280); // Gray
+        return const Color(0xFF6B7280);
     }
   }
 
-  // Get Budget Type Icon
+  /// Get Budget Type Icon
   String getBudgetTypeIcon(String? budgetType) {
     switch (budgetType) {
       case 'needs':
-        return '🏠'; // House
+        return '🏠';
       case 'wants':
-        return '🎯'; // Target
+        return '🎯';
       case 'savings':
-        return '💰'; // Money bag
+        return '💰';
       default:
-        return '📊'; // Chart
+        return '📊';
     }
   }
 
-  // Get Budget Type Name
+  /// Get Budget Type Name
   String getBudgetTypeName(String? budgetType) {
     switch (budgetType) {
       case 'needs':
@@ -648,76 +364,12 @@ class FinanceProvider with ChangeNotifier {
     }
   }
 
-  // ===== LEGACY SUPPORT =====
-
-  // Legacy methods for backward compatibility
-  @Deprecated('Use loadDashboard() instead')
-  Future<void> loadDashboardSummary() async {
-    await loadDashboard();
-  }
-
-  @Deprecated('Use loadCategories() instead')
-  Future<void> loadAvailableCategories() async {
-    await loadCategories();
-  }
-
-  @Deprecated('Use loadHistory() instead')
-  Future<void> loadTransactionHistory({
-    String? type,
-    String? category,
-    DateTime? startDate,
-    DateTime? endDate,
-    String? search,
-    int page = 1,
-    int limit = 20,
-  }) async {
-    await loadHistory(
-      type: type,
-      category: category,
-      startDate: startDate,
-      endDate: endDate,
-      search: search,
-      page: page,
-      limit: limit,
-    );
-  }
-
-  // NEW: Add the missing method for history tab
-  Future<void> loadStudentTransactionHistory({
-    String? type,
-    String? budgetType,
-    String? category,
-    DateTime? startDate,
-    DateTime? endDate,
-    double? minAmount,
-    double? maxAmount,
-    String? search,
-    int page = 1,
-    int limit = 20,
-    String sortBy = 'date',
-    String sortOrder = 'desc',
-  }) async {
-    await loadHistory(
-      type: type,
-      budgetType: budgetType,
-      category: category,
-      startDate: startDate,
-      endDate: endDate,
-      search: search,
-      page: page,
-      limit: limit,
-      sortBy: sortBy,
-      sortOrder: sortOrder,
-    );
-  }
-
-  // Legacy chart methods
+  // ===== LEGACY SUPPORT FOR ANALYTICS TAB =====
   Map<String, dynamic>? get timeSeriesChartData => _analyticsData;
   Map<String, dynamic>? get categoryChartData => _analyticsData;
   bool get isLoadingCharts => _isLoadingAnalytics;
   String? get chartsError => _analyticsError;
 
-  // Legacy methods
   Future<void> loadTimeSeriesChartData({String period = 'monthly'}) async {
     await loadAnalytics(period: period);
   }
@@ -726,15 +378,130 @@ class FinanceProvider with ChangeNotifier {
     await loadAnalytics(period: period);
   }
 
-  Future<void> loadFinancialPredictions({int daysAhead = 30, String type = 'both'}) async {
-    await loadPredictions(daysAhead: daysAhead, type: type);
+  // ===== SAFE DATA ACCESS METHODS =====
+
+  /// Safely get nested data from dashboard
+  T? getSafeDashboardData<T>(List<String> keys, [T? defaultValue]) {
+    try {
+      if (_dashboardData == null) return defaultValue;
+      
+      dynamic current = _dashboardData;
+      for (final key in keys) {
+        if (current is Map<String, dynamic> && current.containsKey(key)) {
+          current = current[key];
+        } else {
+          return defaultValue;
+        }
+      }
+      return current as T? ?? defaultValue;
+    } catch (e) {
+      debugPrint('Error getting dashboard data for keys $keys: $e');
+      return defaultValue;
+    }
   }
 
-  Future<void> loadBasicStats() async {
-    await loadStats();
+  /// Safely get nested data from analytics
+  T? getSafeAnalyticsData<T>(List<String> keys, [T? defaultValue]) {
+    try {
+      if (_analyticsData == null) return defaultValue;
+      
+      dynamic current = _analyticsData;
+      for (final key in keys) {
+        if (current is Map<String, dynamic> && current.containsKey(key)) {
+          current = current[key];
+        } else {
+          return defaultValue;
+        }
+      }
+      return current as T? ?? defaultValue;
+    } catch (e) {
+      debugPrint('Error getting analytics data for keys $keys: $e');
+      return defaultValue;
+    }
   }
 
-  Future<void> loadProgressData() async {
-    await loadProgress();
+  /// Safely get nested data from history
+  T? getSafeHistoryData<T>(List<String> keys, [T? defaultValue]) {
+    try {
+      if (_historyData == null) return defaultValue;
+      
+      dynamic current = _historyData;
+      for (final key in keys) {
+        if (current is Map<String, dynamic> && current.containsKey(key)) {
+          current = current[key];
+        } else {
+          return defaultValue;
+        }
+      }
+      return current as T? ?? defaultValue;
+    } catch (e) {
+      debugPrint('Error getting history data for keys $keys: $e');
+      return defaultValue;
+    }
+  }
+
+  /// Safe double conversion
+  double safeDouble(dynamic value, [double defaultValue = 0.0]) {
+    if (value == null) return defaultValue;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? defaultValue;
+    return defaultValue;
+  }
+
+  /// Safe string conversion
+  String safeString(dynamic value, [String defaultValue = '']) {
+    if (value == null) return defaultValue;
+    return value.toString();
+  }
+
+  /// Safe integer conversion
+  int safeInt(dynamic value, [int defaultValue = 0]) {
+    if (value == null) return defaultValue;
+    if (value is int) return value;
+    if (value is double) return value.round();
+    if (value is String) return int.tryParse(value) ?? defaultValue;
+    return defaultValue;
+  }
+
+  /// Safe boolean conversion
+  bool safeBool(dynamic value, [bool defaultValue = false]) {
+    if (value == null) return defaultValue;
+    if (value is bool) return value;
+    if (value is String) {
+      return value.toLowerCase() == 'true' || value == '1';
+    }
+    if (value is int) return value != 0;
+    return defaultValue;
+  }
+
+  /// Safe list conversion
+  List<T> safeList<T>(dynamic value, [List<T> defaultValue = const []]) {
+    if (value == null) return defaultValue;
+    if (value is List<T>) return value;
+    if (value is List) {
+      try {
+        return value.cast<T>();
+      } catch (e) {
+        debugPrint('Error casting list to List<$T>: $e');
+        return defaultValue;
+      }
+    }
+    return defaultValue;
+  }
+
+  /// Safe map conversion
+  Map<String, dynamic> safeMap(dynamic value, [Map<String, dynamic> defaultValue = const {}]) {
+    if (value == null) return defaultValue;
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) {
+      try {
+        return value.cast<String, dynamic>();
+      } catch (e) {
+        debugPrint('Error casting map to Map<String, dynamic>: $e');
+        return defaultValue;
+      }
+    }
+    return defaultValue;
   }
 }

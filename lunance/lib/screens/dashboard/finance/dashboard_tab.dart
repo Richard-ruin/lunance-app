@@ -21,7 +21,6 @@ class _DashboardTabState extends State<DashboardTab> {
   @override
   void initState() {
     super.initState();
-    // FIX: Use addPostFrameCallback to prevent setState during build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _initializeData();
@@ -29,35 +28,15 @@ class _DashboardTabState extends State<DashboardTab> {
     });
   }
 
-  // FIX: Make this method more defensive
   Future<void> _initializeData() async {
     if (_isInitialized || !mounted) return;
 
     try {
-      final financeProvider =
-          Provider.of<FinanceProvider>(context, listen: false);
+      final financeProvider = Provider.of<FinanceProvider>(context, listen: false);
 
-      // Only load data if not already loaded or loading
-      final futures = <Future<void>>[];
-
-      if (financeProvider.dashboardData == null &&
-          !financeProvider.isLoadingDashboard) {
-        futures.add(financeProvider.loadDashboard());
-      }
-
-      if (financeProvider.budgetStatusData == null &&
-          !financeProvider.isLoadingBudgetStatus) {
-        futures.add(financeProvider.loadBudgetStatus());
-      }
-
-      if (financeProvider.progressData == null &&
-          !financeProvider.isLoadingProgress) {
-        futures.add(financeProvider.loadProgress());
-      }
-
-      // Wait for all futures to complete
-      if (futures.isNotEmpty) {
-        await Future.wait(futures, eagerError: false);
+      // Only load dashboard data if not already loaded
+      if (financeProvider.dashboardData == null && !financeProvider.isLoadingDashboard) {
+        await financeProvider.loadDashboard();
       }
 
       if (mounted) {
@@ -66,10 +45,9 @@ class _DashboardTabState extends State<DashboardTab> {
         });
       }
     } catch (e) {
-      // Handle errors gracefully
       if (mounted) {
         setState(() {
-          _isInitialized = true; // Still set to true to prevent loops
+          _isInitialized = true;
         });
       }
       debugPrint('Error initializing dashboard data: $e');
@@ -80,15 +58,8 @@ class _DashboardTabState extends State<DashboardTab> {
     if (!mounted) return;
 
     try {
-      final financeProvider =
-          Provider.of<FinanceProvider>(context, listen: false);
-
-      // Load data in parallel
-      await Future.wait([
-        financeProvider.loadDashboard(),
-        financeProvider.loadBudgetStatus(),
-        financeProvider.loadProgress(),
-      ], eagerError: false);
+      final financeProvider = Provider.of<FinanceProvider>(context, listen: false);
+      await financeProvider.loadDashboard();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -172,17 +143,18 @@ class _DashboardTabState extends State<DashboardTab> {
           );
         }
 
-        // Extract quick stats
-        final quickStats = dashboardData['quick_stats'] ?? {};
-        final realTotalSavings =
-            (quickStats['real_total_savings'] ?? 0.0).toDouble();
-        final monthlyIncome = (quickStats['monthly_income'] ?? 0.0).toDouble();
-        final currentSpending = quickStats['current_month_spending'] ?? {};
-
-        final totalSpending = ((currentSpending['needs'] ?? 0.0) +
-                (currentSpending['wants'] ?? 0.0) +
-                (currentSpending['savings'] ?? 0.0))
-            .toDouble();
+        // Safe access dengan multiple fallback strategies
+        final quickStats = FormatUtils.formatDashboardQuickStats(dashboardData['quick_stats']);
+        final realTotalSavings = FormatUtils.safeDouble(
+          FormatUtils.safeGetNested(dashboardData, ['quick_stats', 'real_total_savings'])
+        );
+        final monthlyIncome = FormatUtils.safeDouble(
+          FormatUtils.safeGetNested(dashboardData, ['quick_stats', 'monthly_income'])
+        );
+        final currentSpending = FormatUtils.safeGetNested(dashboardData, ['quick_stats', 'current_month_spending']) ?? {};
+        final totalSpending = FormatUtils.safeDouble(currentSpending['needs']) + 
+                             FormatUtils.safeDouble(currentSpending['wants']) + 
+                             FormatUtils.safeDouble(currentSpending['savings']);
 
         return CustomCard(
           child: Column(
@@ -204,7 +176,6 @@ class _DashboardTabState extends State<DashboardTab> {
                   ),
                   const SizedBox(width: 12),
                   Flexible(
-                    // PERBAIKAN: Gunakan Flexible
                     child: Text(
                       'Ringkasan Keuangan',
                       style: AppTextStyles.labelLarge.copyWith(
@@ -244,10 +215,9 @@ class _DashboardTabState extends State<DashboardTab> {
                         color: AppColors.primary,
                         fontWeight: FontWeight.w600,
                       ),
-                      textAlign: TextAlign.center, // Center text
+                      textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
-                    // PERBAIKAN: FittedBox untuk currency yang panjang
                     FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Text(
@@ -274,7 +244,7 @@ class _DashboardTabState extends State<DashboardTab> {
 
               const SizedBox(height: 20),
 
-              // PERBAIKAN: Monthly Overview dengan Intrinsic untuk equal height
+              // Monthly Overview
               IntrinsicHeight(
                 child: Row(
                   children: [
@@ -308,12 +278,12 @@ class _DashboardTabState extends State<DashboardTab> {
   Widget _buildBudgetHealthCard() {
     return Consumer<FinanceProvider>(
       builder: (context, financeProvider, child) {
-        if (financeProvider.isLoadingBudgetStatus) {
+        if (financeProvider.isLoadingDashboard) {
           return _buildLoadingCard(height: 160);
         }
 
-        final budgetData = financeProvider.budgetStatusData;
-        if (budgetData == null || budgetData['has_budget'] != true) {
+        final dashboardData = financeProvider.dashboardData;
+        if (dashboardData == null) {
           return CustomCard(
             child: Center(
               child: Column(
@@ -336,16 +306,20 @@ class _DashboardTabState extends State<DashboardTab> {
           );
         }
 
-        final budgetHealth = budgetData['budget_health'] ?? 'unknown';
-        final currentMonth = budgetData['current_month'] ?? 'Bulan ini';
-        final percentageUsed = budgetData['percentage_used'] ?? {};
-        final recommendations = budgetData['recommendations'] as List? ?? [];
+        final budgetHealth = FormatUtils.safeString(
+          FormatUtils.safeGetNested(dashboardData, ['budget_health', 'overall_status']),
+          'unknown'
+        );
+        final currentMonth = FormatUtils.safeString(
+          dashboardData['current_month'],
+          'Bulan ini'
+        );
+        final budgetOverview = FormatUtils.safeGetNested(dashboardData, ['budget_overview', 'allocation']) ?? {};
 
         return CustomCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // PERBAIKAN: Header dengan Flexible untuk menghindari overflow
               Row(
                 children: [
                   Icon(
@@ -355,13 +329,12 @@ class _DashboardTabState extends State<DashboardTab> {
                   ),
                   const SizedBox(width: 8),
                   Flexible(
-                    // Gunakan Flexible untuk text yang panjang
                     child: Text(
                       'Kesehatan Budget - $currentMonth',
                       style: AppTextStyles.labelLarge.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
-                      overflow: TextOverflow.ellipsis, // Tambahkan ellipsis
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -369,34 +342,26 @@ class _DashboardTabState extends State<DashboardTab> {
 
               const SizedBox(height: 16),
 
-              // PERBAIKAN: Budget Health Status dengan text wrapping
               Container(
-                width: double
-                    .infinity, // Pastikan container menggunakan full width
+                width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: financeProvider
-                      .getBudgetHealthColor(budgetHealth)
-                      .withOpacity(0.1),
+                  color: financeProvider.getBudgetHealthColor(budgetHealth).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: financeProvider
-                        .getBudgetHealthColor(budgetHealth)
-                        .withOpacity(0.3),
+                    color: financeProvider.getBudgetHealthColor(budgetHealth).withOpacity(0.3),
                   ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // PERBAIKAN: Text dengan proper wrapping
                     Text(
                       _getBudgetHealthText(budgetHealth),
                       style: AppTextStyles.labelMedium.copyWith(
-                        color:
-                            financeProvider.getBudgetHealthColor(budgetHealth),
+                        color: financeProvider.getBudgetHealthColor(budgetHealth),
                         fontWeight: FontWeight.w600,
                       ),
-                      maxLines: 2, // Batasi maksimal 2 baris
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 8),
@@ -405,7 +370,7 @@ class _DashboardTabState extends State<DashboardTab> {
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.textSecondary,
                       ),
-                      maxLines: 3, // Batasi maksimal 3 baris
+                      maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
@@ -414,74 +379,28 @@ class _DashboardTabState extends State<DashboardTab> {
 
               const SizedBox(height: 16),
 
-              // PERBAIKAN: Budget Usage Overview dengan Flexible
-              Column(
-                children: [
-                  _buildBudgetUsageRow(
-                    'Kebutuhan (50%)',
-                    ((percentageUsed['needs'] ?? 0.0) as num).toDouble(),
-                    AppColors.success,
-                    '🏠',
-                  ),
-                  const SizedBox(height: 8),
-                  _buildBudgetUsageRow(
-                    'Keinginan (30%)',
-                    ((percentageUsed['wants'] ?? 0.0) as num).toDouble(),
-                    AppColors.warning,
-                    '🎯',
-                  ),
-                  const SizedBox(height: 8),
-                  _buildBudgetUsageRow(
-                    'Tabungan (20%)',
-                    ((percentageUsed['savings'] ?? 0.0) as num).toDouble(),
-                    AppColors.primary,
-                    '💰',
-                  ),
-                ],
-              ),
-
-              // Recommendations
-              if (recommendations.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                Text(
-                  'Rekomendasi:',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary,
-                  ),
+              // Budget Usage Overview
+              if (budgetOverview.isNotEmpty) ...[
+                _buildBudgetUsageRow(
+                  'Kebutuhan (50%)',
+                  FormatUtils.safeDouble(FormatUtils.safeGetNested(budgetOverview, ['needs', 'percentage_used'])),
+                  AppColors.success,
+                  '🏠',
                 ),
                 const SizedBox(height: 8),
-                ...recommendations
-                    .take(2)
-                    .map(
-                      (rec) => Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Row(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start, // Align ke atas
-                          children: [
-                            Text(
-                              '• ',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: AppColors.primary,
-                              ),
-                            ),
-                            Expanded(
-                              // Gunakan Expanded untuk text yang panjang
-                              child: Text(
-                                rec.toString(),
-                                style: AppTextStyles.bodySmall.copyWith(
-                                  color: AppColors.textSecondary,
-                                ),
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                    .toList(),
+                _buildBudgetUsageRow(
+                  'Keinginan (30%)',
+                  FormatUtils.safeDouble(FormatUtils.safeGetNested(budgetOverview, ['wants', 'percentage_used'])),
+                  AppColors.warning,
+                  '🎯',
+                ),
+                const SizedBox(height: 8),
+                _buildBudgetUsageRow(
+                  'Tabungan (20%)',
+                  FormatUtils.safeDouble(FormatUtils.safeGetNested(budgetOverview, ['savings', 'percentage_used'])),
+                  AppColors.primary,
+                  '💰',
+                ),
               ],
             ],
           ),
@@ -493,18 +412,23 @@ class _DashboardTabState extends State<DashboardTab> {
   Widget _buildBudgetBreakdownCard() {
     return Consumer<FinanceProvider>(
       builder: (context, financeProvider, child) {
-        if (financeProvider.isLoadingBudgetStatus) {
+        if (financeProvider.isLoadingDashboard) {
           return _buildLoadingCard(height: 200);
         }
 
-        final budgetData = financeProvider.budgetStatusData;
-        if (budgetData == null || budgetData['has_budget'] != true) {
+        final dashboardData = financeProvider.dashboardData;
+        if (dashboardData == null) {
           return Container();
         }
 
-        final budgetAllocation = budgetData['budget_allocation'] ?? {};
-        final currentSpending = budgetData['current_spending'] ?? {};
-        final remainingBudget = budgetData['remaining_budget'] ?? {};
+        // ULTIMATE FIX: Safe access to budget overview dengan multiple fallbacks
+        final budgetOverview = FormatUtils.safeMap(
+          FormatUtils.safeGetNested(dashboardData, ['budget_overview', 'allocation'])
+        );
+        
+        final monthlyIncome = FormatUtils.safeDouble(
+          FormatUtils.safeGetNested(dashboardData, ['budget_overview', 'monthly_income'])
+        );
 
         return CustomCard(
           child: Column(
@@ -519,7 +443,6 @@ class _DashboardTabState extends State<DashboardTab> {
                   ),
                   const SizedBox(width: 8),
                   Flexible(
-                    // PERBAIKAN: Gunakan Flexible
                     child: Text(
                       'Breakdown Budget 50/30/20',
                       style: AppTextStyles.labelLarge.copyWith(
@@ -533,13 +456,17 @@ class _DashboardTabState extends State<DashboardTab> {
 
               const SizedBox(height: 20),
 
-              // Budget breakdown items
+              // ULTIMATE FIX: Budget breakdown items dengan safe access
               _buildBudgetBreakdownItem(
                 'Kebutuhan',
                 '50%',
-                ((budgetAllocation['needs'] ?? 0.0) as num).toDouble(),
-                ((currentSpending['needs'] ?? 0.0) as num).toDouble(),
-                ((remainingBudget['needs'] ?? 0.0) as num).toDouble(),
+                monthlyIncome * 0.5,
+                FormatUtils.safeDouble(
+                  FormatUtils.safeGetNested(budgetOverview, ['needs', 'spent'])
+                ),
+                FormatUtils.safeDouble(
+                  FormatUtils.safeGetNested(budgetOverview, ['needs', 'remaining'])
+                ),
                 AppColors.success,
                 '🏠',
                 'Kos, makan, transport, pendidikan',
@@ -550,9 +477,13 @@ class _DashboardTabState extends State<DashboardTab> {
               _buildBudgetBreakdownItem(
                 'Keinginan',
                 '30%',
-                ((budgetAllocation['wants'] ?? 0.0) as num).toDouble(),
-                ((currentSpending['wants'] ?? 0.0) as num).toDouble(),
-                ((remainingBudget['wants'] ?? 0.0) as num).toDouble(),
+                monthlyIncome * 0.3,
+                FormatUtils.safeDouble(
+                  FormatUtils.safeGetNested(budgetOverview, ['wants', 'spent'])
+                ),
+                FormatUtils.safeDouble(
+                  FormatUtils.safeGetNested(budgetOverview, ['wants', 'remaining'])
+                ),
                 AppColors.warning,
                 '🎯',
                 'Hiburan, jajan, target tabungan',
@@ -563,9 +494,13 @@ class _DashboardTabState extends State<DashboardTab> {
               _buildBudgetBreakdownItem(
                 'Tabungan',
                 '20%',
-                ((budgetAllocation['savings'] ?? 0.0) as num).toDouble(),
-                ((currentSpending['savings'] ?? 0.0) as num).toDouble(),
-                ((remainingBudget['savings'] ?? 0.0) as num).toDouble(),
+                monthlyIncome * 0.2,
+                FormatUtils.safeDouble(
+                  FormatUtils.safeGetNested(budgetOverview, ['savings', 'spent'])
+                ),
+                FormatUtils.safeDouble(
+                  FormatUtils.safeGetNested(budgetOverview, ['savings', 'remaining'])
+                ),
                 AppColors.primary,
                 '💰',
                 'Dana darurat, investasi masa depan',
@@ -587,15 +522,19 @@ class _DashboardTabState extends State<DashboardTab> {
         final dashboardData = financeProvider.dashboardData;
         if (dashboardData == null) return Container();
 
-        final financialSummary = dashboardData['financial_summary'] ?? {};
-        final monthlyIncome =
-            ((financialSummary['monthly_income'] ?? 0.0) as num).toDouble();
-        final monthlyExpense =
-            ((financialSummary['monthly_expense'] ?? 0.0) as num).toDouble();
-        final netBalance =
-            ((financialSummary['net_balance'] ?? 0.0) as num).toDouble();
-        final savingsRate =
-            ((financialSummary['savings_rate'] ?? 0.0) as num).toDouble();
+        final financialSummary = FormatUtils.formatFinancialSummary(dashboardData['financial_summary']);
+        final monthlyIncome = FormatUtils.safeDouble(
+          FormatUtils.safeGetNested(dashboardData, ['financial_summary', 'monthly_income'])
+        );
+        final monthlyExpense = FormatUtils.safeDouble(
+          FormatUtils.safeGetNested(dashboardData, ['financial_summary', 'monthly_expense'])
+        );
+        final netBalance = FormatUtils.safeDouble(
+          FormatUtils.safeGetNested(dashboardData, ['financial_summary', 'net_balance'])
+        );
+        final savingsRate = FormatUtils.safeDouble(
+          FormatUtils.safeGetNested(dashboardData, ['financial_summary', 'savings_rate'])
+        );
 
         return CustomCard(
           child: Column(
@@ -610,7 +549,6 @@ class _DashboardTabState extends State<DashboardTab> {
                   ),
                   const SizedBox(width: 8),
                   Flexible(
-                    // PERBAIKAN: Gunakan Flexible
                     child: Text(
                       'Ringkasan Bulanan',
                       style: AppTextStyles.labelLarge.copyWith(
@@ -623,7 +561,6 @@ class _DashboardTabState extends State<DashboardTab> {
               ),
               const SizedBox(height: 16),
               IntrinsicHeight(
-                // PERBAIKAN: Equal height
                 child: Row(
                   children: [
                     Expanded(
@@ -648,16 +585,13 @@ class _DashboardTabState extends State<DashboardTab> {
               ),
               const SizedBox(height: 16),
               IntrinsicHeight(
-                // PERBAIKAN: Equal height
                 child: Row(
                   children: [
                     Expanded(
                       child: _buildSummaryItem(
                         'Saldo Bersih',
                         FormatUtils.formatCurrency(netBalance),
-                        netBalance >= 0
-                            ? Icons.trending_up
-                            : Icons.trending_down,
+                        netBalance >= 0 ? Icons.trending_up : Icons.trending_down,
                         netBalance >= 0 ? AppColors.success : AppColors.error,
                       ),
                     ),
@@ -683,14 +617,14 @@ class _DashboardTabState extends State<DashboardTab> {
   Widget _buildSavingsGoalsCard() {
     return Consumer<FinanceProvider>(
       builder: (context, financeProvider, child) {
-        if (financeProvider.isLoadingProgress) {
+        if (financeProvider.isLoadingDashboard) {
           return _buildLoadingCard(height: 200);
         }
 
-        final progressData = financeProvider.progressData;
-        if (progressData == null) return Container();
+        final dashboardData = financeProvider.dashboardData;
+        if (dashboardData == null) return Container();
 
-        final savingsGoals = progressData['savings_goals'] as List? ?? [];
+        final savingsGoals = FormatUtils.safeGetNested(dashboardData, ['wants_savings_goals', 'goals']) as List? ?? [];
 
         return CustomCard(
           child: Column(
@@ -705,7 +639,6 @@ class _DashboardTabState extends State<DashboardTab> {
                   ),
                   const SizedBox(width: 8),
                   Flexible(
-                    // PERBAIKAN: Gunakan Flexible
                     child: Text(
                       'Target Tabungan (dari 30% Wants)',
                       style: AppTextStyles.labelLarge.copyWith(
@@ -757,7 +690,8 @@ class _DashboardTabState extends State<DashboardTab> {
                 Center(
                   child: TextButton(
                     onPressed: () {
-                      // Navigate to full goals view
+                      // Navigate to history tab
+                      DefaultTabController.of(context)?.animateTo(2);
                     },
                     child: Text(
                       'Lihat Semua (${savingsGoals.length})',
@@ -785,7 +719,7 @@ class _DashboardTabState extends State<DashboardTab> {
         final dashboardData = financeProvider.dashboardData;
         if (dashboardData == null) return Container();
 
-        final recentActivity = dashboardData['recent_activity'] ?? {};
+        final recentActivity = FormatUtils.safeGetNested(dashboardData, ['recent_activity']) ?? {};
         final transactions = recentActivity['transactions'] as List? ?? [];
 
         return CustomCard(
@@ -801,7 +735,6 @@ class _DashboardTabState extends State<DashboardTab> {
                   ),
                   const SizedBox(width: 8),
                   Flexible(
-                    // PERBAIKAN: Gunakan Flexible
                     child: Text(
                       'Aktivitas Terbaru',
                       style: AppTextStyles.labelLarge.copyWith(
@@ -845,6 +778,7 @@ class _DashboardTabState extends State<DashboardTab> {
                   child: TextButton(
                     onPressed: () {
                       // Navigate to history tab
+                      DefaultTabController.of(context)?.animateTo(2);
                     },
                     child: Text(
                       'Lihat Semua History',
@@ -878,7 +812,6 @@ class _DashboardTabState extends State<DashboardTab> {
                   ),
                   const SizedBox(width: 8),
                   Flexible(
-                    // PERBAIKAN: Gunakan Flexible
                     child: Text(
                       'Tips Keuangan Mahasiswa',
                       style: AppTextStyles.labelLarge.copyWith(
@@ -910,7 +843,6 @@ class _DashboardTabState extends State<DashboardTab> {
                         ),
                         const SizedBox(width: 8),
                         Flexible(
-                          // PERBAIKAN: Gunakan Flexible
                           child: Text(
                             'Metode 50/30/20 untuk Mahasiswa',
                             style: AppTextStyles.labelMedium.copyWith(
@@ -944,16 +876,13 @@ class _DashboardTabState extends State<DashboardTab> {
   }
 
   // Helper widgets
-  Widget _buildQuickStatItem(
-      String label, String value, IconData icon, Color color) {
+  Widget _buildQuickStatItem(String label, String value, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.all(12), // Tambahkan padding
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: color.withOpacity(0.05),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: color.withOpacity(0.1),
-        ),
+        border: Border.all(color: color.withOpacity(0.1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -961,14 +890,9 @@ class _DashboardTabState extends State<DashboardTab> {
         children: [
           Row(
             children: [
-              Icon(
-                icon,
-                size: 16,
-                color: color,
-              ),
+              Icon(icon, size: 16, color: color),
               const SizedBox(width: 6),
               Expanded(
-                // PERBAIKAN: Gunakan Expanded untuk label
                 child: Text(
                   label,
                   style: AppTextStyles.bodySmall.copyWith(
@@ -981,7 +905,6 @@ class _DashboardTabState extends State<DashboardTab> {
             ],
           ),
           const SizedBox(height: 8),
-          // PERBAIKAN: FittedBox untuk value yang panjang
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
@@ -998,18 +921,12 @@ class _DashboardTabState extends State<DashboardTab> {
     );
   }
 
-  // PERBAIKAN: Budget Usage Row dengan Flexible
-  Widget _buildBudgetUsageRow(
-      String label, double percentage, Color color, String emoji) {
+  Widget _buildBudgetUsageRow(String label, double percentage, Color color, String emoji) {
     return Row(
       children: [
-        Text(
-          emoji,
-          style: const TextStyle(fontSize: 16),
-        ),
+        Text(emoji, style: const TextStyle(fontSize: 16)),
         const SizedBox(width: 8),
         Expanded(
-          // Gunakan Expanded untuk label
           child: Text(
             label,
             style: AppTextStyles.bodySmall.copyWith(
@@ -1018,7 +935,7 @@ class _DashboardTabState extends State<DashboardTab> {
             overflow: TextOverflow.ellipsis,
           ),
         ),
-        const SizedBox(width: 8), // Tambahkan spacing
+        const SizedBox(width: 8),
         Text(
           '${percentage.toStringAsFixed(0)}%',
           style: AppTextStyles.labelMedium.copyWith(
@@ -1030,6 +947,7 @@ class _DashboardTabState extends State<DashboardTab> {
     );
   }
 
+  // ULTIMATE FIX: Budget breakdown item dengan safe calculations
   Widget _buildBudgetBreakdownItem(
     String title,
     String percentage,
@@ -1040,29 +958,27 @@ class _DashboardTabState extends State<DashboardTab> {
     String emoji,
     String description,
   ) {
-    final usedPercentage = budget > 0 ? (spent / budget * 100) : 0;
+    // Safe calculation untuk percentage used
+    final usedPercentage = budget > 0 ? (spent / budget * 100).clamp(0.0, 200.0) : 0.0;
+    
+    // Safe calculation untuk remaining (recalculate from budget - spent)
+    final actualRemaining = budget - spent;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: color.withOpacity(0.05),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: color.withOpacity(0.2),
-        ),
+        border: Border.all(color: color.withOpacity(0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text(
-                emoji,
-                style: const TextStyle(fontSize: 20),
-              ),
+              Text(emoji, style: const TextStyle(fontSize: 20)),
               const SizedBox(width: 8),
               Expanded(
-                // PERBAIKAN: Gunakan Expanded
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1086,9 +1002,9 @@ class _DashboardTabState extends State<DashboardTab> {
               ),
             ],
           ),
-
           const SizedBox(height: 12),
-
+          
+          // Progress bar dengan safe value
           LinearProgressIndicator(
             value: (usedPercentage / 100).clamp(0.0, 1.0),
             backgroundColor: AppColors.gray200,
@@ -1097,10 +1013,34 @@ class _DashboardTabState extends State<DashboardTab> {
             ),
             minHeight: 6,
           ),
-
+          
           const SizedBox(height: 8),
-
-          // PERBAIKAN: Row dengan Flexible untuk text panjang
+          
+          // Budget info dengan safe formatting
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Budget: ${FormatUtils.formatCurrency(budget)}',
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${usedPercentage.toStringAsFixed(0)}%',
+                style: AppTextStyles.caption.copyWith(
+                  color: usedPercentage > 100 ? AppColors.error : color,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 4),
+          
           Row(
             children: [
               Expanded(
@@ -1115,9 +1055,9 @@ class _DashboardTabState extends State<DashboardTab> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Sisa: ${FormatUtils.formatCurrency(remaining)}',
+                  'Sisa: ${FormatUtils.formatCurrency(actualRemaining)}',
                   style: AppTextStyles.caption.copyWith(
-                    color: AppColors.textSecondary,
+                    color: actualRemaining >= 0 ? AppColors.success : AppColors.error,
                   ),
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.end,
@@ -1130,16 +1070,13 @@ class _DashboardTabState extends State<DashboardTab> {
     );
   }
 
-  Widget _buildSummaryItem(
-      String label, String value, IconData icon, Color color) {
+  Widget _buildSummaryItem(String label, String value, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.all(12), // Tambahkan padding
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: color.withOpacity(0.05),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: color.withOpacity(0.1),
-        ),
+        border: Border.all(color: color.withOpacity(0.1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1147,14 +1084,9 @@ class _DashboardTabState extends State<DashboardTab> {
         children: [
           Row(
             children: [
-              Icon(
-                icon,
-                size: 16,
-                color: color,
-              ),
+              Icon(icon, size: 16, color: color),
               const SizedBox(width: 6),
               Expanded(
-                // PERBAIKAN: Gunakan Expanded
                 child: Text(
                   label,
                   style: AppTextStyles.bodySmall.copyWith(
@@ -1167,7 +1099,6 @@ class _DashboardTabState extends State<DashboardTab> {
           ),
           const SizedBox(height: 8),
           FittedBox(
-            // PERBAIKAN: FittedBox untuk value
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
             child: Text(
@@ -1184,11 +1115,10 @@ class _DashboardTabState extends State<DashboardTab> {
   }
 
   Widget _buildSavingsGoalItem(Map<String, dynamic> goal) {
-    final itemName = goal['item_name'] ?? '';
-    final targetAmount = ((goal['target_amount'] ?? 0.0) as num).toDouble();
-    final currentAmount = ((goal['current_amount'] ?? 0.0) as num).toDouble();
-    final progressPercentage =
-        ((goal['progress_percentage'] ?? 0.0) as num).toDouble();
+    final itemName = FormatUtils.safeString(goal['item_name']);
+    final targetAmount = FormatUtils.safeDouble(goal['target_amount']);
+    final currentAmount = FormatUtils.safeDouble(goal['current_amount']);
+    final progressPercentage = FormatUtils.safeDouble(goal['progress_percentage']);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -1198,7 +1128,6 @@ class _DashboardTabState extends State<DashboardTab> {
           Row(
             children: [
               Expanded(
-                // PERBAIKAN: Gunakan Expanded
                 child: Text(
                   itemName,
                   style: AppTextStyles.bodyMedium.copyWith(
@@ -1228,7 +1157,6 @@ class _DashboardTabState extends State<DashboardTab> {
           Row(
             children: [
               Expanded(
-                // PERBAIKAN: Gunakan Expanded
                 child: Text(
                   FormatUtils.formatCurrency(currentAmount),
                   style: AppTextStyles.caption.copyWith(
@@ -1250,14 +1178,14 @@ class _DashboardTabState extends State<DashboardTab> {
     );
   }
 
-  // PERBAIKAN: Transaction Item untuk Aktivitas Terbaru
   Widget _buildTransactionItem(Map<String, dynamic> transaction) {
-    final type = transaction['type'] ?? '';
-    final amount = ((transaction['amount'] ?? 0.0) as num).toDouble();
-    final description = transaction['description'] ?? '';
-    final category = transaction['category'] ?? '';
-    final budgetType = transaction['budget_type'] ?? '';
-    final relativeTime = transaction['relative_time'] ?? '';
+    final formattedTransaction = FormatUtils.formatTransactionHistoryItem(transaction);
+    final type = formattedTransaction['type'] ?? '';
+    final amount = FormatUtils.safeDouble(formattedTransaction['amount']);
+    final description = FormatUtils.safeString(formattedTransaction['description']);
+    final category = FormatUtils.safeString(formattedTransaction['category']);
+    final budgetType = FormatUtils.safeString(formattedTransaction['budget_type']);
+    final relativeTime = FormatUtils.safeString(formattedTransaction['relative_date']);
 
     final isIncome = type == 'income';
     final color = isIncome ? AppColors.success : AppColors.error;
@@ -1267,13 +1195,13 @@ class _DashboardTabState extends State<DashboardTab> {
       builder: (context, financeProvider, child) {
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(12), // Tambahkan padding
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: AppColors.gray50,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start, // Align ke atas
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 width: 32,
@@ -1282,15 +1210,10 @@ class _DashboardTabState extends State<DashboardTab> {
                   color: color.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(
-                  icon,
-                  size: 16,
-                  color: color,
-                ),
+                child: Icon(icon, size: 16, color: color),
               ),
               const SizedBox(width: 12),
               Expanded(
-                // PERBAIKAN: Gunakan Expanded untuk content
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1303,7 +1226,6 @@ class _DashboardTabState extends State<DashboardTab> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
-                    // PERBAIKAN: Wrap untuk category info yang panjang
                     Wrap(
                       children: [
                         Text(
@@ -1326,8 +1248,7 @@ class _DashboardTabState extends State<DashboardTab> {
                           Text(
                             ' ${financeProvider.getBudgetTypeName(budgetType)}',
                             style: AppTextStyles.caption.copyWith(
-                              color: financeProvider
-                                  .getBudgetTypeColor(budgetType),
+                              color: financeProvider.getBudgetTypeColor(budgetType),
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -1338,9 +1259,8 @@ class _DashboardTabState extends State<DashboardTab> {
                 ),
               ),
               const SizedBox(width: 8),
-              // PERBAIKAN: Amount section dengan fixed width
               SizedBox(
-                width: 80, // Fixed width untuk amount
+                width: 80,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [

@@ -4,7 +4,6 @@ import '../../../providers/finance_provider.dart';
 import '../../../utils/app_colors.dart';
 import '../../../utils/app_text_styles.dart';
 import '../../../utils/format_eksplore.dart';
-
 import '../../../widgets/common_widgets.dart';
 
 class HistoryTab extends StatefulWidget {
@@ -18,10 +17,9 @@ class _HistoryTabState extends State<HistoryTab> {
   // Filter parameters
   String? _selectedType;
   String? _selectedCategory;
+  String? _selectedBudgetType;
   DateTime? _startDate;
   DateTime? _endDate;
-  double? _minAmount;
-  double? _maxAmount;
   String? _searchQuery;
   
   // Pagination
@@ -30,8 +28,6 @@ class _HistoryTabState extends State<HistoryTab> {
   
   // Controllers
   final TextEditingController _searchController = TextEditingController();
-  final TextEditingController _minAmountController = TextEditingController();
-  final TextEditingController _maxAmountController = TextEditingController();
   
   bool _showFilters = false;
   bool _isInitialized = false;
@@ -47,8 +43,6 @@ class _HistoryTabState extends State<HistoryTab> {
   @override
   void dispose() {
     _searchController.dispose();
-    _minAmountController.dispose();
-    _maxAmountController.dispose();
     super.dispose();
   }
 
@@ -56,17 +50,15 @@ class _HistoryTabState extends State<HistoryTab> {
     if (mounted) {
       final financeProvider = Provider.of<FinanceProvider>(context, listen: false);
       
-      // Check if already loading to prevent multiple calls
       if (financeProvider.isLoadingHistory) return;
       
       try {
-        await financeProvider.loadStudentTransactionHistory( // UPDATED: Using student method
+        await financeProvider.loadHistory(
           type: _selectedType,
+          budgetType: _selectedBudgetType,
           category: _selectedCategory,
           startDate: _startDate,
           endDate: _endDate,
-          minAmount: _minAmount,
-          maxAmount: _maxAmount,
           search: _searchQuery,
           page: _currentPage,
           limit: _itemsPerPage,
@@ -78,13 +70,12 @@ class _HistoryTabState extends State<HistoryTab> {
           });
         }
       } catch (e) {
-        // Handle error gracefully
         if (mounted) {
           setState(() {
             _isInitialized = true;
           });
         }
-        debugPrint('Error loading student history: $e');
+        debugPrint('Error loading history: $e');
       }
     }
   }
@@ -93,12 +84,6 @@ class _HistoryTabState extends State<HistoryTab> {
     setState(() {
       _currentPage = 1;
       _searchQuery = _searchController.text.isEmpty ? null : _searchController.text;
-      _minAmount = _minAmountController.text.isEmpty 
-          ? null 
-          : double.tryParse(_minAmountController.text.replaceAll(RegExp(r'[^0-9]'), ''));
-      _maxAmount = _maxAmountController.text.isEmpty 
-          ? null 
-          : double.tryParse(_maxAmountController.text.replaceAll(RegExp(r'[^0-9]'), ''));
     });
     _loadHistory();
   }
@@ -107,18 +92,14 @@ class _HistoryTabState extends State<HistoryTab> {
     setState(() {
       _selectedType = null;
       _selectedCategory = null;
+      _selectedBudgetType = null;
       _startDate = null;
       _endDate = null;
-      _minAmount = null;
-      _maxAmount = null;
       _searchQuery = null;
       _currentPage = 1;
     });
     
     _searchController.clear();
-    _minAmountController.clear();
-    _maxAmountController.clear();
-    
     _loadHistory();
   }
 
@@ -252,61 +233,35 @@ class _HistoryTabState extends State<HistoryTab> {
           
           const SizedBox(height: 16),
           
-          // Type and Category filters
+          // Type filter
           Row(
             children: [
               Expanded(
                 child: _buildDropdownFilter(
                   'Jenis',
                   _selectedType,
-                  ['income', 'expense'],
-                  ['Pemasukan', 'Pengeluaran'],
+                  ['income', 'expense', 'goals'],
+                  ['Pemasukan', 'Pengeluaran', 'Target Tabungan'],
                   (value) => setState(() => _selectedType = value),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _buildCategoryFilter(),
+                child: _buildDropdownFilter(
+                  'Budget Type',
+                  _selectedBudgetType,
+                  ['needs', 'wants', 'savings'],
+                  ['Kebutuhan (50%)', 'Keinginan (30%)', 'Tabungan (20%)'],
+                  (value) => setState(() => _selectedBudgetType = value),
+                ),
               ),
             ],
           ),
           
           const SizedBox(height: 12),
           
-          // Amount range filters
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _minAmountController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Jumlah Minimum',
-                    hintText: '0',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextField(
-                  controller: _maxAmountController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Jumlah Maksimum',
-                    hintText: '9999999',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          // Category filter
+          _buildCategoryFilter(),
           
           const SizedBox(height: 12),
           
@@ -412,10 +367,10 @@ class _HistoryTabState extends State<HistoryTab> {
           );
         }
 
-        final transactions = historyData['transactions'] as List? ?? [];
-        final savingsGoals = historyData['savings_goals'] as List? ?? [];
+        // Handle different response structures
+        final items = _extractHistoryItems(historyData);
 
-        if (transactions.isEmpty && savingsGoals.isEmpty) {
+        if (items.isEmpty) {
           return const Center(
             child: EmptyStateWidget(
               icon: Icons.search_off,
@@ -430,24 +385,11 @@ class _HistoryTabState extends State<HistoryTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Transactions section
-              if (transactions.isNotEmpty) ...[
-                _buildSectionHeader('Transaksi', transactions.length),
-                const SizedBox(height: 16),
-                ...transactions.map((transaction) => 
-                  _buildTransactionItem(transaction)
-                ).toList(),
-              ],
+              // Items list
+              _buildSectionHeader('Riwayat Transaksi', items.length),
+              const SizedBox(height: 16),
               
-              // Savings goals section
-              if (savingsGoals.isNotEmpty) ...[
-                if (transactions.isNotEmpty) const SizedBox(height: 32),
-                _buildSectionHeader('Target Tabungan', savingsGoals.length),
-                const SizedBox(height: 16),
-                ...savingsGoals.map((goal) => 
-                  _buildSavingsGoalItem(goal)
-                ).toList(),
-              ],
+              ...items.map((item) => _buildHistoryItem(item)).toList(),
               
               // Pagination info
               const SizedBox(height: 24),
@@ -457,6 +399,27 @@ class _HistoryTabState extends State<HistoryTab> {
         );
       },
     );
+  }
+
+  List<Map<String, dynamic>> _extractHistoryItems(Map<String, dynamic> historyData) {
+    final items = <Map<String, dynamic>>[];
+    
+    // Check for transactions
+    final transactions = historyData['transactions'] as List? ?? [];
+    items.addAll(transactions.map((t) => {...t, 'item_type': 'transaction'}));
+    
+    // Check for savings goals
+    final savingsGoals = historyData['savings_goals'] as List? ?? [];
+    items.addAll(savingsGoals.map((g) => {...g, 'item_type': 'savings_goal'}));
+    
+    // Check for items (unified response)
+    final directItems = historyData['items'] as List? ?? [];
+    items.addAll(directItems.map((i) => {
+      ...i,
+      'item_type': i['type'] == 'savings_goal' ? 'savings_goal' : 'transaction'
+    }));
+    
+    return items;
   }
 
   Widget _buildSectionHeader(String title, int count) {
@@ -487,14 +450,26 @@ class _HistoryTabState extends State<HistoryTab> {
     );
   }
 
+  Widget _buildHistoryItem(Map<String, dynamic> item) {
+    final itemType = item['item_type'] ?? 'transaction';
+    
+    if (itemType == 'savings_goal') {
+      return _buildSavingsGoalItem(item);
+    } else {
+      return _buildTransactionItem(item);
+    }
+  }
+
   Widget _buildTransactionItem(Map<String, dynamic> transaction) {
-    final type = transaction['type'] as String? ?? '';
-    final amount = transaction['amount'] as num? ?? 0;
-    final category = transaction['category'] as String? ?? '';
-    final description = transaction['description'] as String? ?? '';
-    final formattedAmount = transaction['formatted_amount'] as String? ?? '';
-    final formattedDate = transaction['formatted_date'] as String? ?? '';
-    final relativeDate = transaction['relative_date'] as String? ?? '';
+    final formattedTransaction = FormatUtils.formatTransactionHistoryItem(transaction);
+    
+    final type = formattedTransaction['type'] ?? '';
+    final amount = FormatUtils.safeDouble(formattedTransaction['amount']);
+    final category = FormatUtils.safeString(formattedTransaction['category']);
+    final description = FormatUtils.safeString(formattedTransaction['description']);
+    final budgetType = FormatUtils.safeString(formattedTransaction['budget_type']);
+    final formattedDate = FormatUtils.safeString(formattedTransaction['formatted_date']);
+    final relativeDate = FormatUtils.safeString(formattedTransaction['relative_date']);
 
     final isIncome = type == 'income';
     final color = isIncome ? AppColors.success : AppColors.error;
@@ -509,6 +484,7 @@ class _HistoryTabState extends State<HistoryTab> {
         border: Border.all(color: AppColors.border),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 40,
@@ -517,11 +493,7 @@ class _HistoryTabState extends State<HistoryTab> {
               color: color.withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(
-              icon,
-              color: color,
-              size: 20,
-            ),
+            child: Icon(icon, color: color, size: 20),
           ),
           
           const SizedBox(width: 12),
@@ -530,7 +502,6 @@ class _HistoryTabState extends State<HistoryTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Description - Top line
                 Text(
                   description,
                   style: AppTextStyles.bodyMedium.copyWith(
@@ -541,16 +512,31 @@ class _HistoryTabState extends State<HistoryTab> {
                 ),
                 const SizedBox(height: 6),
                 
-                // Category - Second line
+                // Category and Budget Type in separate rows to prevent overflow
                 Text(
                   category,
                   style: AppTextStyles.bodySmall.copyWith(
                     color: AppColors.textSecondary,
                   ),
                 ),
+                
+                if (budgetType.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Consumer<FinanceProvider>(
+                    builder: (context, financeProvider, child) {
+                      return Text(
+                        '${financeProvider.getBudgetTypeIcon(budgetType)} ${financeProvider.getBudgetTypeName(budgetType)}',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: financeProvider.getBudgetTypeColor(budgetType),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+                
                 const SizedBox(height: 4),
                 
-                // Time info - Third line
                 Text(
                   relativeDate,
                   style: AppTextStyles.caption.copyWith(
@@ -563,12 +549,11 @@ class _HistoryTabState extends State<HistoryTab> {
           
           const SizedBox(width: 12),
           
-          // Amount and date column
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${isIncome ? '+' : '-'}$formattedAmount',
+                '${isIncome ? '+' : '-'}${FormatUtils.formatCurrency(amount)}',
                 style: AppTextStyles.labelMedium.copyWith(
                   color: color,
                   fontWeight: FontWeight.w600,
@@ -589,13 +574,14 @@ class _HistoryTabState extends State<HistoryTab> {
   }
 
   Widget _buildSavingsGoalItem(Map<String, dynamic> goal) {
-    final itemName = goal['item_name'] as String? ?? '';
-    final targetAmount = goal['target_amount'] as num? ?? 0;
-    final currentAmount = goal['current_amount'] as num? ?? 0;
-    final progressPercentage = goal['progress_percentage'] as num? ?? 0;
-    final formattedTarget = goal['formatted_target'] as String? ?? '';
-    final formattedCurrent = goal['formatted_current'] as String? ?? '';
-    final status = goal['status'] as String? ?? '';
+    final formattedGoal = FormatUtils.formatSavingsGoalHistoryItem(goal);
+    
+    final itemName = FormatUtils.safeString(formattedGoal['item_name']);
+    final targetAmount = FormatUtils.safeDouble(formattedGoal['target_amount']);
+    final currentAmount = FormatUtils.safeDouble(formattedGoal['current_amount']);
+    final progressPercentage = FormatUtils.safeDouble(formattedGoal['progress_percentage']);
+    final status = FormatUtils.safeString(formattedGoal['status']);
+    final daysRemaining = FormatUtils.safeInt(formattedGoal['days_remaining']);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -638,11 +624,21 @@ class _HistoryTabState extends State<HistoryTab> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Target: $formattedTarget',
+                      'Target: ${FormatUtils.formatCurrency(targetAmount)}',
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.textSecondary,
                       ),
                     ),
+                    if (daysRemaining > 0) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        FormatUtils.formatDaysRemaining(daysRemaining),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.warning,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -679,16 +675,23 @@ class _HistoryTabState extends State<HistoryTab> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Terkumpul: $formattedCurrent',
+                'Terkumpul: ${FormatUtils.formatCurrency(currentAmount)}',
                 style: AppTextStyles.bodySmall.copyWith(
                   color: AppColors.textSecondary,
                 ),
               ),
-              Text(
-                status,
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: status == 'completed' ? AppColors.success : AppColors.primary,
-                  fontWeight: FontWeight.w500,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: status == 'completed' ? AppColors.success.withOpacity(0.1) : AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  status == 'completed' ? 'Selesai' : 'Aktif',
+                  style: AppTextStyles.caption.copyWith(
+                    color: status == 'completed' ? AppColors.success : AppColors.primary,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ],
@@ -750,58 +753,48 @@ class _HistoryTabState extends State<HistoryTab> {
   }
 
   Widget _buildCategoryFilter() {
-    return Consumer<FinanceProvider>(
-      builder: (context, financeProvider, child) {
-        final categoriesData = financeProvider.categoriesData;
-        
-        // Student categories from backend
-        final incomeCategories = categoriesData?['income_categories'] as List? ?? [];
-        final expenseCategories = categoriesData?['expense_categories'] as List? ?? [];
-        final allCategories = [...incomeCategories, ...expenseCategories];
-        
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Kategori',
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                border: Border.all(color: AppColors.border),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _selectedCategory,
-                  hint: Text('Semua'),
-                  isExpanded: true,
-                  style: AppTextStyles.bodyMedium,
-                  onChanged: (value) => setState(() => _selectedCategory = value),
-                  items: [
-                    DropdownMenuItem<String>(
-                      value: null,
-                      child: Text('Semua'),
-                    ),
-                    ...allCategories.map((category) {
-                      return DropdownMenuItem<String>(
-                        value: category.toString(),
-                        child: Text(category.toString()),
-                      );
-                    }),
-                  ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Kategori',
+          style: AppTextStyles.bodySmall.copyWith(
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedCategory,
+              hint: Text('Semua'),
+              isExpanded: true,
+              style: AppTextStyles.bodyMedium,
+              onChanged: (value) => setState(() => _selectedCategory = value),
+              items: [
+                DropdownMenuItem<String>(
+                  value: null,
+                  child: Text('Semua'),
                 ),
-              ),
+                // Add common categories
+                ...['Makanan Pokok', 'Kos/Tempat Tinggal', 'Transportasi Wajib', 'Pendidikan', 'Hiburan & Sosial', 'Jajan & Snack', 'Tabungan Umum', 'Dana Darurat'].map((category) {
+                  return DropdownMenuItem<String>(
+                    value: category,
+                    child: Text(category),
+                  );
+                }),
+              ],
             ),
-          ],
-        );
-      },
+          ),
+        ),
+      ],
     );
   }
 
@@ -865,9 +858,8 @@ class _HistoryTabState extends State<HistoryTab> {
 
   Widget _buildPaginationInfo(Map<String, dynamic> historyData) {
     final pagination = historyData['pagination'] ?? {};
-    final currentPage = pagination['current_page'] ?? 1;
-    final totalTransactions = pagination['total_transactions'] ?? 0;
-    final totalGoals = pagination['total_goals'] ?? 0;
+    final currentPage = FormatUtils.safeInt(pagination['current_page'], 1);
+    final totalItems = FormatUtils.safeInt(pagination['total_items']);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -885,11 +877,54 @@ class _HistoryTabState extends State<HistoryTab> {
           ),
           const SizedBox(height: 4),
           Text(
-            '$totalTransactions transaksi • $totalGoals target tabungan',
+            '$totalItems item ditemukan',
             style: AppTextStyles.bodySmall.copyWith(
               color: AppColors.textSecondary,
             ),
           ),
+          
+          if (totalItems > _itemsPerPage) ...[
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (currentPage > 1) ...[
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _currentPage = currentPage - 1;
+                      });
+                      _loadHistory();
+                    },
+                    child: Text(
+                      'Sebelumnya',
+                      style: AppTextStyles.labelMedium.copyWith(
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                ],
+                
+                if (totalItems > currentPage * _itemsPerPage) ...[
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _currentPage = currentPage + 1;
+                      });
+                      _loadHistory();
+                    },
+                    child: Text(
+                      'Selanjutnya',
+                      style: AppTextStyles.labelMedium.copyWith(
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -898,10 +933,9 @@ class _HistoryTabState extends State<HistoryTab> {
   bool _hasActiveFilters() {
     return _selectedType != null ||
            _selectedCategory != null ||
+           _selectedBudgetType != null ||
            _startDate != null ||
            _endDate != null ||
-           _minAmount != null ||
-           _maxAmount != null ||
            (_searchQuery != null && _searchQuery!.isNotEmpty);
   }
 }
