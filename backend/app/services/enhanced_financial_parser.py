@@ -1,4 +1,4 @@
-# app/services/enhanced_financial_parser.py - UPDATED untuk metode 50/30/20
+# app/services/enhanced_financial_parser.py - COMPLETE VERSION
 import re
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
@@ -50,6 +50,24 @@ class EnhancedFinancialParser:
             'september': 9, 'oktober': 10, 'november': 11, 'desember': 12,
             'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4,
             'jun': 6, 'jul': 7, 'agu': 8, 'sep': 9, 'okt': 10, 'nov': 11, 'des': 12
+        }
+        
+        # FIXED: Time-related words yang harus difilter dari nama barang
+        self.time_filter_words = {
+            # Bulan
+            'januari', 'februari', 'maret', 'april', 'mei', 'juni',
+            'juli', 'agustus', 'september', 'oktober', 'november', 'desember',
+            'jan', 'feb', 'mar', 'apr', 'jun', 'jul', 'agu', 'sep', 'okt', 'nov', 'des',
+            
+            # Waktu relatif
+            'bulan', 'tahun', 'hari', 'minggu', 'lagi', 'mendatang', 'depan',
+            'kemudian', 'nanti', 'besok', 'esok', 'masa', 'waktu',
+            
+            # Kata penghubung waktu
+            'dalam', 'pada', 'tanggal', 'sebelum', 'sesudah', 'sampai', 'hingga',
+            
+            # Angka yang biasanya merujuk waktu
+            'satu', 'dua', 'tiga', 'empat', 'lima', 'enam', 'tujuh', 'delapan', 'sembilan', 'sepuluh'
         }
         
         # Budget type guidance untuk 50/30/20
@@ -203,29 +221,105 @@ class EnhancedFinancialParser:
         return clean_text[:100] if clean_text else "Transaksi melalui chat"
     
     def extract_item_name_for_savings(self, text: str, amount: float, target_date: Optional[datetime] = None) -> str:
-        """Ekstrak nama barang untuk target tabungan"""
-        # Remove amount and date patterns
-        clean_text = text
+        """
+        FIXED: Ekstrak nama barang untuk target tabungan dengan filter yang lebih baik
+        """
+        # Start with original text
+        clean_text = text.lower()
+        
+        # 1. Remove money patterns first
         for pattern in self.money_patterns:
             clean_text = re.sub(pattern, '', clean_text, flags=re.IGNORECASE)
         
+        # 2. Remove date patterns
         if target_date:
             for pattern in self.date_patterns:
                 clean_text = re.sub(pattern, '', clean_text, flags=re.IGNORECASE)
         
-        # Remove savings keywords
-        savings_words = ['nabung', 'tabung', 'target', 'ingin', 'mau', 'pengen', 'beli', 'buat']
-        for word in savings_words:
+        # 3. Remove savings keywords and action words
+        savings_action_words = [
+            'nabung', 'tabung', 'target', 'ingin', 'mau', 'pengen', 'beli', 'buat',
+            'kepengen', 'impian', 'rencana', 'saving', 'goal', 'tujuan', 'untuk'
+        ]
+        
+        for word in savings_action_words:
             clean_text = re.sub(rf'\b{word}\b', '', clean_text, flags=re.IGNORECASE)
         
-        # Clean up
+        # 4. FIXED: Remove time-related words more aggressively
+        for time_word in self.time_filter_words:
+            clean_text = re.sub(rf'\b{time_word}\b', '', clean_text, flags=re.IGNORECASE)
+        
+        # 5. Remove numeric expressions that might indicate time
+        # Remove standalone numbers that could be dates/months
+        clean_text = re.sub(r'\b\d{1,2}\b', '', clean_text)  # Remove 1-2 digit numbers
+        clean_text = re.sub(r'\b\d{4}\b', '', clean_text)    # Remove years
+        
+        # 6. Remove common connecting words and prepositions
+        connecting_words = [
+            'dengan', 'dan', 'atau', 'yang', 'ini', 'itu', 'tersebut',
+            'di', 'ke', 'dari', 'untuk', 'pada', 'dalam', 'oleh', 'kepada',
+            'sebagai', 'seperti', 'antara', 'hingga', 'sampai', 'sejak'
+        ]
+        
+        for word in connecting_words:
+            clean_text = re.sub(rf'\b{word}\b', '', clean_text, flags=re.IGNORECASE)
+        
+        # 7. Clean up multiple spaces and trim
         clean_text = re.sub(r'\s+', ' ', clean_text).strip()
         
-        # If still empty or too short, provide default
-        if not clean_text or len(clean_text) < 3:
-            return "Target tabungan"
+        # 8. Additional cleanup - remove remaining single characters and short words
+        words = clean_text.split()
+        meaningful_words = []
         
-        return clean_text[:50]  # Limit length
+        for word in words:
+            # Skip if word is too short (except common items like 'hp', 'tv', etc.)
+            if len(word) < 2:
+                continue
+            
+            # Skip if word is still a time indicator
+            if word.lower() in self.time_filter_words:
+                continue
+            
+            # Skip if word looks like a date fragment
+            if re.match(r'^\d+$', word):
+                continue
+            
+            meaningful_words.append(word)
+        
+        # 9. Reconstruct the item name
+        final_name = ' '.join(meaningful_words)
+        
+        # 10. Handle edge cases
+        if not final_name or len(final_name.strip()) < 2:
+            # Try to extract from common item patterns
+            original_lower = text.lower()
+            
+            # Look for common electronics/items
+            item_patterns = [
+                r'\b(laptop|notebook|macbook)\b',
+                r'\b(hp|handphone|smartphone|iphone|samsung)\b',
+                r'\b(motor|sepeda|mobil|kendaraan)\b',
+                r'\b(tv|televisi|monitor)\b',
+                r'\b(kulkas|mesin cuci|ac|kipas)\b',
+                r'\b(sepatu|sandal|tas|baju|kemeja)\b',
+                r'\b(buku|novel|komik)\b',
+                r'\b(kamera|drone|headset)\b'
+            ]
+            
+            for pattern in item_patterns:
+                match = re.search(pattern, original_lower)
+                if match:
+                    return match.group(1).title()
+            
+            # Last resort - return generic name
+            return "Target Tabungan"
+        
+        # 11. Capitalize properly and limit length
+        final_name = final_name.title()
+        if len(final_name) > 50:
+            final_name = final_name[:47] + "..."
+        
+        return final_name
     
     def generate_budget_guidance(self, category: str, budget_type: str, amount: float, monthly_income: float = None) -> Dict[str, Any]:
         """Generate guidance berdasarkan budget type 50/30/20"""
