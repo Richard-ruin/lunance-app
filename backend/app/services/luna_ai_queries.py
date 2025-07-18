@@ -1,4 +1,4 @@
-# app/services/luna_ai_queries.py - Financial Query Handlers untuk Luna AI
+# app/services/luna_ai_queries_fixed.py - FIXED version yang mengganti luna_ai_queries.py
 import random
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
@@ -7,508 +7,765 @@ from bson import ObjectId
 from ..config.database import get_database
 from ..utils.timezone_utils import IndonesiaDatetime, now_for_db
 from .luna_ai_base import LunaAIBase
-from .finance_analyzer import FinanceAnalyzer
+from .luna_financial_calculator import LunaFinancialCalculator  # NEW import
 from .finance_advisor import FinanceAdvisor
 
 
-class LunaAIQueries(LunaAIBase):
-    """Luna AI Queries untuk financial queries & purchase analysis"""
+class LunaAIQueriesFixed(LunaAIBase):
+    """
+    FIXED: Luna AI Queries dengan real financial data calculation
+    Mengganti luna_ai_queries.py yang bermasalah
+    
+    Focus pada mengatasi:
+    1. Mixed conversation handling (42.9% → 95%+)
+    2. Financial query implementation yang akurat
+    3. Response yang lebih specific dan helpful
+    """
     
     def __init__(self):
         super().__init__()
-        self.analyzer = FinanceAnalyzer()
+        self.calculator = LunaFinancialCalculator()  # NEW: Real calculation engine
         self.advisor = FinanceAdvisor()
     
     # ==========================================
-    # PURCHASE INTENT HANDLER
+    # PURCHASE INTENT HANDLER - ENHANCED
     # ==========================================
     
     async def handle_purchase_intent(self, user_id: str, purchase_intent: Dict[str, Any]) -> str:
-        """Handle purchase intent dengan analisis lengkap"""
+        """FIXED: Handle purchase intent dengan analisis yang akurat"""
         try:
             item_name = purchase_intent["item_name"]
             price = purchase_intent["price"]
             
-            # Analyze purchase impact menggunakan FinanceAnalyzer
-            purchase_advice = await self.advisor.generate_purchase_advice(user_id, item_name, price)
+            print(f"🛒 Processing purchase intent: {item_name} - {self.format_currency(price)}")
             
-            if not purchase_advice["can_advise"]:
-                return f"""🤔 **Pertanyaan tentang pembelian {item_name} seharga {self.format_currency(price)}**
-
-{purchase_advice["message"]}
-
-Untuk mendapatkan analisis yang akurat, silakan:
-1. Setup budget bulanan dengan metode 50/30/20
-2. Catat beberapa transaksi untuk building profile
-3. Tanyakan lagi setelah setup selesai
-
-Butuh bantuan setup? Ketik: **"bantuan setup budget"**"""
+            # Get real financial data for analysis
+            budget_data = await self.calculator.calculate_current_month_budget_performance(user_id)
+            savings_data = await self.calculator.calculate_real_total_savings(user_id)
             
-            # Generate comprehensive response
-            response = f"""💰 **Analisis Pembelian: {item_name}**
+            if not budget_data.get("has_budget"):
+                return f"""💭 **Analisis Pembelian: {item_name}**
+💰 **Harga**: {self.format_currency(price)}
 
-**Harga**: {purchase_advice["formatted_price"]}
-**Kategori**: {purchase_advice["category"]} ({purchase_advice["budget_type"].upper()})
+Untuk analisis pembelian yang akurat, saya perlu data transaksi Anda dulu.
+
+🚀 **Mulai dengan:**
+1. Input beberapa transaksi income: *"Dapat uang saku 2 juta"*
+2. Catat pengeluaran harian: *"Bayar kos 800rb"*, *"Jajan 50rb"*
+3. Minimal 3-5 transaksi untuk analisis budget 50/30/20
+
+Setelah ada data, saya bisa kasih analisis: "Apakah aman beli {item_name}?" 😊"""
+            
+            # Determine budget type for the item
+            budget_type = self._determine_item_budget_type(item_name)
+            
+            # Calculate affordability
+            base_income = budget_data["base_income"]
+            performance = budget_data["performance"]
+            
+            if budget_type in performance:
+                category_info = performance[budget_type]
+                current_remaining = category_info["remaining"]
+                
+                # Affordability assessment
+                if price <= current_remaining:
+                    feasibility = "recommended"
+                    feasibility_emoji = "✅"
+                    feasibility_message = "DIREKOMENDASIKAN"
+                elif price <= current_remaining * 1.2:
+                    feasibility = "consider"
+                    feasibility_emoji = "🤔"
+                    feasibility_message = "PERTIMBANGKAN"
+                elif price <= current_remaining * 1.5:
+                    feasibility = "risky"
+                    feasibility_emoji = "⚠️"
+                    feasibility_message = "BERISIKO"
+                else:
+                    feasibility = "not_recommended"
+                    feasibility_emoji = "🚨"
+                    feasibility_message = "TIDAK DIREKOMENDASIKAN"
+                
+                # Generate response
+                response = f"""💰 **Analisis Pembelian: {item_name}**
+
+**💳 Detail:**
+• **Harga**: {self.format_currency(price)}
+• **Kategori Budget**: {budget_type.upper()} Budget
+• **Sisa Budget {budget_type.upper()}**: {category_info['formatted_remaining']}
+
+{feasibility_emoji} **{feasibility_message}**
 
 """
+                
+                # Specific analysis
+                if feasibility == "recommended":
+                    response += f"💚 **Analisis**: Pembelian ini aman untuk budget {budget_type.upper()} Anda\n"
+                    response += f"📊 **Impact**: Hanya {(price/category_info['budget']*100):.1f}% dari budget {budget_type.upper()}\n"
+                    
+                elif feasibility == "consider":
+                    response += f"💡 **Analisis**: Masih bisa dibeli tapi akan menggunakan {(price/category_info['budget']*100):.1f}% budget {budget_type.upper()}\n"
+                    response += f"🔍 **Saran**: Pastikan tidak ada pengeluaran {budget_type} lain yang urgent\n"
+                    
+                elif feasibility == "risky":
+                    over_amount = price - current_remaining
+                    response += f"⚠️ **Analisis**: Akan melebihi budget {budget_type.upper()} sebesar {self.format_currency(over_amount)}\n"
+                    response += f"🤔 **Saran**: Pertimbangkan menunda atau cari versi yang lebih murah\n"
+                    
+                else:  # not_recommended
+                    over_amount = price - current_remaining
+                    response += f"❌ **Analisis**: Akan merusak budget {budget_type.upper()} - melebihi {self.format_currency(over_amount)}\n"
+                    response += f"🚨 **Saran**: Tunda pembelian atau alokasikan dari budget bulan depan\n"
+                
+                # Add timing advice
+                response += f"\n🗓️ **Timing Advice:**\n"
+                if feasibility in ["recommended", "consider"]:
+                    response += f"• Bisa dibeli bulan ini dengan monitoring ketat\n"
+                else:
+                    response += f"• Lebih baik tunggu bulan depan saat budget reset\n"
+                    response += f"• Atau buat target tabungan dari budget WANTS\n"
+                
+                # Add budget context
+                budget_health = budget_data["overall"]["budget_health"]
+                if budget_health in ["warning", "critical"]:
+                    response += f"\n⚠️ **Note**: Budget health saat ini {budget_health} - lebih hati-hati dengan spending"
+                
+                return response
             
-            # Main assessment
-            feasibility = purchase_advice["feasibility"]
-            if feasibility == "not_recommended":
-                response += "🚨 **TIDAK DIREKOMENDASIKAN**\n\n"
-            elif feasibility == "risky":
-                response += "⚠️ **BERISIKO - Pertimbangkan Matang-Matang**\n\n"
-            elif feasibility == "consider":
-                response += "🤔 **PERTIMBANGKAN DENGAN HATI-HATI**\n\n"
-            elif feasibility == "recommended":
-                response += "✅ **DIREKOMENDASIKAN**\n\n"
-            
-            # Add main advice
-            for advice in purchase_advice["advice"][:3]:  # Limit to 3 main points
-                response += f"• {advice}\n"
-            
-            response += "\n"
-            
-            # Add alternatives if needed
-            if purchase_advice["alternatives"]:
-                response += "**🔄 Alternatif:**\n"
-                for alt in purchase_advice["alternatives"][:3]:  # Limit to 3 alternatives
-                    response += f"• {alt}\n"
-                response += "\n"
-            
-            # Add timing advice
-            timeline = purchase_advice["timeline_advice"]
-            if timeline["recommended_timing"] != "anytime":
-                response += f"**⏰ Waktu yang Tepat:** {timeline['action']}\n\n"
-            
-            # Add motivational closing
-            if feasibility == "recommended":
-                response += "💪 Dengan financial health yang baik, Anda bisa menikmati pembelian ini tanpa khawatir!"
-            elif feasibility == "not_recommended":
-                response += "🎯 Focus pada stabilitas budget dulu, nanti pasti ada kesempatan yang tepat!"
             else:
-                response += "📊 Keputusan ada di tangan Anda! Pertimbangkan dengan bijak sesuai prioritas."
+                return f"💭 **Analisis Pembelian: {item_name}**\n\nMaaf, terjadi kesalahan dalam menganalisis budget. Coba tanya lagi ya!"
+            
+        except Exception as e:
+            print(f"Error handling purchase intent: {e}")
+            return f"""💭 **Pertanyaan tentang pembelian {purchase_intent.get('item_name', 'barang')}**
+
+Maaf, terjadi kesalahan saat menganalisis pembelian. 😅
+
+🔧 **Coba lagi dengan format:**
+• "Saya ingin membeli [nama barang] seharga [harga]"
+
+**Contoh**: *"Saya ingin membeli laptop seharga 10 juta"*"""
+    
+    # ==========================================
+    # FINANCIAL QUERY HANDLERS - FIXED
+    # ==========================================
+    
+    async def handle_financial_query(self, user_id: str, query_type: str) -> str:
+        """FIXED: Handle financial queries dengan response yang akurat dan helpful"""
+        try:
+            print(f"📊 Processing financial query: {query_type}")
+            
+            # Route to specific query handlers
+            if query_type == "total_tabungan":
+                return await self.calculator.get_total_savings_response(user_id)
+                
+            elif query_type == "financial_health":
+                return await self.calculator.get_financial_health_response(user_id)
+                
+            elif query_type == "budget_performance":
+                return await self.calculator.get_budget_performance_response(user_id)
+                
+            elif query_type == "progress_tabungan":
+                return await self.calculator.get_savings_goals_progress_response(user_id)
+                
+            elif query_type == "list_targets" or query_type == "daftar_target":
+                return await self.handle_list_savings_goals(user_id)
+                
+            elif query_type == "target_bulanan":
+                return await self._handle_monthly_target_query(user_id)
+                
+            elif query_type == "pengeluaran_terbesar":
+                return await self._handle_biggest_expense_query(user_id)
+                
+            elif query_type == "spending_analysis":
+                return await self._handle_spending_analysis_query(user_id)
+                
+            elif query_type == "ringkasan":
+                return await self._handle_financial_summary_query(user_id)
+                
+            else:
+                # Fallback untuk query yang tidak dikenali
+                return f"""📊 **Financial Query: {query_type.replace('_', ' ').title()}**
+
+Fitur ini sedang dikembangkan. Untuk saat ini Anda bisa tanya:
+
+💰 **Data Keuangan:**
+• "Total tabungan saya berapa?"
+• "Kesehatan keuangan saya gimana?"
+• "Budget performance bulan ini"
+
+🎯 **Target & Progress:**
+• "Progress tabungan saya"
+• "Daftar target saya"
+• "Target bulanan saya"
+
+📊 **Analisis:**
+• "Pengeluaran terbesar saya"
+• "Analisis pengeluaran saya"
+• "Ringkasan keuangan saya"
+
+Coba salah satu ya! 😊"""
+            
+        except Exception as e:
+            print(f"❌ Error handling financial query: {e}")
+            return f"""📊 **Financial Query Error**
+
+Maaf, terjadi kesalahan saat memproses query keuangan Anda. 😅
+
+🔧 **Coba tanya dengan format yang lebih spesifik:**
+• "Total tabungan saya berapa?"
+• "Kesehatan keuangan saya gimana?"
+• "Budget performance bulan ini"
+
+Atau tunggu sebentar dan coba lagi!"""
+    
+    # ==========================================
+    # SPECIFIC QUERY HANDLERS - NEW
+    # ==========================================
+    
+    async def _handle_monthly_target_query(self, user_id: str) -> str:
+        """Handle query tentang target bulanan"""
+        try:
+            budget_data = await self.calculator.calculate_current_month_budget_performance(user_id)
+            
+            if not budget_data.get("has_budget"):
+                return """🎯 **Target Bulanan**
+
+Untuk melihat target bulanan, saya perlu data income Anda dulu.
+
+📝 **Setup yang dibutuhkan:**
+1. Input beberapa transaksi income
+2. Sistem akan menghitung target savings 20% otomatis
+3. Target akan update berdasarkan income real Anda
+
+**Contoh**: *"Dapat uang saku 2 juta dari ortu"*
+
+Setelah ada data income, target bulanan akan muncul otomatis! 🚀"""
+            
+            base_income = budget_data["base_income"]
+            savings_budget = budget_data["budget_allocation"]["savings_budget"]
+            savings_performance = budget_data["performance"]["savings"]
+            
+            # Calculate monthly savings target (20% of income)
+            monthly_target = savings_budget
+            actual_savings = savings_performance["spent"]
+            progress_percentage = (actual_savings / monthly_target * 100) if monthly_target > 0 else 0
+            
+            response = f"""🎯 **Target Bulanan Anda**
+
+💰 **Base Income**: {budget_data['formatted']['base_income']}
+📊 **Target Savings (20%)**: {self.format_currency(monthly_target)}
+💳 **Actual Savings**: {savings_performance['formatted_spent']}
+
+📈 **Progress Target:**"""
+            
+            # Progress bar
+            filled_bars = min(10, int(progress_percentage // 10))
+            progress_bar = "🟩" * filled_bars + "⬜" * (10 - filled_bars)
+            response += f"\n{progress_bar} {progress_percentage:.1f}%\n"
+            
+            # Status assessment
+            if progress_percentage >= 100:
+                response += f"\n🎉 **AMAZING!** Target bulanan sudah tercapai!\n"
+                response += f"🏆 **Surplus**: {self.format_currency(actual_savings - monthly_target)}\n"
+                response += f"💡 **Saran**: Alokasikan surplus untuk investasi atau target jangka panjang\n"
+                
+            elif progress_percentage >= 75:
+                response += f"\n👍 **EXCELLENT!** Hampir mencapai target 20%!\n"
+                shortage = monthly_target - actual_savings
+                response += f"🎯 **Sisa Target**: {self.format_currency(shortage)}\n"
+                response += f"💪 **Saran**: Sedikit push lagi untuk achieve target!\n"
+                
+            elif progress_percentage >= 50:
+                response += f"\n📊 **GOOD!** Sudah separuh jalan ke target\n"
+                shortage = monthly_target - actual_savings
+                response += f"🎯 **Sisa Target**: {self.format_currency(shortage)}\n"
+                response += f"📈 **Saran**: Focus optimasi budget WANTS untuk boost savings\n"
+                
+            else:
+                response += f"\n🚀 **KEEP GOING!** Masih ada waktu untuk catch up\n"
+                shortage = monthly_target - actual_savings
+                response += f"🎯 **Target Remaining**: {self.format_currency(shortage)}\n"
+                response += f"💡 **Action**: Review semua pengeluaran WANTS yang bisa ditunda\n"
+            
+            # Add actionable tips
+            response += f"\n💡 **Tips Achieve Target 20%:**\n"
+            response += f"• Set aside 20% segera setelah dapat income\n"
+            response += f"• Monitor spending WANTS jangan lebih 30%\n"
+            response += f"• Track daily spending untuk prevent overspend\n"
+            
+            # Add period context
+            now = IndonesiaDatetime.now()
+            days_left = (now.replace(day=1, month=now.month+1 if now.month < 12 else 1, year=now.year+1 if now.month == 12 else now.year) - now).days
+            response += f"\n🗓️ **Sisa waktu bulan ini**: {days_left} hari"
             
             return response
             
         except Exception as e:
-            print(f"Error handling purchase intent: {e}")
-            return f"""🤔 **Pertanyaan tentang pembelian {purchase_intent.get('item_name', 'barang')}**
-
-Maaf, terjadi kesalahan saat menganalisis pembelian. Coba tanyakan lagi dengan format:
-
-*"Saya ingin membeli [nama barang] seharga [harga]"*
-
-Contoh: *"Saya ingin membeli laptop seharga 10 juta"*"""
+            print(f"Error handling monthly target query: {e}")
+            return "😅 Terjadi kesalahan saat mengambil target bulanan. Coba tanya lagi ya!"
     
-    # ==========================================
-    # FINANCIAL QUERY HANDLERS
-    # ==========================================
-    
-    async def handle_financial_query(self, user_id: str, query_type: str) -> str:
-        """Handle pertanyaan tentang data keuangan user dengan analisis mendalam"""
+    async def _handle_biggest_expense_query(self, user_id: str) -> str:
+        """Handle query tentang pengeluaran terbesar"""
         try:
-            if query_type == "list_targets":
-                return await self.handle_list_savings_goals(user_id)
+            # Get current month transactions
+            now = IndonesiaDatetime.now()
+            start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            start_of_month_utc = IndonesiaDatetime.to_utc(start_of_month).replace(tzinfo=None)
             
-            # Use FinanceAnalyzer for comprehensive analysis
-            financial_analysis = await self.analyzer.analyze_user_financial_status(user_id)
+            # Aggregate spending by category
+            pipeline = [
+                {"$match": {
+                    "user_id": user_id,
+                    "type": "expense",
+                    "status": "confirmed",
+                    "date": {"$gte": start_of_month_utc}
+                }},
+                {"$group": {
+                    "_id": "$category",
+                    "total": {"$sum": "$amount"},
+                    "count": {"$sum": 1}
+                }},
+                {"$sort": {"total": -1}}
+            ]
             
-            if financial_analysis["status"] != "analyzed":
-                return f"""📊 **Data Keuangan Belum Tersedia**
-
-{financial_analysis.get("message", "Belum ada data keuangan yang dapat dianalisis")}
-
-Untuk mendapatkan insight keuangan yang akurat:
-1. Setup budget bulanan dengan metode 50/30/20
-2. Catat beberapa transaksi (pemasukan & pengeluaran)
-3. Buat target tabungan untuk motivasi
-
-Butuh bantuan setup? Ketik: **"bantuan setup budget"**"""
+            category_spending = list(self.db.transactions.aggregate(pipeline))
             
-            # Handle different query types
-            if query_type == "total_tabungan":
-                return await self._handle_total_tabungan_query(financial_analysis)
-            elif query_type == "financial_health":
-                return await self._handle_financial_health_query(financial_analysis)
-            elif query_type == "budget_performance":
-                return await self._handle_budget_performance_query(financial_analysis)
-            elif query_type == "spending_analysis":
-                return await self._handle_spending_analysis_query(financial_analysis)
-            elif query_type == "progress_tabungan":
-                return await self._handle_progress_tabungan_query(financial_analysis)
-            elif query_type == "target_bulanan":
-                return await self._handle_target_bulanan_query(financial_analysis)
-            elif query_type == "pengeluaran_terbesar":
-                return await self._handle_pengeluaran_terbesar_query(financial_analysis)
-            elif query_type == "ringkasan":
-                return await self._handle_ringkasan_query(financial_analysis)
-            else:
-                return "📊 Fitur analisis ini sedang dikembangkan. Untuk saat ini Anda bisa tanya tentang total tabungan, kesehatan keuangan, atau performa budget."
-            
-        except Exception as e:
-            print(f"❌ Error handling financial query: {e}")
-            return f"😅 Maaf, terjadi kesalahan saat menganalisis data keuangan. Coba tanya lagi ya! Error: {str(e)}"
-    
-    async def _handle_total_tabungan_query(self, financial_analysis: Dict[str, Any]) -> str:
-        """Handle query total tabungan"""
-        current_totals = financial_analysis["current_totals"]
-        total_savings = current_totals["real_total_savings"]
-        
-        response = f"""📊 **Total Tabungan Anda**: {self.format_currency(total_savings)}
+            if not category_spending:
+                return """💸 **Pengeluaran Terbesar Bulan Ini**
 
-**Breakdown:**
-• Tabungan Awal: {self.format_currency(current_totals["initial_savings"])}
-• Total Pemasukan: {self.format_currency(current_totals["total_income"])}
-• Total Pengeluaran: {self.format_currency(current_totals["total_expense"])}
-• **Net Growth**: {self.format_currency(current_totals["savings_growth"])}
+Belum ada data pengeluaran bulan ini yang dapat dianalisis.
+
+🚀 **Mulai tracking pengeluaran:**
+• "Bayar kos 800 ribu"
+• "Belanja groceries 150rb"
+• "Jajan bubble tea 25rb"
+
+Setelah ada transaksi, saya bisa analisis pengeluaran terbesar Anda! 📊"""
+            
+            top_category = category_spending[0]
+            total_spending = sum(cat["total"] for cat in category_spending)
+            
+            response = f"""💸 **Pengeluaran Terbesar Bulan Ini**
+
+🏆 **#1 {top_category['_id']}**
+• **Total**: {self.format_currency(top_category['total'])} ({(top_category['total']/total_spending*100):.1f}% dari total)
+• **Frekuensi**: {top_category['count']}x transaksi
+• **Rata-rata**: {self.format_currency(top_category['total']/top_category['count'])}/transaksi
 
 """
-        
-        # Add contextual advice
-        if current_totals["savings_growth"] > 0:
-            response += "📈 **Selamat!** Tabungan Anda bertumbuh positif!\n\n"
-        elif current_totals["savings_growth"] < 0:
-            response += "📉 **Perhatian!** Tabungan Anda berkurang. Waktunya evaluasi pengeluaran.\n\n"
-        else:
-            response += "📊 **Stabil** - Pemasukan dan pengeluaran seimbang.\n\n"
-        
-        # Add tips based on health level
-        health_level = financial_analysis["health_score"]["level"]
-        if health_level == "needs_improvement":
-            response += "💡 **Saran:** Focus pada budgeting 50/30/20 untuk meningkatkan tabungan"
-        elif health_level == "fair":
-            response += "💪 **Saran:** Pertahankan konsistensi dan tingkatkan sedikit alokasi savings"
-        elif health_level == "good":
-            response += "🎯 **Saran:** Excellent! Pertimbangkan untuk mulai investasi sederhana"
-        else:
-            response += "🏆 **Saran:** Amazing! Anda bisa mulai explore investasi jangka panjang"
-        
-        response += "\n\nTetap semangat menabung! 💪"
-        
-        return response
-    
-    async def _handle_financial_health_query(self, financial_analysis: Dict[str, Any]) -> str:
-        """Handle query kesehatan keuangan"""
-        health_score = financial_analysis["health_score"]
-        
-        # Emoji based on health level
-        level_emoji = {
-            "excellent": "🏆",
-            "good": "👍",
-            "fair": "📊",
-            "needs_improvement": "🆘"
-        }
-        
-        emoji = level_emoji.get(health_score["level"], "📊")
-        
-        response = f"""{emoji} **Kesehatan Keuangan Anda**
-
-**Score**: {health_score['score']}/{health_score['max_score']} ({health_score['percentage']:.1f}%)
-**Level**: {health_score['level'].replace('_', ' ').title()}
-
-**Komponen Penilaian:**
-• Budget Discipline: {health_score['components'].get('budget_discipline', 'Unknown')}
-• Savings Progress: {health_score['components'].get('savings_progress', 0):.1f}%
-• Savings Growth: {self.format_currency(health_score['components'].get('savings_growth', 0))}
-• Transaction Activity: {health_score['components'].get('transaction_activity', 0)} transaksi
-
-"""
-        
-        # Add level-specific message
-        if health_score["level"] == "excellent":
-            response += "🎉 **Luar Biasa!** Financial management Anda sudah sangat baik!"
-        elif health_score["level"] == "good":
-            response += "👏 **Bagus!** Anda sudah on track dengan financial planning"
-        elif health_score["level"] == "fair":
-            response += "📈 **Cukup Baik!** Ada ruang untuk improvement"
-        else:
-            response += "💪 **Semangat!** Mari kita tingkatkan financial health Anda"
-        
-        response += "\n\n💡 **Rekomendasi:**\n"
-        
-        # Add top 3 recommendations
-        for i, rec in enumerate(financial_analysis['recommendations'][:3], 1):
-            response += f"{i}. {rec}\n"
-        
-        return response
-    
-    async def _handle_budget_performance_query(self, financial_analysis: Dict[str, Any]) -> str:
-        """Handle query performa budget"""
-        budget_perf = financial_analysis["budget_performance"]
-        performance = budget_perf["performance"]
-        
-        # Health emoji
-        health_emoji = {
-            "excellent": "🟢",
-            "good": "🟡",
-            "warning": "🟠",
-            "critical": "🔴"
-        }
-        
-        emoji = health_emoji.get(budget_perf["budget_health"], "⚪")
-        
-        response = f"""{emoji} **Performa Budget Bulan Ini**
-
-**Income**: {self.format_currency(budget_perf['monthly_income'])}
-**Budget Health**: {budget_perf['budget_health'].replace('_', ' ').title()}
-**Total Spent**: {self.format_currency(budget_perf['total_spent'])} ({budget_perf['overall_percentage']:.1f}%)
-
-**Detail per Kategori:**
-
-"""
-        
-        # Add each budget category
-        for budget_type, info in performance.items():
-            status_emoji = "🟢" if info["status"] == "under" else "🔴"
-            response += f"{status_emoji} **{budget_type.upper()}** ({budget_type == 'needs' and '50%' or budget_type == 'wants' and '30%' or '20%'}):\n"
-            response += f"   Used: {self.format_currency(info['spent'])} ({info['percentage_used']:.1f}%)\n"
-            response += f"   Budget: {self.format_currency(info['budget'])}\n"
-            response += f"   Remaining: {self.format_currency(info['remaining'])}\n\n"
-        
-        # Add contextual advice
-        if budget_perf["budget_health"] == "critical":
-            response += "🚨 **Urgent Action Needed!** Kurangi pengeluaran segera"
-        elif budget_perf["budget_health"] == "warning":
-            response += "⚠️ **Perlu Perhatian** - Monitor spending lebih ketat"
-        elif budget_perf["budget_health"] == "good":
-            response += "👍 **On Track** - Pertahankan discipline ini"
-        else:
-            response += "🎉 **Excellent** - Budget management sangat baik!"
-        
-        return response
-    
-    async def _handle_spending_analysis_query(self, financial_analysis: Dict[str, Any]) -> str:
-        """Handle query analisis pengeluaran"""
-        spending_patterns = financial_analysis["spending_patterns"]
-        top_categories = spending_patterns["top_categories"]
-        
-        response = f"""📈 **Analisis Pengeluaran (30 Hari Terakhir)**
-
-**Summary:**
-• Total Pengeluaran: {self.format_currency(spending_patterns['total_spent'])}
-• Rata-rata Harian: {self.format_currency(spending_patterns['average_daily'])}
-• Jumlah Transaksi: {spending_patterns['transaction_count']}
-
-**Top 5 Kategori Pengeluaran:**
-
-"""
-        
-        # Add top categories
-        for i, cat in enumerate(top_categories[:5], 1):
-            percentage = (cat['total'] / spending_patterns['total_spent'] * 100) if spending_patterns['total_spent'] > 0 else 0
-            response += f"{i}. **{cat['_id']}**: {self.format_currency(cat['total'])} ({percentage:.1f}%)\n"
-            response += f"   {cat['count']} transaksi\n\n"
-        
-        # Add insights
-        if top_categories:
-            top_category = top_categories[0]
-            response += f"💡 **Insight:** Pengeluaran terbesar Anda adalah {top_category['_id']}\n"
+            
+            # Determine budget type and give advice
+            budget_type = self._categorize_expense_to_budget_type(top_category['_id'])
+            budget_info = {
+                "needs": {"target": "50%", "advice": "Reasonable untuk kebutuhan pokok, tapi cek apakah bisa dioptimalkan"},
+                "wants": {"target": "30%", "advice": "Dari budget keinginan - pastikan tidak melebihi alokasi 30%"},
+                "savings": {"target": "20%", "advice": "Bagus! Ini investasi untuk masa depan"}
+            }
+            
+            category_info = budget_info.get(budget_type, {"target": "Unknown", "advice": "Review kategori ini"})
+            
+            response += f"💡 **Analisis Budget Type: {budget_type.upper()}** ({category_info['target']})\n"
+            response += f"📋 **Assessment**: {category_info['advice']}\n\n"
+            
+            # Show top 3 categories
+            if len(category_spending) > 1:
+                response += f"📊 **Top 3 Kategori:**\n"
+                for i, cat in enumerate(category_spending[:3], 1):
+                    percentage = (cat['total'] / total_spending * 100)
+                    response += f"{i}. **{cat['_id']}**: {self.format_currency(cat['total'])} ({percentage:.1f}%)\n"
+                response += "\n"
             
             # Category-specific tips
             category_tips = {
-                "Makanan Pokok": "Tip: Masak sendiri bisa menghemat 40-60%",
-                "Jajan & Snack": "Tip: Batasi jajan ke 10% dari budget WANTS",
-                "Transportasi Wajib": "Tip: Gunakan transportasi umum untuk hemat",
-                "Hiburan & Sosial": "Tip: Cari hiburan gratis atau promo mahasiswa"
+                "Makanan Pokok": "🍚 Tips: Masak sendiri bisa hemat 40-60% vs makan di luar",
+                "Jajan & Snack": "🍕 Tips: Set daily limit untuk jajan (max 50rb/hari)",
+                "Transportasi": "🚌 Tips: Maksimalkan transportasi umum",
+                "Hiburan": "🎬 Tips: Set monthly budget khusus untuk hiburan",
+                "Kos": "🏠 Tips: Fixed cost, tapi bisa nego untuk long-term rate"
             }
             
-            tip = category_tips.get(top_category['_id'], "Evaluasi apakah pengeluaran ini bisa dikurangi")
-            response += f"💰 {tip}"
-        
-        return response
+            tip = category_tips.get(top_category['_id'], f"💡 Tips: Review setiap transaksi {top_category['_id']} - mana yang essential vs nice-to-have")
+            response += f"{tip}\n\n"
+            
+            response += f"📱 **Deep dive**: Tanya \"budget performance bulan ini\" untuk analisis 50/30/20!"
+            
+            return response
+            
+        except Exception as e:
+            print(f"Error handling biggest expense query: {e}")
+            return "😅 Terjadi kesalahan saat menganalisis pengeluaran terbesar. Coba lagi ya!"
     
-    async def _handle_progress_tabungan_query(self, financial_analysis: Dict[str, Any]) -> str:
-        """Handle query progress tabungan"""
-        savings_analysis = financial_analysis["savings_analysis"]
-        
-        if not savings_analysis["has_goals"]:
-            return """🎯 **Progress Tabungan**
+    async def _handle_spending_analysis_query(self, user_id: str) -> str:
+        """Handle query analisis pengeluaran mendalam"""
+        try:
+            # Get budget performance first
+            budget_data = await self.calculator.calculate_current_month_budget_performance(user_id)
+            
+            if not budget_data.get("has_budget"):
+                return """📈 **Analisis Pengeluaran**
 
-Belum ada target tabungan aktif. Yuk buat target pertama!
+Untuk analisis pengeluaran yang mendalam, saya perlu data transaksi Anda.
 
-**Contoh membuat target:**
-• "Mau nabung buat beli laptop 10 juta pada tanggal 22 januari 2026"
-• "Target beli motor 25 juta dalam 1 tahun"
-• "Pengen beli hp 5 juta"
+📝 **Yang dibutuhkan:**
+1. Data income untuk menghitung budget 50/30/20
+2. Minimal 5-10 transaksi pengeluaran  
+3. Mix kategori: NEEDS, WANTS, SAVINGS
 
-💡 Target tabungan akan membantu Anda lebih fokus dan disiplin dalam menabung!"""
-        
-        response = f"""📈 **Progress Tabungan Anda**
+**Start tracking**: *"Bayar kos 800rb"*, *"Jajan 25rb"*, *"Freelance dapat 500rb"*
 
-**Summary:**
-• Total Target: {savings_analysis['total_goals']} target
-• Aktif: {savings_analysis['active_goals']} | Selesai: {savings_analysis['completed_goals']}
-• Total Target Amount: {self.format_currency(savings_analysis['total_target'])}
-• Total Terkumpul: {self.format_currency(savings_analysis['total_current'])}
-• **Average Progress**: {savings_analysis['average_progress']:.1f}%
+Setelah ada data, saya bisa kasih analisis pattern spending yang detail! 🔍"""
+            
+            # Get spending breakdown
+            performance = budget_data["performance"]
+            base_income = budget_data["base_income"]
+            
+            response = f"""📈 **Analisis Pengeluaran Mendalam**
 
-**Target Aktif:**
+💰 **Base Income**: {budget_data['formatted']['base_income']}
+📊 **Method**: 50/30/20 Elizabeth Warren
+🗓️ **Period**: {budget_data['period']}
+
+📋 **Spending Breakdown:**
 
 """
-        
-        # Add active goals
-        for goal in savings_analysis["goals_summary"]:
-            if goal["status"] == "active":
-                progress_bar = "🟩" * int(goal["progress"] // 10) + "⬜" * (10 - int(goal["progress"] // 10))
-                response += f"🛍️ **{goal['item_name']}**:\n"
-                response += f"   {progress_bar} {goal['progress']:.1f}%\n"
-                response += f"   💰 {self.format_currency(goal['current_amount'])} / {self.format_currency(goal['target_amount'])}\n\n"
-        
-        # Add urgent goals warning
-        urgent_goals = savings_analysis["urgent_goals"]
-        if urgent_goals:
-            response += f"⏰ **Urgent:** {len(urgent_goals)} target akan deadline dalam 30 hari!\n"
-            for goal in urgent_goals:
-                response += f"• {goal['item_name']} ({goal['days_remaining']} hari lagi)\n"
-            response += "\n"
-        
-        response += "Terus semangat! Setiap rupiah yang ditabung adalah langkah menuju impian Anda! ✨"
-        
-        return response
+            
+            # Analyze each budget type
+            total_spent = sum(perf["spent"] for perf in performance.values())
+            
+            for budget_type in ["needs", "wants", "savings"]:
+                if budget_type in performance:
+                    info = performance[budget_type]
+                    percentage_of_income = (info["spent"] / base_income * 100) if base_income > 0 else 0
+                    
+                    # Visual indicator
+                    if info["status"] == "over":
+                        status_emoji = "🔴"
+                        status_text = "OVER BUDGET"
+                    elif info["percentage_used"] > 80:
+                        status_emoji = "🟡"
+                        status_text = "NEAR LIMIT"
+                    else:
+                        status_emoji = "🟢"
+                        status_text = "ON TRACK"
+                    
+                    response += f"{status_emoji} **{budget_type.upper()}** ({status_text}):\n"
+                    response += f"   💸 Spent: {info['formatted_spent']} ({percentage_of_income:.1f}% of income)\n"
+                    response += f"   🎯 Target: {info['formatted_budget']} (Budget: {info['percentage_used']:.1f}%)\n"
+                    response += f"   ⚖️ Remaining: {info['formatted_remaining']}\n\n"
+            
+            # Overall spending assessment
+            overall_percentage = (total_spent / base_income * 100) if base_income > 0 else 0
+            response += f"📊 **Overall Spending**: {self.format_currency(total_spent)} ({overall_percentage:.1f}% of income)\n\n"
+            
+            # Spending insights
+            response += f"💡 **Pattern Analysis:**\n"
+            
+            if overall_percentage > 95:
+                response += f"🚨 **High Alert**: Spending hampir 100% income - bahaya defisit!\n"
+                response += f"• Immediate action: Freeze semua WANTS spending\n"
+                response += f"• Review NEEDS untuk potential cuts\n"
+                response += f"• Cari additional income source\n"
+                
+            elif overall_percentage > 80:
+                response += f"⚠️ **Warning Zone**: Spending di atas 80% income\n"
+                response += f"• Monitor remaining budget dengan ketat\n"
+                response += f"• Prioritaskan NEEDS, minimize WANTS\n"
+                response += f"• Prepare backup plan untuk emergency\n"
+                
+            elif overall_percentage > 60:
+                response += f"📊 **Healthy Range**: Spending pattern tergolong normal\n"
+                response += f"• Maintain current discipline\n"
+                response += f"• Look for optimization opportunities\n"
+                response += f"• Consider increasing savings allocation\n"
+                
+            else:
+                response += f"🎉 **Excellent Control**: Very efficient spending!\n"
+                response += f"• You're a budgeting role model!\n"
+                response += f"• Consider aggressive savings atau investment\n"
+                response += f"• Share tips ke teman-teman mahasiswa\n"
+            
+            # Specific recommendations by category
+            response += f"\n🎯 **Recommendations by Category:**\n"
+            
+            for budget_type, info in performance.items():
+                if info["percentage_used"] > 90:
+                    response += f"• **{budget_type.upper()}**: Critical - stop non-essential spending\n"
+                elif info["percentage_used"] > 70:
+                    response += f"• **{budget_type.upper()}**: Monitor closely - approaching limit\n"
+                elif info["percentage_used"] < 30:
+                    response += f"• **{budget_type.upper()}**: Opportunity to optimize allocation\n"
+            
+            response += f"\n📱 **Next Step**: Tanya \"pengeluaran terbesar saya\" untuk category deep-dive!"
+            
+            return response
+            
+        except Exception as e:
+            print(f"Error handling spending analysis query: {e}")
+            return "😅 Terjadi kesalahan saat menganalisis spending pattern. Coba tanya lagi!"
     
-    async def _handle_target_bulanan_query(self, financial_analysis: Dict[str, Any]) -> str:
-        """Handle query target bulanan"""
-        # Get monthly savings progress
-        from .finance_service import FinanceService
-        finance_service = FinanceService()
-        
-        monthly_progress = await finance_service._calculate_monthly_savings_progress(financial_analysis["user_id"])
-        percentage = monthly_progress["progress_percentage"]
-        
-        response = f"""🎯 **Target Tabungan Bulan Ini**
+    async def _handle_financial_summary_query(self, user_id: str) -> str:
+        """Handle query ringkasan keuangan komprehensif"""
+        try:
+            # Get all financial data
+            savings_data = await self.calculator.calculate_real_total_savings(user_id)
+            budget_data = await self.calculator.calculate_current_month_budget_performance(user_id)
+            goals_data = await self.calculator.calculate_savings_goals_progress(user_id)
+            health_data = await self.calculator.calculate_financial_health_score(user_id)
+            
+            response = f"""{health_data['level_emoji']} **Ringkasan Keuangan Anda**
 
-**Target**: {self.format_currency(monthly_progress['monthly_target'])}
-**Sudah Tercapai**: {self.format_currency(monthly_progress['net_savings_this_month'])} ({percentage:.1f}%)
-
-**Breakdown:**
-• Pemasukan Bulan Ini: {self.format_currency(monthly_progress['monthly_income'])}
-• Pengeluaran Bulan Ini: {self.format_currency(monthly_progress['monthly_expense'])}
-• **Net Savings**: {self.format_currency(monthly_progress['net_savings_this_month'])}
+💰 **Financial Overview:**
+• **Total Tabungan**: {savings_data['formatted_real_total']}
+• **Net Growth**: {savings_data['formatted_net_growth']}
+• **Health Score**: {health_data['score']}/{health_data['max_score']} ({health_data['level'].replace('_', ' ').title()})
 
 """
-        
-        # Status message based on progress
-        if percentage >= 100:
-            response += "🎉 **Selamat!** Target bulan ini sudah tercapai! Luar biasa!\n\n"
-            response += "💡 **Saran:** Pertimbangkan untuk menaikkan target bulan depan atau invest surplus ini"
-        elif percentage >= 75:
-            response += "👍 **Hampir sampai target!** Sedikit lagi, tetap semangat!\n\n"
-            response += "💪 **Saran:** Kurangi sedikit pengeluaran WANTS untuk mencapai target"
-        elif percentage >= 50:
-            response += "📊 **Separuh jalan sudah ditempuh!** Keep going!\n\n"
-            response += "🎯 **Saran:** Evaluasi pengeluaran dan fokus pada target tabungan"
-        else:
-            response += "🚀 **Masih ada waktu!** Yuk lebih giat menabung!\n\n"
-            response += "💡 **Saran:** Review kembali pengeluaran dan prioritaskan saving"
-        
-        return response
-    
-    async def _handle_pengeluaran_terbesar_query(self, financial_analysis: Dict[str, Any]) -> str:
-        """Handle query pengeluaran terbesar"""
-        spending_patterns = financial_analysis["spending_patterns"]
-        top_categories = spending_patterns["top_categories"]
-        
-        if not top_categories:
-            return "🤔 **Belum ada data pengeluaran** bulan ini. Yuk mulai catat pengeluaran harian Anda!"
-        
-        top_category = top_categories[0]
-        category_name = top_category["_id"]
-        amount = top_category["total"]
-        count = top_category["count"]
-        
-        response = f"""💸 **Kategori Pengeluaran Terbesar**
-
-**{category_name}**: {self.format_currency(amount)}
-**Jumlah Transaksi**: {count}x transaksi
-**Rata-rata per Transaksi**: {self.format_currency(amount / count)}
-
-"""
-        
-        # Add percentage of total spending
-        total_spent = spending_patterns["total_spent"]
-        if total_spent > 0:
-            percentage = (amount / total_spent) * 100
-            response += f"**Persentase**: {percentage:.1f}% dari total pengeluaran\n\n"
-        
-        # Category-specific tips
-        category_tips = {
-            "Makanan Pokok": "🍚 Tip: Masak sendiri bisa menghemat 40-60% budget makan bulanan",
-            "Jajan & Snack": "🍕 Tip: Batasi jajan ke maksimal 10% dari budget WANTS",
-            "Transportasi Wajib": "🚌 Tip: Gunakan transportasi umum untuk menghemat budget NEEDS",
-            "Hiburan & Sosial": "🎬 Tip: Cari hiburan gratis atau promo mahasiswa untuk menghemat",
-            "Kos/Tempat Tinggal": "🏠 Tip: Pertimbangkan sharing cost atau cari tempat yang lebih ekonomis",
-            "Pakaian & Aksesoris": "👕 Tip: Beli pakaian saat sale atau di thrift shop untuk hemat"
-        }
-        
-        tip = category_tips.get(category_name, "💡 Evaluasi apakah pengeluaran ini bisa dikurangi atau dioptimalkan")
-        response += tip
-        
-        return response
-    
-    async def _handle_ringkasan_query(self, financial_analysis: Dict[str, Any]) -> str:
-        """Handle query ringkasan keuangan"""
-        current_totals = financial_analysis["current_totals"]
-        budget_perf = financial_analysis["budget_performance"]
-        savings_analysis = financial_analysis["savings_analysis"]
-        health_score = financial_analysis["health_score"]
-        
-        response = f"""📊 **Ringkasan Keuangan Anda**
-
-**💰 Total Tabungan**: {self.format_currency(current_totals['real_total_savings'])}
-**📈 Net Growth**: {self.format_currency(current_totals['savings_growth'])}
-**💊 Health Score**: {health_score['score']}/{health_score['max_score']} ({health_score['level'].replace('_', ' ').title()})
-
-**📊 Budget Performance:**
-• Monthly Income: {self.format_currency(budget_perf['monthly_income'])}
-• Total Spent: {self.format_currency(budget_perf['total_spent'])} ({budget_perf['overall_percentage']:.1f}%)
-• Budget Health: {budget_perf['budget_health'].replace('_', ' ').title()}
-
-**🎯 Savings Goals:**
-• Total Targets: {savings_analysis['total_goals']}
-• Active: {savings_analysis['active_goals']} | Completed: {savings_analysis['completed_goals']}
-• Average Progress: {savings_analysis['average_progress']:.1f}%
-
-**📈 Activity:**
-• Income Transactions: {current_totals['transaction_count']['income']}
-• Expense Transactions: {current_totals['transaction_count']['expense']}
-
-"""
-        
-        # Add quick insights
-        insights = []
-        
-        if current_totals['savings_growth'] > 0:
-            insights.append("✅ Tabungan bertumbuh positif")
-        elif current_totals['savings_growth'] < 0:
-            insights.append("⚠️ Tabungan menurun, perlu evaluasi")
-        
-        if budget_perf['budget_health'] == 'excellent':
-            insights.append("✅ Budget management sangat baik")
-        elif budget_perf['budget_health'] == 'critical':
-            insights.append("🚨 Budget over limit, perlu action")
-        
-        if savings_analysis['urgent_goals']:
-            insights.append(f"⏰ {len(savings_analysis['urgent_goals'])} target urgent")
-        
-        if health_score['level'] == 'excellent':
-            insights.append("🏆 Financial health excellent")
-        elif health_score['level'] == 'needs_improvement':
-            insights.append("💪 Perlu improve financial discipline")
-        
-        if insights:
-            response += "**💡 Quick Insights:**\n"
-            for insight in insights:
-                response += f"• {insight}\n"
-        
-        return response
+            
+            # Budget summary
+            if budget_data.get("has_budget"):
+                response += f"📊 **Budget Performance (50/30/20):**\n"
+                response += f"• **Base Income**: {budget_data['formatted']['base_income']}\n"
+                response += f"• **Total Spent**: {budget_data['formatted']['total_spent']}\n"
+                response += f"• **Budget Health**: {budget_data['overall']['budget_health'].replace('_', ' ').title()}\n\n"
+                
+                # Quick budget breakdown
+                performance = budget_data["performance"]
+                for budget_type in ["needs", "wants", "savings"]:
+                    if budget_type in performance:
+                        info = performance[budget_type]
+                        status_icon = "✅" if info["percentage_used"] <= 90 else "⚠️" if info["percentage_used"] <= 100 else "🚨"
+                        response += f"{status_icon} **{budget_type.upper()}**: {info['percentage_used']:.1f}% used\n"
+            else:
+                response += f"📊 **Budget**: Setup belum lengkap - perlu data income\n"
+            
+            # Savings goals summary
+            response += f"\n🎯 **Target Tabungan:**\n"
+            if goals_data.get("has_goals"):
+                response += f"• **Total**: {goals_data['total_goals']} target ({goals_data['active_goals']} aktif)\n"
+                response += f"• **Progress**: {goals_data['average_progress']:.1f}% overall\n"
+                response += f"• **Value**: {goals_data['formatted']['total_current']} / {goals_data['formatted']['total_target']}\n"
+                
+                if goals_data["urgent_goals"]:
+                    response += f"• ⏰ **Urgent**: {len(goals_data['urgent_goals'])} target deadline < 30 hari\n"
+            else:
+                response += f"• Belum ada target tabungan aktif\n"
+            
+            # Key insights
+            response += f"\n💡 **Key Insights:**\n"
+            
+            # Growth insight
+            net_growth = savings_data["net_growth"]
+            if net_growth > 0:
+                response += f"✅ Tabungan tumbuh {savings_data['formatted_net_growth']} - great discipline!\n"
+            elif net_growth < 0:
+                response += f"⚠️ Tabungan menurun {self.format_currency(abs(net_growth))} - perlu action plan\n"
+            else:
+                response += f"📊 Break-even - income sama dengan expense\n"
+            
+            # Budget insight
+            if budget_data.get("has_budget"):
+                budget_health = budget_data["overall"]["budget_health"]
+                if budget_health == "excellent":
+                    response += f"🏆 Budget management excellent - role model!\n"
+                elif budget_health == "critical":
+                    response += f"🚨 Budget over limit - immediate action needed\n"
+                else:
+                    response += f"📊 Budget {budget_health} - maintain atau improve\n"
+            
+            # Goals insight
+            if goals_data.get("urgent_goals"):
+                response += f"⏰ {len(goals_data['urgent_goals'])} target urgent - focus saving mode!\n"
+            elif not goals_data.get("has_goals"):
+                response += f"🎯 Opportunity: Buat target tabungan untuk motivasi\n"
+            
+            # Priority actions based on health level
+            response += f"\n🎯 **Priority Actions:**\n"
+            
+            if health_data["level"] == "excellent":
+                response += f"🚀 Scale up target dan explore advanced financial planning\n"
+                response += f"💎 Consider investment options untuk wealth building\n"
+                
+            elif health_data["level"] == "good":
+                response += f"💪 Maintain consistency dan optimize budget efficiency\n"
+                response += f"📈 Look for opportunities to increase savings rate\n"
+                
+            elif health_data["level"] == "fair":
+                response += f"🔧 Focus pada konsistensi budgeting 50/30/20\n"
+                response += f"📊 Optimize WANTS category untuk better savings\n"
+                
+            else:  # needs_improvement
+                response += f"🆘 Implement strict 50/30/20 budgeting immediately\n"
+                response += f"📝 Track ALL transactions untuk awareness building\n"
+            
+            # Motivational closing
+            response += f"\n"
+            if health_data["level"] == "excellent":
+                response += f"🎉 **Amazing!** Anda sudah menjadi financial role model!"
+            elif health_data["level"] == "good":
+                response += f"👏 **Great job!** Konsistensi adalah kunci success!"
+            elif health_data["level"] == "fair":
+                response += f"💪 **Good progress!** Sedikit lagi untuk financial excellence!"
+            else:
+                response += f"🚀 **Keep going!** Every expert was once a beginner!"
+            
+            response += f"\n\n📱 **Stay connected**: Tanya ringkasan lagi minggu depan untuk track improvement!"
+            
+            return response
+            
+        except Exception as e:
+            print(f"Error handling financial summary query: {e}")
+            return "😅 Terjadi kesalahan saat menyiapkan ringkasan keuangan. Coba lagi ya!"
     
     # ==========================================
-    # UTILITY METHOD FROM HANDLERS
+    # HELPER METHODS
     # ==========================================
     
     async def handle_list_savings_goals(self, user_id: str) -> str:
-        """Handle request untuk list semua savings goals - import from handlers"""
-        from .luna_ai_handlers import LunaAIHandlers
-        handlers = LunaAIHandlers()
-        return await handlers.handle_list_savings_goals(user_id)
+        """Handle request untuk list semua savings goals - FIXED version"""
+        try:
+            goals_data = await self.calculator.calculate_savings_goals_progress(user_id)
+            
+            if not goals_data.get("has_goals"):
+                return """🎯 **Daftar Target Tabungan**
+
+Belum ada target tabungan. Yuk buat target pertama!
+
+💡 **Contoh target tabungan:**
+• "Mau nabung buat beli laptop 10 juta pada tanggal 22 januari 2026"
+• "Target beli motor 25 juta dalam 1 tahun"
+• "Pengen beli smartphone 5 juta"
+
+🎯 **Kenapa perlu target tabungan?**
+• Memberikan motivasi dan fokus yang jelas
+• Membantu disiplin budget WANTS (30%)
+• Training untuk financial planning
+
+**Mulai sekarang!** Contoh: *"Mau nabung buat beli headset 500 ribu"*"""
+            
+            # Get detailed goals from database
+            goals_cursor = self.db.savings_goals.find({
+                "user_id": user_id,
+                "status": {"$in": ["active", "paused", "completed"]}
+            }).sort("created_at", -1)
+            
+            goals = list(goals_cursor)
+            
+            # Group by status
+            active_goals = [g for g in goals if g["status"] == "active"]
+            completed_goals = [g for g in goals if g["status"] == "completed"]
+            paused_goals = [g for g in goals if g["status"] == "paused"]
+            
+            response = f"""🎯 **Daftar Target Tabungan Anda**
+
+📊 **Summary**: {len(goals)} total ({len(active_goals)} aktif, {len(completed_goals)} selesai)
+
+"""
+            
+            # Active goals
+            if active_goals:
+                response += "**🟢 Target Aktif:**\n"
+                for goal in active_goals:
+                    progress = (goal["current_amount"] / goal["target_amount"] * 100) if goal["target_amount"] > 0 else 0
+                    progress_bar = "🟩" * int(progress // 10) + "⬜" * (10 - int(progress // 10))
+                    
+                    # Calculate days remaining
+                    days_remaining_str = ""
+                    if goal.get("target_date"):
+                        try:
+                            target_date = goal["target_date"]
+                            if isinstance(target_date, str):
+                                target_date = datetime.fromisoformat(target_date.replace('Z', '+00:00'))
+                            
+                            days_remaining = (target_date - datetime.now()).days
+                            if days_remaining > 0:
+                                days_remaining_str = f" (⏰ {days_remaining} hari lagi)"
+                            elif days_remaining == 0:
+                                days_remaining_str = " (⏰ hari ini!)"
+                            else:
+                                days_remaining_str = f" (⚠️ lewat {abs(days_remaining)} hari)"
+                        except:
+                            pass
+                    
+                    response += f"• **{goal['item_name']}**{days_remaining_str}\n"
+                    response += f"  {progress_bar} {progress:.1f}%\n"
+                    response += f"  💰 {self.format_currency(goal['current_amount'])} / {self.format_currency(goal['target_amount'])}\n\n"
+            
+            # Completed goals
+            if completed_goals:
+                response += "**🎉 Target Tercapai:**\n"
+                for goal in completed_goals[:3]:  # Show max 3
+                    response += f"• **{goal['item_name']}** - {self.format_currency(goal['target_amount'])} ✅\n"
+                if len(completed_goals) > 3:
+                    response += f"• *...dan {len(completed_goals) - 3} target lainnya*\n"
+                response += "\n"
+            
+            # Paused goals
+            if paused_goals:
+                response += "**⏸️ Target Dipause:**\n"
+                for goal in paused_goals[:2]:  # Show max 2
+                    progress = (goal["current_amount"] / goal["target_amount"] * 100) if goal["target_amount"] > 0 else 0
+                    response += f"• **{goal['item_name']}** ({progress:.1f}%) - {self.format_currency(goal['target_amount'])}\n"
+                response += "\n"
+            
+            # Commands help
+            response += """**🛠️ Perintah yang bisa digunakan:**
+• *"ubah target [nama] jadi [harga baru]"* - Ubah harga
+• *"ubah target [nama] tanggal [tanggal]"* - Ubah deadline  
+• *"ganti nama [nama] jadi [nama baru]"* - Ubah nama
+• *"hapus target [nama]"* - Hapus target
+• *"progress tabungan"* - Lihat progress detail
+
+⚠️ **PENTING**: Hanya 1 perubahan per pesan untuk akurasi tinggi!
+
+💡 *Tip: Sebutkan nama spesifik untuk perintah yang akurat*"""
+            
+            return response
+            
+        except Exception as e:
+            print(f"Error listing savings goals: {e}")
+            return "😅 Maaf, terjadi kesalahan saat mengambil daftar target. Coba lagi ya!"
+    
+    def _determine_item_budget_type(self, item_name: str) -> str:
+        """Determine budget type for an item in purchase analysis"""
+        item_lower = item_name.lower()
+        
+        # NEEDS items
+        needs_keywords = ['buku', 'kuliah', 'laptop kuliah', 'hp untuk kuliah', 'transportasi', 'makanan', 'obat', 'vitamin']
+        for keyword in needs_keywords:
+            if keyword in item_lower:
+                return "needs"
+        
+        # SAVINGS items (investment-like)
+        savings_keywords = ['investasi', 'tabungan', 'deposito', 'reksadana', 'saham']
+        for keyword in savings_keywords:
+            if keyword in item_lower:
+                return "savings"
+        
+        # WANTS items (default for most consumer goods)
+        return "wants"
+    
+    def _categorize_expense_to_budget_type(self, category: str) -> str:
+        """Categorize expense category to budget type - same as calculator"""
+        category_lower = category.lower()
+        
+        # NEEDS keywords
+        needs_keywords = [
+            'makan', 'makanan', 'kos', 'sewa', 'transport', 'transportasi', 
+            'pendidikan', 'buku', 'kuliah', 'kampus', 'listrik', 'air', 
+            'internet', 'pulsa', 'kesehatan', 'obat', 'sabun', 'pasta'
+        ]
+        for keyword in needs_keywords:
+            if keyword in category_lower:
+                return "needs"
+        
+        # SAVINGS keywords
+        savings_keywords = [
+            'tabungan', 'saving', 'investasi', 'deposito', 'darurat', 
+            'masa depan', 'reksadana', 'saham'
+        ]
+        for keyword in savings_keywords:
+            if keyword in category_lower:
+                return "savings"
+        
+        # WANTS default
+        return "wants"

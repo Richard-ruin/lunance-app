@@ -1,4 +1,4 @@
-# app/services/enhanced_financial_parser.py - COMPLETE VERSION
+# app/services/enhanced_financial_parser.py - FIXED VERSION dengan amount parsing yang akurat
 import re
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
@@ -26,18 +26,24 @@ class EnhancedFinancialParser:
             'kepengen', 'impian', 'rencana beli', 'saving', 'goal', 'tujuan'
         ]
         
-        # Pattern untuk mendeteksi jumlah uang (improved untuk bahasa Indonesia)
+        # FIXED: Pattern untuk mendeteksi jumlah uang dengan akurasi tinggi
         self.money_patterns = [
-            r'(?:rp\.?\s*)?(\d{1,3}(?:\.\d{3})*(?:\,\d{1,2})?)\s*(?:ribu|rb|k)',  # 500 ribu, 500k
-            r'(?:rp\.?\s*)?(\d{1,3}(?:\.\d{3})*(?:\,\d{1,2})?)\s*(?:juta|jt|m)',  # 5 juta, 5m
-            r'(?:rp\.?\s*)?(\d{1,3}(?:\.\d{3})*(?:\,\d{1,2})?)\s*(?:miliar|b)',   # 1 miliar
-            r'(?:rp\.?\s*)?(\d+\.?\d*)',  # angka biasa dengan/tanpa desimal
+            # Pattern untuk X juta (prioritas tertinggi)
+            r'(?:rp\.?\s*)?(\d+(?:[.,]\d+)?)\s*(?:juta|jt|m)(?!\w)',
+            # Pattern untuk X ribu
+            r'(?:rp\.?\s*)?(\d+(?:[.,]\d+)?)\s*(?:ribu|rb|k)(?!\w)',
+            # Pattern untuk X miliar
+            r'(?:rp\.?\s*)?(\d+(?:[.,]\d+)?)\s*(?:miliar|milyar|b)(?!\w)',
+            # Pattern untuk angka dengan format Indonesia (1.000.000)
+            r'(?:rp\.?\s*)?(\d{1,3}(?:\.\d{3})+)(?!\d)',
+            # Pattern untuk angka biasa
+            r'(?:rp\.?\s*)?(\d+)(?!\d)',
         ]
         
-        # Pattern untuk mendeteksi tanggal target (new feature)
+        # Pattern untuk mendeteksi tanggal target
         self.date_patterns = [
             r'(?:pada\s+)?(?:tanggal\s+)?(\d{1,2})\s+(\w+)\s+(\d{4})',  # 22 januari 2026
-            r'(?:pada\s+)?(?:tanggal\s+)?(\d{1,2})[-/](\d{1,2})[-/](\d{4})',  # 22/01/2026 atau 22-01-2026
+            r'(?:pada\s+)?(?:tanggal\s+)?(\d{1,2})[-/](\d{1,2})[-/](\d{4})',  # 22/01/2026
             r'(?:pada\s+)?(?:bulan\s+)?(\w+)\s+(\d{4})',  # januari 2026
             r'(?:dalam\s+)?(\d+)\s+(?:bulan|bln)',  # dalam 6 bulan
             r'(?:dalam\s+)?(\d+)\s+(?:tahun|thn)',  # dalam 2 tahun
@@ -52,21 +58,14 @@ class EnhancedFinancialParser:
             'jun': 6, 'jul': 7, 'agu': 8, 'sep': 9, 'okt': 10, 'nov': 11, 'des': 12
         }
         
-        # FIXED: Time-related words yang harus difilter dari nama barang
+        # Time-related words yang harus difilter dari nama barang
         self.time_filter_words = {
-            # Bulan
             'januari', 'februari', 'maret', 'april', 'mei', 'juni',
             'juli', 'agustus', 'september', 'oktober', 'november', 'desember',
             'jan', 'feb', 'mar', 'apr', 'jun', 'jul', 'agu', 'sep', 'okt', 'nov', 'des',
-            
-            # Waktu relatif
             'bulan', 'tahun', 'hari', 'minggu', 'lagi', 'mendatang', 'depan',
             'kemudian', 'nanti', 'besok', 'esok', 'masa', 'waktu',
-            
-            # Kata penghubung waktu
             'dalam', 'pada', 'tanggal', 'sebelum', 'sesudah', 'sampai', 'hingga',
-            
-            # Angka yang biasanya merujuk waktu
             'satu', 'dua', 'tiga', 'empat', 'lima', 'enam', 'tujuh', 'delapan', 'sembilan', 'sepuluh'
         }
         
@@ -93,32 +92,60 @@ class EnhancedFinancialParser:
         }
     
     def parse_amount(self, text: str) -> Optional[float]:
-        """Parse jumlah uang dari teks (improved)"""
-        text_lower = text.lower()
+        """FIXED: Parse jumlah uang dengan akurasi tinggi"""
+        if not text:
+            return None
+            
+        text_lower = text.lower().strip()
+        print(f"🔍 Parsing amount from: '{text_lower}'")
         
-        for pattern in self.money_patterns:
-            match = re.search(pattern, text_lower)
-            if match:
-                amount_str = match.group(1).replace('.', '').replace(',', '.')
+        # Coba setiap pattern dengan urutan prioritas
+        for i, pattern in enumerate(self.money_patterns):
+            matches = re.finditer(pattern, text_lower)
+            
+            for match in matches:
+                amount_str = match.group(1)
+                original_match = match.group(0)
+                
+                print(f"  Pattern {i+1}: Found '{original_match}' -> amount_str: '{amount_str}'")
+                
                 try:
-                    amount = float(amount_str)
+                    # Clean amount string
+                    cleaned_amount = amount_str.replace(',', '.')
+                    amount = float(cleaned_amount)
                     
-                    # Apply multiplier based on unit
-                    if any(unit in text_lower for unit in ['ribu', 'rb', 'k']):
-                        amount *= 1000
-                    elif any(unit in text_lower for unit in ['juta', 'jt', 'm']):
-                        amount *= 1000000
-                    elif any(unit in text_lower for unit in ['miliar', 'b']):
-                        amount *= 1000000000
+                    # Apply multiplier based on unit in original match
+                    final_amount = amount
                     
-                    return amount
-                except ValueError:
+                    if any(unit in original_match for unit in ['juta', 'jt']):
+                        final_amount = amount * 1000000
+                        print(f"    Applied multiplier 1,000,000: {amount} -> {final_amount}")
+                    elif any(unit in original_match for unit in ['ribu', 'rb', 'k']):
+                        final_amount = amount * 1000
+                        print(f"    Applied multiplier 1,000: {amount} -> {final_amount}")
+                    elif any(unit in original_match for unit in ['miliar', 'milyar', 'b']):
+                        final_amount = amount * 1000000000
+                        print(f"    Applied multiplier 1,000,000,000: {amount} -> {final_amount}")
+                    else:
+                        # Check if it's already a large number (format Indonesia)
+                        if '.' in amount_str and len(amount_str.replace('.', '')) > 4:
+                            # Likely Indonesian format (1.500.000)
+                            cleaned_amount = amount_str.replace('.', '')
+                            final_amount = float(cleaned_amount)
+                            print(f"    Indonesian format detected: {amount_str} -> {final_amount}")
+                    
+                    print(f"✅ Final parsed amount: {final_amount}")
+                    return final_amount
+                    
+                except ValueError as e:
+                    print(f"    Failed to parse '{amount_str}': {e}")
                     continue
         
+        print(f"❌ No amount found in: '{text_lower}'")
         return None
     
     def parse_target_date(self, text: str) -> Optional[datetime]:
-        """Parse tanggal target dari teks (new feature)"""
+        """Parse tanggal target dari teks"""
         text_lower = text.lower()
         
         for pattern in self.date_patterns:
@@ -201,7 +228,7 @@ class EnhancedFinancialParser:
             return category, budget_type
     
     def extract_description(self, text: str, amount: float) -> str:
-        """Ekstrak deskripsi dari teks (improved)"""
+        """Ekstrak deskripsi dari teks"""
         # Remove amount patterns and common words
         clean_text = text
         for pattern in self.money_patterns:
@@ -245,12 +272,11 @@ class EnhancedFinancialParser:
         for word in savings_action_words:
             clean_text = re.sub(rf'\b{word}\b', '', clean_text, flags=re.IGNORECASE)
         
-        # 4. FIXED: Remove time-related words more aggressively
+        # 4. Remove time-related words more aggressively
         for time_word in self.time_filter_words:
             clean_text = re.sub(rf'\b{time_word}\b', '', clean_text, flags=re.IGNORECASE)
         
         # 5. Remove numeric expressions that might indicate time
-        # Remove standalone numbers that could be dates/months
         clean_text = re.sub(r'\b\d{1,2}\b', '', clean_text)  # Remove 1-2 digit numbers
         clean_text = re.sub(r'\b\d{4}\b', '', clean_text)    # Remove years
         
@@ -374,15 +400,23 @@ class EnhancedFinancialParser:
             "budget_guidance": None
         }
         
+        print(f"📝 Parsing financial data: '{text}'")
+        
         # Detect amount first
         amount = self.parse_amount(text)
         if not amount:
+            print("❌ No amount detected")
             return result
+        
+        print(f"💰 Amount detected: {amount}")
         
         # Detect transaction type
         data_type = self.detect_transaction_type(text)
         if not data_type:
+            print("❌ No transaction type detected")
             return result
+        
+        print(f"📊 Transaction type: {data_type}")
         
         result["is_financial_data"] = True
         result["data_type"] = data_type
@@ -395,7 +429,7 @@ class EnhancedFinancialParser:
                 "type": data_type,
                 "amount": amount,
                 "category": category,
-                "budget_type": budget_type,  # NEW: Include budget type
+                "budget_type": budget_type,
                 "description": description,
                 "date": datetime.now()
             }
@@ -412,7 +446,6 @@ class EnhancedFinancialParser:
                 result["suggestions"].append(f"✅ Dikategorikan sebagai {budget_type.upper()} ({self.budget_guidance.get(budget_type, {}).get('percentage', 0)}%) - {category}")
             else:
                 result["confidence"] = 0.7
-                # Suggest similar categories
                 similar = IndonesianStudentCategories.suggest_similar_categories(text, budget_type)
                 if similar:
                     result["suggestions"] = [f"🔍 Mungkin maksud Anda kategori: {', '.join(similar)}"]
@@ -471,6 +504,7 @@ class EnhancedFinancialParser:
             else:
                 result["suggestions"].append("💡 Tip: Tambahkan target waktu untuk perencanaan yang lebih baik, contoh: 'pada tanggal 22 januari 2026'")
         
+        print(f"✅ Parsing result: {result['data_type']} - {result['confidence']} confidence")
         return result
     
     def validate_budget_allocation(self, amount: float, budget_type: str, monthly_income: float) -> Dict[str, Any]:

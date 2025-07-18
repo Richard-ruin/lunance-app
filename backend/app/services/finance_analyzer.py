@@ -1,4 +1,4 @@
-# app/services/finance_analyzer.py - Khusus untuk analisis data keuangan chatbot
+# app/services/finance_analyzer.py - FIXED untuk menghitung real savings dari transaksi actual
 import re
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
@@ -14,7 +14,7 @@ from .financial_categories import IndonesianStudentCategories
 
 class FinanceAnalyzer:
     """
-    Analyzer khusus untuk chatbot Luna AI
+    FIXED: Analyzer yang menghitung tabungan real dari TRANSAKSI AKTUAL (bukan monthly income di setup)
     Menganalisis data keuangan user dan memberikan insight untuk chatbot responses
     """
     
@@ -29,48 +29,48 @@ class FinanceAnalyzer:
             return f"Rp {amount}"
     
     # ==========================================
-    # FINANCIAL DATA ANALYSIS METHODS
+    # ENHANCED: REAL FINANCIAL CALCULATION
     # ==========================================
     
     async def analyze_user_financial_status(self, user_id: str) -> Dict[str, Any]:
         """
-        Analisis lengkap status keuangan user untuk chatbot context
+        FIXED: Analisis lengkap berdasarkan TRANSAKSI AKTUAL, bukan monthly income setup
         """
         try:
-            # Get user financial settings
+            # Get user financial settings (hanya untuk initial_savings dan budget allocation)
             user_doc = self.db.users.find_one({"_id": ObjectId(user_id)})
-            if not user_doc or not user_doc.get("financial_settings"):
-                return {
-                    "status": "no_setup",
-                    "message": "User belum setup keuangan 50/30/20",
-                    "recommendations": ["Setup budget 50/30/20 terlebih dahulu"]
-                }
+            financial_settings = user_doc.get("financial_settings", {}) if user_doc else {}
             
-            financial_settings = user_doc["financial_settings"]
-            monthly_income = financial_settings.get("monthly_income", 0)
-            
-            if monthly_income <= 0:
-                return {
-                    "status": "no_income",
-                    "message": "Monthly income belum di-set",
-                    "recommendations": ["Set monthly income untuk aktivasi budget 50/30/20"]
-                }
-            
-            # Calculate current totals
+            # Calculate current totals dari TRANSAKSI AKTUAL (FIXED)
             current_totals = await self._calculate_current_totals(user_id)
-            budget_performance = await self._analyze_budget_performance(user_id, monthly_income)
+            
+            # FIXED: Gunakan REAL monthly income dari transaksi, bukan setup
+            real_monthly_income = await self._calculate_real_monthly_income(user_id)
+            
+            if real_monthly_income <= 0:
+                return {
+                    "status": "no_transactions",
+                    "message": "Belum ada transaksi yang dapat dianalisis",
+                    "recommendations": ["Mulai catat pemasukan dan pengeluaran harian Anda"],
+                    "current_totals": current_totals,
+                    "real_monthly_income": 0
+                }
+            
+            # Budget performance berdasarkan REAL income
+            budget_performance = await self._analyze_budget_performance(user_id, real_monthly_income)
             savings_analysis = await self._analyze_savings_goals(user_id)
             spending_patterns = await self._analyze_spending_patterns(user_id)
             
             # Overall financial health
             health_score = self._calculate_health_score(
-                current_totals, budget_performance, savings_analysis, monthly_income
+                current_totals, budget_performance, savings_analysis, real_monthly_income
             )
             
             return {
                 "status": "analyzed",
                 "user_id": user_id,
-                "monthly_income": monthly_income,
+                "real_monthly_income": real_monthly_income,  # FIXED: Real dari transaksi
+                "setup_monthly_income": financial_settings.get("monthly_income", 0),  # Setup value
                 "current_totals": current_totals,
                 "budget_performance": budget_performance,
                 "savings_analysis": savings_analysis,
@@ -91,15 +91,15 @@ class FinanceAnalyzer:
             }
     
     async def _calculate_current_totals(self, user_id: str) -> Dict[str, Any]:
-        """Calculate current financial totals"""
+        """FIXED: Calculate current financial totals dari TRANSAKSI AKTUAL"""
         try:
-            # Get user initial savings
+            # Get user initial savings dari setup
             user_doc = self.db.users.find_one({"_id": ObjectId(user_id)})
             initial_savings = 0.0
             if user_doc and user_doc.get("financial_settings"):
                 initial_savings = user_doc["financial_settings"].get("current_savings", 0.0)
             
-            # Get all confirmed transactions
+            # FIXED: Get all confirmed transactions (REAL data)
             pipeline = [
                 {"$match": {
                     "user_id": user_id,
@@ -121,9 +121,15 @@ class FinanceAnalyzer:
                 elif item["_id"] == TransactionType.EXPENSE.value:
                     total_expense = item["total"]
             
-            # Calculate real total savings
+            # FIXED: Real total savings = initial + REAL income - REAL expense
             real_total_savings = initial_savings + total_income - total_expense
             net_this_period = total_income - total_expense
+            
+            print(f"💰 REAL Financial Calculation:")
+            print(f"  Initial Savings: {self.format_currency(initial_savings)}")
+            print(f"  Total Income (Real): {self.format_currency(total_income)}")
+            print(f"  Total Expense (Real): {self.format_currency(total_expense)}")
+            print(f"  Real Total Savings: {self.format_currency(real_total_savings)}")
             
             return {
                 "initial_savings": initial_savings,
@@ -146,21 +152,62 @@ class FinanceAnalyzer:
                 "transaction_count": {"income": 0, "expense": 0}
             }
     
+    async def _calculate_real_monthly_income(self, user_id: str) -> float:
+        """FIXED: Calculate REAL monthly income dari transaksi income 30 hari terakhir"""
+        try:
+            # Get last 30 days
+            thirty_days_ago = now_for_db() - timedelta(days=30)
+            
+            # Get all income transactions in last 30 days
+            pipeline = [
+                {"$match": {
+                    "user_id": user_id,
+                    "type": TransactionType.INCOME.value,
+                    "status": TransactionStatus.CONFIRMED.value,
+                    "date": {"$gte": thirty_days_ago}
+                }},
+                {"$group": {
+                    "_id": None,
+                    "total_income": {"$sum": "$amount"}
+                }}
+            ]
+            
+            result = list(self.db.transactions.aggregate(pipeline))
+            total_income_30_days = result[0]["total_income"] if result else 0.0
+            
+            # Calculate monthly average (30 days = 1 month approximation)
+            real_monthly_income = total_income_30_days
+            
+            print(f"📊 Real Monthly Income Calculation:")
+            print(f"  Last 30 days income: {self.format_currency(total_income_30_days)}")
+            print(f"  Estimated monthly: {self.format_currency(real_monthly_income)}")
+            
+            return real_monthly_income
+            
+        except Exception as e:
+            print(f"Error calculating real monthly income: {e}")
+            return 0.0
+    
     async def _analyze_budget_performance(self, user_id: str, monthly_income: float) -> Dict[str, Any]:
-        """Analyze budget performance 50/30/20"""
+        """FIXED: Analyze budget performance 50/30/20 dengan REAL monthly income"""
         try:
             # Get start of current month
             now = IndonesiaDatetime.now()
             start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             start_of_month_utc = IndonesiaDatetime.to_utc(start_of_month).replace(tzinfo=None)
             
-            # Get current month spending by budget type
+            # Get current month spending by budget type dari TRANSAKSI AKTUAL
             spending_by_type = await self._get_spending_by_budget_type(user_id, start_of_month_utc)
             
-            # Calculate budget allocations
+            # FIXED: Calculate budget allocations dari REAL monthly income
             needs_budget = monthly_income * 0.50
             wants_budget = monthly_income * 0.30
             savings_budget = monthly_income * 0.20
+            
+            print(f"📊 Budget Analysis (Real Income: {self.format_currency(monthly_income)}):")
+            print(f"  NEEDS Budget: {self.format_currency(needs_budget)} | Spent: {self.format_currency(spending_by_type.get('needs', 0))}")
+            print(f"  WANTS Budget: {self.format_currency(wants_budget)} | Spent: {self.format_currency(spending_by_type.get('wants', 0))}")
+            print(f"  SAVINGS Budget: {self.format_currency(savings_budget)} | Spent: {self.format_currency(spending_by_type.get('savings', 0))}")
             
             # Calculate performance
             performance = {
@@ -202,6 +249,7 @@ class FinanceAnalyzer:
             
             return {
                 "monthly_income": monthly_income,
+                "is_real_income": True,  # FIXED: Indicate this is from real transactions
                 "performance": performance,
                 "total_spent": total_spent,
                 "overall_percentage": overall_percentage,
@@ -213,6 +261,7 @@ class FinanceAnalyzer:
             print(f"Error analyzing budget performance: {e}")
             return {
                 "monthly_income": monthly_income,
+                "is_real_income": True,
                 "performance": {"needs": {}, "wants": {}, "savings": {}},
                 "total_spent": 0,
                 "overall_percentage": 0,
@@ -306,7 +355,7 @@ class FinanceAnalyzer:
             }
     
     async def _analyze_spending_patterns(self, user_id: str) -> Dict[str, Any]:
-        """Analyze spending patterns"""
+        """Analyze spending patterns from actual transactions"""
         try:
             # Get last 30 days transactions
             thirty_days_ago = now_for_db() - timedelta(days=30)
@@ -375,32 +424,32 @@ class FinanceAnalyzer:
             }
     
     # ==========================================
-    # PURCHASE ANALYSIS METHODS
+    # PURCHASE ANALYSIS METHODS - ENHANCED
     # ==========================================
     
     async def analyze_purchase_impact(self, user_id: str, item_name: str, price: float) -> Dict[str, Any]:
         """
-        Analisis dampak pembelian terhadap budget dan target tabungan
+        FIXED: Analisis dampak pembelian berdasarkan REAL financial status
         """
         try:
-            # Get current financial analysis
+            # Get current financial analysis (dengan REAL data)
             financial_status = await self.analyze_user_financial_status(user_id)
             
             if financial_status["status"] != "analyzed":
                 return {
                     "can_analyze": False,
-                    "message": "Tidak dapat menganalisis dampak pembelian",
+                    "message": "Tidak dapat menganalisis dampak pembelian - belum ada data transaksi yang cukup",
                     "reason": financial_status.get("message", "Financial data not available")
                 }
             
             budget_performance = financial_status["budget_performance"]
-            monthly_income = financial_status["monthly_income"]
+            real_monthly_income = financial_status["real_monthly_income"]  # FIXED: Use real income
             
             # Determine item category and budget type
             category, budget_type = IndonesianStudentCategories.get_expense_category_with_budget_type(item_name)
             
-            # Calculate impact on budget
-            budget_impact = self._calculate_budget_impact(price, budget_type, budget_performance, monthly_income)
+            # Calculate impact on budget (dengan REAL income)
+            budget_impact = self._calculate_budget_impact(price, budget_type, budget_performance, real_monthly_income)
             
             # Calculate impact on savings goals
             savings_impact = await self._calculate_savings_impact(user_id, price)
@@ -423,6 +472,7 @@ class FinanceAnalyzer:
                 "savings_impact": savings_impact,
                 "recommendations": recommendations,
                 "overall_assessment": overall_assessment,
+                "real_monthly_income": real_monthly_income,  # FIXED: Include real income
                 "analysis_timestamp": now_for_db()
             }
             
@@ -434,7 +484,7 @@ class FinanceAnalyzer:
             }
     
     def _calculate_budget_impact(self, price: float, budget_type: str, budget_performance: Dict, monthly_income: float) -> Dict[str, Any]:
-        """Calculate impact on budget allocation"""
+        """Calculate impact on budget allocation dengan REAL income"""
         try:
             performance = budget_performance["performance"]
             
@@ -463,6 +513,13 @@ class FinanceAnalyzer:
                 impact_level = "high"
             else:
                 impact_level = "critical"
+            
+            print(f"💳 Purchase Impact Analysis:")
+            print(f"  Budget Type: {budget_type}")
+            print(f"  Current Spent: {self.format_currency(current_spent)}")
+            print(f"  Budget Allocation: {self.format_currency(budget_allocation)}")
+            print(f"  After Purchase: {self.format_currency(after_purchase_spent)} ({after_purchase_percentage:.1f}%)")
+            print(f"  Impact Level: {impact_level}")
             
             return {
                 "budget_type": budget_type,
@@ -585,12 +642,12 @@ class FinanceAnalyzer:
     
     def _calculate_health_score(self, current_totals: Dict, budget_performance: Dict, 
                               savings_analysis: Dict, monthly_income: float) -> Dict[str, Any]:
-        """Calculate overall financial health score"""
+        """Calculate overall financial health score berdasarkan REAL data"""
         try:
             score = 0
             max_score = 100
             
-            # Budget discipline score (40 points)
+            # Budget discipline score (40 points) - berdasarkan REAL performance
             budget_health = budget_performance.get("budget_health", "unknown")
             if budget_health == "excellent":
                 score += 40
@@ -615,7 +672,7 @@ class FinanceAnalyzer:
                 else:
                     score += 10
             
-            # Savings growth score (20 points)
+            # REAL Savings growth score (20 points)
             savings_growth = current_totals.get("savings_growth", 0)
             if savings_growth > 0:
                 score += 20
@@ -670,7 +727,7 @@ class FinanceAnalyzer:
     
     def _generate_recommendations(self, budget_performance: Dict, savings_analysis: Dict, 
                                 spending_patterns: Dict, health_score: Dict) -> List[str]:
-        """Generate personalized recommendations"""
+        """Generate personalized recommendations berdasarkan REAL performance"""
         recommendations = []
         
         # Budget-based recommendations
@@ -694,7 +751,7 @@ class FinanceAnalyzer:
         else:
             recommendations.append("🎯 Belum ada target tabungan. Buat target untuk motivasi saving yang lebih baik")
         
-        # Spending pattern recommendations
+        # Spending pattern recommendations berdasarkan REAL transactions
         top_categories = spending_patterns.get("top_categories", [])
         if top_categories:
             top_category = top_categories[0]
@@ -703,7 +760,7 @@ class FinanceAnalyzer:
         # Health score recommendations
         health_level = health_score.get("level", "unknown")
         if health_level == "needs_improvement":
-            recommendations.append("🔧 Mulai disiplin dengan metode 50/30/20 untuk financial health yang lebih baik")
+            recommendations.append("🔧 Mulai disiplin dengan metode 50/30/20 berdasarkan income REAL Anda")
         elif health_level == "fair":
             recommendations.append("📊 Financial health cukup baik. Tingkatkan konsistensi untuk hasil yang lebih optimal")
         

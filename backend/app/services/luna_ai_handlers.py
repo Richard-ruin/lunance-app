@@ -1,4 +1,4 @@
-# app/services/luna_ai_handlers.py - Transaction & CRUD Operations untuk Luna AI
+# app/services/luna_ai_handlers.py - FIXED dengan Consistent Confirmation Flow
 import random
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
@@ -12,7 +12,7 @@ from .finance_advisor import FinanceAdvisor
 
 
 class LunaAIHandlers(LunaAIBase):
-    """Luna AI Handlers untuk transaction input & savings goal CRUD operations"""
+    """Luna AI Handlers untuk transaction input & savings goal CRUD operations - FIXED VERSION"""
     
     def __init__(self):
         super().__init__()
@@ -20,37 +20,69 @@ class LunaAIHandlers(LunaAIBase):
         self.advisor = FinanceAdvisor()
     
     # ==========================================
-    # FINANCIAL DATA INPUT HANDLERS
+    # FINANCIAL DATA INPUT HANDLERS - FIXED
     # ==========================================
     
     async def handle_financial_data(self, user_id: str, conversation_id: str, message_id: str,
                                   transaction_type: str, amount: float, original_message: str) -> str:
-        """Handle financial data input dengan enhanced parsing dan advice"""
+        """FIXED: Handle financial data input dengan CONSISTENT confirmation flow"""
         
-        parse_result = self.parser.parse_financial_data(original_message)
+        # Get user's monthly income for budget calculation
+        user_doc = self.db.users.find_one({"_id": ObjectId(user_id)})
+        monthly_income = 0
+        if user_doc and user_doc.get("financial_settings"):
+            monthly_income = user_doc["financial_settings"].get("monthly_income", 0)
+        
+        # Parse dengan monthly income context
+        parse_result = self.parser.parse_financial_data(original_message, monthly_income)
         
         if not parse_result["is_financial_data"]:
             return await self.handle_regular_message(original_message)
         
         parsed_data = parse_result["parsed_data"]
         suggestions = parse_result.get("suggestions", [])
+        budget_guidance = parse_result.get("budget_guidance", {})
+        
+        print(f"💰 Processing {transaction_type}: {amount} - {parsed_data}")
         
         if transaction_type in ["income", "expense"]:
             trans_type_id = "pemasukan" if transaction_type == "income" else "pengeluaran"
             
+            # FIXED: ALWAYS show confirmation as per dokumentasi
             confirmation_message = f"""💰 Saya mendeteksi data {trans_type_id}:
 
 📋 **Detail Transaksi:**
-• Jenis: {trans_type_id.title()}
-• Jumlah: {self.format_currency(amount)}
-• Kategori: {parsed_data['category']}
-• Keterangan: {parsed_data['description']}
-• Tanggal: {IndonesiaDatetime.format_date_only(parsed_data['date'])}
+• **Jenis**: {trans_type_id.title()}
+• **Jumlah**: {self.format_currency(amount)}
+• **Kategori**: {parsed_data['category']}"""
+
+            # Add budget type for expenses
+            if transaction_type == "expense" and parsed_data.get('budget_type'):
+                budget_type = parsed_data['budget_type']
+                budget_info = {
+                    "needs": "NEEDS (50%) - Kebutuhan Pokok",
+                    "wants": "WANTS (30%) - Keinginan & Lifestyle", 
+                    "savings": "SAVINGS (20%) - Tabungan Masa Depan"
+                }.get(budget_type, budget_type)
+                confirmation_message += f"\n• **Budget Type**: {budget_info}"
+
+            confirmation_message += f"""
+• **Keterangan**: {parsed_data['description']}
+• **Tanggal**: {IndonesiaDatetime.format_date_only(parsed_data['date'])}
 
 Apakah informasi ini sudah benar? Ketik **"ya"** untuk menyimpan atau **"tidak"** untuk membatalkan."""
 
+            # Add budget guidance if available
+            if budget_guidance and transaction_type == "expense":
+                recommendations = budget_guidance.get("recommendations", [])
+                if recommendations:
+                    confirmation_message += f"\n\n💡 **Insight Budget 50/30/20:**\n"
+                    for rec in recommendations[:2]:  # Max 2 recommendations
+                        confirmation_message += f"• {rec}\n"
+
+            # Add general suggestions
             if suggestions:
-                confirmation_message += f"\n\n💡 {suggestions[0]}"
+                confirmation_message += f"\n💬 **Tips**: {suggestions[0]}"
             
             # Convert datetime to ISO string for storage
             storage_data = parsed_data.copy()
@@ -59,35 +91,273 @@ Apakah informasi ini sudah benar? Ketik **"ya"** untuk menyimpan atau **"tidak"*
         elif transaction_type == "savings_goal":
             target_date_str = ""
             if parsed_data.get("target_date"):
-                target_date_str = f"• Target Waktu: {IndonesiaDatetime.format_date_only(parsed_data['target_date'])}\n"
+                target_date_str = f"• **Target Waktu**: {IndonesiaDatetime.format_date_only(parsed_data['target_date'])}\n"
             
+            # FIXED: ALWAYS show confirmation as per dokumentasi
             confirmation_message = f"""🎯 Saya mendeteksi target tabungan baru:
 
 📋 **Detail Target Tabungan:**
-• Barang yang ingin dibeli: {parsed_data['item_name']}
-• Target jumlah: {self.format_currency(parsed_data['target_amount'])}
-{target_date_str}• Keterangan: {parsed_data['description']}
+• **Barang yang ingin dibeli**: {parsed_data['item_name']}
+• **Target jumlah**: {self.format_currency(parsed_data['target_amount'])}
+{target_date_str}• **Keterangan**: {parsed_data['description']}
 
 Apakah informasi ini sudah benar? Ketik **"ya"** untuk menyimpan atau **"tidak"** untuk membatalkan."""
 
+            # Add budget guidance for savings goals
+            if budget_guidance:
+                monthly_needed = budget_guidance.get("monthly_needed")
+                if monthly_needed:
+                    confirmation_message += f"\n\n💡 **Perencanaan Budget WANTS (30%):**\n"
+                    confirmation_message += f"• Perlu menabung {self.format_currency(monthly_needed)}/bulan\n"
+                    confirmation_message += f"• Dari budget WANTS: {budget_guidance.get('percentage_of_wants_budget', 0):.1f}%"
+
+            # Add general suggestions  
             if suggestions:
-                confirmation_message += f"\n\n💡 {suggestions[0]}"
+                confirmation_message += f"\n\n💬 **Tips**: {suggestions[0]}"
             
             # Convert datetime to ISO string for storage
             storage_data = parsed_data.copy()
             if parsed_data.get("target_date"):
                 storage_data["target_date"] = self.datetime_to_iso(parsed_data["target_date"])
 
-        # Store pending data
+        # FIXED: ALWAYS store pending data for confirmation
         pending_id = self.store_pending_data(
             user_id, conversation_id, message_id, transaction_type,
             storage_data, original_message, confirmation_message
         )
         
+        print(f"✅ Stored pending data with ID: {pending_id}")
         return confirmation_message
     
     # ==========================================
-    # SAVINGS GOAL CRUD HANDLERS
+    # CONFIRMATION HANDLERS - FIXED
+    # ==========================================
+    
+    async def handle_confirmation(self, user_id: str, conversation_id: str, confirmed: bool) -> str:
+        """FIXED: Handle konfirmasi dengan response yang sesuai dokumentasi"""
+        print(f"🔄 Processing confirmation: {confirmed}")
+        
+        # Get latest pending data
+        pending_data = self.get_latest_pending_data(user_id, conversation_id)
+        
+        if not pending_data:
+            print("❌ No pending data found")
+            # Return generic response instead of treating as regular message
+            return "Saya tidak menemukan data yang perlu dikonfirmasi. Silakan coba input transaksi atau target tabungan baru."
+        
+        data_type = pending_data.get("data_type")
+        
+        if confirmed:
+            if data_type in ["update_savings_goal", "delete_savings_goal"]:
+                return await self.confirm_update_delete_action(user_id, pending_data)
+            else:
+                return await self.confirm_financial_data(user_id, pending_data)
+        else:
+            if data_type in ["update_savings_goal", "delete_savings_goal"]:
+                return await self.cancel_update_delete_action(user_id, pending_data)
+            else:
+                return await self.cancel_financial_data(user_id, pending_data)
+    
+    async def confirm_financial_data(self, user_id: str, pending_data: dict) -> str:
+        """FIXED: Konfirmasi dan simpan data keuangan dengan response sesuai dokumentasi"""
+        try:
+            # Import finance service
+            from .finance_service import FinanceService
+            finance_service = FinanceService()
+            
+            pending_id = str(pending_data["_id"])
+            result = finance_service.confirm_pending_data(pending_id, user_id, True)
+            
+            if result["success"]:
+                data_type = result.get("type", pending_data["data_type"])
+                created_data = result.get("data", {})
+                
+                if data_type == "transaction" or data_type in ["income", "expense"]:
+                    # FIXED: Response format sesuai dokumentasi
+                    trans_type = "pemasukan" if created_data.get("type") == "income" else "pengeluaran"
+                    
+                    response = f"""✅ **Data {trans_type} berhasil disimpan!**
+
+💰 **Detail yang tersimpan:**
+• **Jenis**: {trans_type.title()}
+• **Jumlah**: {self.format_currency(created_data.get('amount', 0))}
+• **Kategori**: {created_data.get('category', '')}
+• **Tanggal**: {IndonesiaDatetime.format_date_only(created_data.get('date', now_for_db()))}
+
+"""
+                    
+                    # Generate post-transaction advice
+                    post_advice = await self.advisor.generate_post_transaction_advice(user_id, created_data)
+                    
+                    if post_advice.get("has_advice"):
+                        # Add main advice
+                        if post_advice.get("advice"):
+                            response += "💡 **Saran untuk Anda:**\n"
+                            for advice in post_advice["advice"][:2]:  # Limit to 2 points
+                                response += f"• {advice}\n"
+                            response += "\n"
+                        
+                        # Add warnings if any
+                        if post_advice.get("warnings"):
+                            response += "⚠️ **Peringatan:**\n"
+                            for warning in post_advice["warnings"][:1]:  # Limit to 1 warning
+                                response += f"• {warning}\n"
+                            response += "\n"
+                    else:
+                        # Fallback advice
+                        response += f"💡 **Tips**: {random.choice(self.student_tips)}\n\n"
+                    
+                    response += "Silakan input transaksi lainnya atau tanyakan analisis keuangan Anda! 😊"
+                    
+                elif data_type == "savings_goal":
+                    # FIXED: Response format sesuai dokumentasi untuk target tabungan
+                    response = f"""✅ **Target tabungan berhasil dibuat!**
+
+🎯 **Detail Target:**
+• **Barang**: {created_data.get('item_name', 'Target baru')}
+• **Target Jumlah**: {self.format_currency(created_data.get('target_amount', 0))}
+• **Progress Saat Ini**: Rp 0 (0%)
+
+💡 **Tips Menabung:**
+• Target ini dialokasikan dari budget WANTS (30%)
+• Mulai sisihkan sejumlah kecil setiap hari
+• Konsisten lebih penting daripada jumlah besar
+
+Selamat menabung! Saya siap membantu track progress Anda. 🏆"""
+                
+                return response
+            else:
+                return f"❌ **Terjadi kesalahan**: {result.get('message', 'Tidak dapat menyimpan data')}\n\nSilakan coba lagi atau hubungi support jika masalah berlanjut."
+        
+        except Exception as e:
+            print(f"❌ Error confirming financial data: {e}")
+            return "😅 Maaf, terjadi kesalahan sistem saat menyimpan data. Silakan coba input ulang transaksi Anda."
+    
+    async def cancel_financial_data(self, user_id: str, pending_data: dict) -> str:
+        """FIXED: Batalkan data keuangan dengan response yang friendly"""
+        try:
+            # Import finance service
+            from .finance_service import FinanceService
+            finance_service = FinanceService()
+            
+            pending_id = str(pending_data["_id"])
+            result = finance_service.confirm_pending_data(pending_id, user_id, False)
+            
+            if result["success"]:
+                return """❌ **Data dibatalkan**
+
+Tidak masalah! Jika ada transaksi atau target tabungan lain yang ingin dicatat, silakan beritahu saya kapan saja.
+
+💡 **Contoh input yang bisa Anda coba:**
+• "Dapat uang saku 2 juta dari ortu"
+• "Bayar kos 800 ribu"
+• "Mau nabung buat beli laptop 10 juta"
+
+Saya siap membantu! 😊"""
+            else:
+                return f"⚠️ **Terjadi kesalahan**: {result.get('message', 'Tidak dapat membatalkan data')}"
+        
+        except Exception as e:
+            print(f"❌ Error cancelling financial data: {e}")
+            return "😅 Maaf, terjadi kesalahan. Coba lagi ya!"
+    
+    # ==========================================
+    # REGULAR MESSAGE HANDLER - ENHANCED
+    # ==========================================
+    
+    async def handle_regular_message(self, user_message: str) -> str:
+        """FIXED: Handle pesan regular dengan response yang lebih specific"""
+        message_lower = user_message.lower().strip()
+        
+        # Greeting responses
+        if any(word in message_lower for word in ['halo', 'hai', 'hi', 'hello', 'selamat']):
+            greetings = [
+                "Halo! Saya Luna, asisten keuangan untuk mahasiswa Indonesia. Siap membantu Anda mengelola keuangan dengan metode 50/30/20! 😊\n\n💡 **Coba katakan:**\n• \"Dapat uang saku 2 juta\"\n• \"Bayar kos 800 ribu\"\n• \"Mau nabung buat beli laptop\"",
+                "Hi! Luna di sini! 👋 Saya spesialis membantu mahasiswa Indonesia budgeting dengan sistem 50/30/20.\n\n📊 **Yang bisa saya bantu:**\n• Catat pemasukan & pengeluaran\n• Buat target tabungan\n• Analisis keuangan personal",
+                "Selamat datang! Saya Luna AI 🤖 Mari kita atur keuangan mahasiswa Anda dengan lebih baik!\n\n🎯 **Mulai dengan:**\n• Input transaksi harian\n• Setup target tabungan\n• Tanya tips keuangan mahasiswa"
+            ]
+            return random.choice(greetings)
+            
+        # Thank you responses
+        elif any(word in message_lower for word in ['terima kasih', 'thanks', 'makasih', 'thx']):
+            return "Sama-sama! Senang bisa membantu mengelola keuangan mahasiswa Anda. 😊\n\nAda transaksi lain yang ingin dicatat atau mau tanya analisis keuangan?"
+            
+        # Help requests
+        elif any(word in message_lower for word in ['bantuan', 'help', 'tolong', 'gimana', 'bagaimana']):
+            return """🔰 **Panduan Luna AI untuk Mahasiswa Indonesia**
+
+📊 **Input Keuangan:**
+• *"Dapat uang saku 2 juta dari ortu"* → Catat pemasukan
+• *"Bayar kos 800 ribu"* → Catat pengeluaran  
+• *"Mau nabung buat beli laptop 10 juta"* → Buat target tabungan
+
+📈 **Analisis Keuangan:**
+• *"Total tabungan saya"* → Cek saldo
+• *"Budget performance bulan ini"* → Cek budget 50/30/20
+• *"Daftar target saya"* → Lihat target tabungan
+
+🛒 **Analisis Pembelian:**
+• *"Saya ingin beli iPhone 15 juta"* → Analisis dampak
+• *"Beli motor 25 juta aman ga?"* → Cek affordability
+
+🔧 **Kelola Target:**
+• *"Ubah target laptop jadi 12 juta"* → Update target
+• *"Hapus target motor"* → Hapus target
+
+💡 **Tips & Advice:**
+• *"Tips hemat mahasiswa"* → Saran menghemat
+• *"Jelaskan metode 50/30/20"* → Panduan budgeting
+
+Coba salah satu contoh di atas! 🚀"""
+            
+        # Question about Luna
+        elif any(word in message_lower for word in ['luna', 'kamu', 'anda', 'siapa']):
+            return """👋 **Saya Luna AI!**
+
+🎓 **Spesialisasi**: Asisten keuangan khusus mahasiswa Indonesia
+🏆 **Keahlian**: Budgeting metode 50/30/20 Elizabeth Warren
+📊 **Yang saya pahami**:
+• Tantangan keuangan mahasiswa Indonesia
+• Sistem NEEDS (50%) - WANTS (30%) - SAVINGS (20%)
+• Kategori pengeluaran mahasiswa (kos, makan, transport, dll)
+• Target tabungan untuk barang impian
+
+💡 **Pendekatan saya**:
+• Fokus praktis untuk kehidupan mahasiswa
+• Bahasa yang mudah dipahami
+• Tips hemat yang realistis
+• Tracking yang simple tapi akurat
+
+Siap membantu Anda mencapai financial goals! 💪✨"""
+            
+        # Financial keyword responses  
+        elif any(keyword in message_lower for keyword in ['budget', 'anggaran', 'uang', 'keuangan', 'tabungan', 'hemat', 'mahasiswa']):
+            base_response = "Saya siap membantu Anda dengan manajemen keuangan mahasiswa! 💰"
+            
+            # Add specific tips based on keywords
+            if any(word in message_lower for word in ['budget', 'anggaran']):
+                base_response += "\n\n📋 **Metode 50/30/20 untuk Mahasiswa:**\n• **50% NEEDS**: Kos, makan pokok, transport kuliah, buku\n• **30% WANTS**: Jajan, hiburan, baju, target tabungan barang\n• **20% SAVINGS**: Tabungan masa depan, dana darurat"
+            elif 'tabungan' in message_lower:
+                base_response += "\n\n🏦 **Tips Menabung Mahasiswa:**\n• Alokasikan 20% untuk tabungan masa depan\n• Gunakan 30% WANTS untuk target barang impian\n• Konsisten lebih penting dari jumlah besar"
+            elif 'hemat' in message_lower:
+                base_response += "\n\n💡 **Tips Hemat Mahasiswa:**\n• Masak sendiri vs makan di luar (hemat 40-60%)\n• Gunakan transportasi umum atau sepeda\n• Manfaatkan diskon mahasiswa\n• Beli buku bekas atau pinjam dari perpustakaan"
+            
+            # Add call to action
+            base_response += f"\n\n🚀 **Yuk mulai sekarang!**\nCoba input: *\"Dapat uang saku 2 juta\"* atau tanyakan *\"Total tabungan saya\"*"
+            
+            return base_response
+        
+        # Default responses with helpful suggestions
+        else:
+            default_responses = [
+                "Hmm, saya tidak yakin memahami maksud Anda. 🤔\n\n💡 **Coba contoh ini:**\n• \"Bayar listrik 100 ribu\"\n• \"Freelance dapat 500rb\"\n• \"Total tabungan saya berapa?\"",
+                "Maaf, bisa tolong diperjelas? 😅\n\n📝 **Format yang saya pahami:**\n• Input transaksi: \"Bayar kos 800 ribu\"\n• Buat target: \"Mau nabung laptop 10 juta\"\n• Tanya data: \"Budget performance bulan ini\"",
+                "Saya belum mengerti permintaan Anda. 🙏\n\n🎯 **Yang bisa saya bantu:**\n• Catat keuangan harian\n• Analisis budget 50/30/20\n• Tips menghemat untuk mahasiswa\n\nCoba salah satu ya!"
+            ]
+            return random.choice(default_responses)
+    
+    # ==========================================
+    # OTHER METHODS (unchanged from original)
     # ==========================================
     
     async def handle_update_delete_command(self, user_id: str, conversation_id: str, message_id: str, command: Dict[str, Any]) -> str:
@@ -444,107 +714,6 @@ Anda belum memiliki target tabungan. Yuk buat target pertama!
             print(f"❌ Error listing savings goals: {e}")
             return "😅 Maaf, terjadi kesalahan saat mengambil daftar target. Coba lagi ya!"
     
-    # ==========================================
-    # CONFIRMATION HANDLERS
-    # ==========================================
-    
-    async def handle_confirmation(self, user_id: str, conversation_id: str, confirmed: bool) -> str:
-        """Handle konfirmasi dari user untuk data keuangan atau update/delete"""
-        print(f"🔄 Processing confirmation: {confirmed}")
-        
-        # Get latest pending data
-        pending_data = self.get_latest_pending_data(user_id, conversation_id)
-        
-        if not pending_data:
-            print("❌ No pending data found")
-            return await self.handle_regular_message("ya" if confirmed else "tidak")
-        
-        data_type = pending_data.get("data_type")
-        
-        if confirmed:
-            if data_type in ["update_savings_goal", "delete_savings_goal"]:
-                return await self.confirm_update_delete_action(user_id, pending_data)
-            else:
-                return await self.confirm_financial_data(user_id, pending_data)
-        else:
-            if data_type in ["update_savings_goal", "delete_savings_goal"]:
-                return await self.cancel_update_delete_action(user_id, pending_data)
-            else:
-                return await self.cancel_financial_data(user_id, pending_data)
-    
-    async def confirm_financial_data(self, user_id: str, pending_data: dict) -> str:
-        """Konfirmasi dan simpan data keuangan dengan post-transaction advice"""
-        try:
-            # Import finance service
-            from .finance_service import FinanceService
-            finance_service = FinanceService()
-            
-            pending_id = str(pending_data["_id"])
-            result = finance_service.confirm_pending_data(pending_id, user_id, True)
-            
-            if result["success"]:
-                data_type = result.get("type", pending_data["data_type"])
-                created_data = result.get("data", {})
-                
-                if data_type == "transaction" or data_type in ["income", "expense"]:
-                    # Generate post-transaction advice
-                    post_advice = await self.advisor.generate_post_transaction_advice(user_id, created_data)
-                    
-                    trans_type = "pemasukan" if created_data.get("type") == "income" else "pengeluaran"
-                    
-                    response = f"""✅ **{trans_type.title()} berhasil disimpan!**
-
-💰 {self.format_currency(created_data.get('amount', 0))} - {created_data.get('category', '')}
-📝 {created_data.get('description', '')}
-📅 {IndonesiaDatetime.format_date_only(created_data.get('date', now_for_db()))}
-
-"""
-                    
-                    # Add post-transaction advice
-                    if post_advice["has_advice"]:
-                        # Add main advice
-                        if post_advice["advice"]:
-                            response += "💡 **Saran untuk Anda:**\n"
-                            for advice in post_advice["advice"][:3]:  # Limit to 3 points
-                                response += f"• {advice}\n"
-                            response += "\n"
-                        
-                        # Add warnings if any
-                        if post_advice["warnings"]:
-                            response += "⚠️ **Peringatan:**\n"
-                            for warning in post_advice["warnings"][:2]:  # Limit to 2 warnings
-                                response += f"• {warning}\n"
-                            response += "\n"
-                        
-                        # Add motivation
-                        if post_advice["motivation"]:
-                            response += f"🎯 **Motivasi:** {post_advice['motivation']['advice']}\n\n"
-                            response += f"💪 *{post_advice['motivation']['quote']}*"
-                    else:
-                        # Fallback motivation
-                        response += f"{random.choice(self.student_tips)}"
-                    
-                elif data_type == "savings_goal":
-                    response = f"""🎯 **Target tabungan berhasil dibuat!**
-
-🛍️ **{created_data.get('item_name', 'Target baru')}**
-💰 Target: {self.format_currency(created_data.get('target_amount', 0))}
-📊 Progress: Rp 0 (0%)
-
-Mulai menabung sekarang untuk mencapai target Anda! 💪
-
-💡 *Untuk mengubah target ini nanti, gunakan: "ubah target [nama] ..."*
-
-{random.choice(self.student_tips)}"""
-                
-                return response
-            else:
-                return f"⚠️ **Terjadi kesalahan:** {result.get('message', 'Tidak dapat menyimpan data')}"
-        
-        except Exception as e:
-            print(f"❌ Error confirming financial data: {e}")
-            return "😅 Maaf, terjadi kesalahan saat menyimpan data. Coba lagi ya!"
-    
     async def confirm_update_delete_action(self, user_id: str, pending_data: dict) -> str:
         """Konfirmasi dan eksekusi update/delete savings goal"""
         try:
@@ -665,101 +834,3 @@ Tetap semangat menabung! 💪"""
         except Exception as e:
             print(f"❌ Error cancelling update/delete action: {e}")
             return "😅 Maaf, terjadi kesalahan. Coba lagi ya!"
-    
-    async def cancel_financial_data(self, user_id: str, pending_data: dict) -> str:
-        """Batalkan data keuangan"""
-        try:
-            # Import finance service
-            from .finance_service import FinanceService
-            finance_service = FinanceService()
-            
-            pending_id = str(pending_data["_id"])
-            result = finance_service.confirm_pending_data(pending_id, user_id, False)
-            
-            if result["success"]:
-                return "❌ **Data dibatalkan.**\n\nTidak masalah! Jika ada transaksi atau target tabungan lain yang ingin dicatat, silakan beritahu saya kapan saja."
-            else:
-                return f"⚠️ **Terjadi kesalahan:** {result.get('message', 'Tidak dapat membatalkan data')}"
-        
-        except Exception as e:
-            print(f"❌ Error cancelling financial data: {e}")
-            return "😅 Maaf, terjadi kesalahan. Coba lagi ya!"
-    
-    # ==========================================
-    # REGULAR MESSAGE HANDLER
-    # ==========================================
-    
-    async def handle_regular_message(self, user_message: str) -> str:
-        """Handle pesan regular (non-financial)"""
-        message_lower = user_message.lower()
-        
-        # Greeting responses
-        if any(word in message_lower for word in ['halo', 'hai', 'hi', 'hello', 'selamat']):
-            return random.choice(self.greetings)
-            
-        # Thank you responses
-        elif any(word in message_lower for word in ['terima kasih', 'thanks', 'makasih', 'thx']):
-            return "Sama-sama! Senang bisa membantu Anda mengelola keuangan mahasiswa. Ada lagi yang ingin dibahas?"
-            
-        # Help requests
-        elif any(word in message_lower for word in ['bantuan', 'help', 'tolong', 'gimana', 'bagaimana']):
-            return """Tentu! Saya bisa membantu Anda dengan:
-
-📊 **Mencatat Keuangan Mahasiswa:**
-• Catat pemasukan: "Dapat uang saku 1 juta"
-• Catat pengeluaran: "Bayar kos 500 ribu"
-• Target tabungan: "Mau nabung buat beli laptop 10 juta pada tanggal 22 januari 2026"
-
-📈 **Tanya Data Keuangan:**
-• "Total tabungan saya"
-• "Kesehatan keuangan saya"
-• "Performa budget bulan ini"
-• "Progress tabungan"
-• "Daftar target saya"
-
-🛒 **Analisis Pembelian:**
-• "Saya ingin membeli laptop seharga 10 juta"
-• "Mau beli motor 25 juta, gimana?"
-
-🔧 **Kelola Target Tabungan (1 perubahan per pesan):**
-• "Ubah target laptop tanggal 31 desember 2025"
-• "Ubah target laptop jadi 15 juta"
-• "Ganti nama laptop jadi smartphone"
-• "Hapus target motor"
-
-💡 **Tips Keuangan Mahasiswa:**
-• Budgeting metode 50/30/20
-• Tips menghemat uang saku
-• Perencanaan keuangan
-
-Ada yang ingin dicoba sekarang?"""
-            
-        # Question about Luna
-        elif any(word in message_lower for word in ['luna', 'kamu', 'anda', 'siapa']):
-            return "Saya Luna, asisten AI yang dirancang khusus untuk membantu mahasiswa Indonesia mengelola keuangan. Saya paham betul tantangan keuangan mahasiswa dan bisa membantu Anda dengan budgeting 50/30/20, tips menghemat, tracking pengeluaran, mencatat transaksi, analisis pembelian, dan mengelola target tabungan dengan sistem yang akurat!"
-            
-        # Financial keyword responses
-        elif any(keyword in message_lower for keyword in ['budget', 'anggaran', 'uang', 'keuangan', 'tabungan', 'hemat', 'mahasiswa']):
-            response = "Saya bisa membantu Anda dengan manajemen keuangan mahasiswa yang lebih baik!"
-            
-            # Add specific tips based on keywords
-            if any(word in message_lower for word in ['budget', 'anggaran']):
-                response += "\n\n📋 **Tips Budget Mahasiswa:**\n• 50% untuk kebutuhan (makan, transport, kos)\n• 30% untuk keinginan (hiburan, jajan)\n• 20% untuk tabungan dan dana darurat"
-            elif 'tabungan' in message_lower:
-                response += "\n\n🏦 **Tips Menabung Mahasiswa:**\n• Sisihkan 15-20% uang saku untuk tabungan\n• Buat target tabungan yang spesifik\n• Gunakan rekening terpisah untuk tabungan"
-            elif 'hemat' in message_lower:
-                response += "\n\n💡 **Tips Hemat Mahasiswa:**\n• Masak sendiri atau makan bersama teman kos\n• Manfaatkan diskon dan promo mahasiswa\n• Gunakan transportasi umum\n• Beli buku bekas atau pinjam dari perpustakaan"
-            
-            # Add random student tip
-            response += f"\n\n{random.choice(self.student_tips)}"
-            return response
-        
-        # Default responses with helpful tips
-        else:
-            response = "Saya di sini untuk membantu Anda dengan keuangan mahasiswa. Ada yang ingin dibahas tentang budgeting, tabungan, atau analisis pengeluaran?"
-            
-            # Sometimes add a helpful tip
-            if random.choice([True, False]):
-                response += f"\n\n{random.choice(self.student_tips)}"
-            
-            return response
