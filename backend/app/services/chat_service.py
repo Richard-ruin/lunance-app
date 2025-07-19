@@ -1,19 +1,40 @@
-# app/services/chat_service.py - Updated untuk menggunakan Luna AI Core
+# app/services/chat_service.py - FIXED VERSION dengan IndoRoBERTa integration
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from bson import ObjectId
+import logging
 
 from ..config.database import get_database
 from ..models.chat import Conversation, Message, MessageType, ConversationStatus
 from ..utils.timezone_utils import IndonesiaDatetime, now_for_db
+
+# CRITICAL: Import the FIXED Luna AI Core
 from .luna_ai_core import LunaAICore
 
-class ChatService:
-    """Enhanced Chat Service dengan Luna AI Core integration"""
+# Setup logging for tracking IndoRoBERTa usage
+logger = logging.getLogger(__name__)
+
+class ChatServiceFixed:
+    """FIXED Chat Service dengan IndoRoBERTa parser tracking"""
     
     def __init__(self):
         self.db = get_database()
+        
+        # CRITICAL: Initialize FIXED Luna AI Core with IndoRoBERTa
+        logger.info("🔧 Initializing ChatService with FIXED Luna AI Core...")
         self.luna_ai = LunaAICore()
+        
+        # Log parser information for debugging
+        if hasattr(self.luna_ai, 'get_parser_info'):
+            parser_info = self.luna_ai.get_parser_info()
+            logger.info(f"📊 Luna AI Parser Info: {parser_info}")
+        
+        # Test parser with sample message
+        if hasattr(self.luna_ai, 'test_parser_with_message'):
+            test_result = self.luna_ai.test_parser_with_message("Bayar kos 800 ribu")
+            logger.info(f"🧪 Parser test result: {test_result.get('is_financial_data', False)} using {test_result.get('parser_info', {}).get('parser_type', 'Unknown')}")
+        
+        logger.info("✅ ChatService initialized with IndoRoBERTa integration")
     
     async def create_conversation(self, user_id: str) -> Conversation:
         """Membuat percakapan baru"""
@@ -45,7 +66,7 @@ class ChatService:
             updated_at=now
         )
         
-        print(f"✅ Conversation created: {conversation_id}")
+        logger.info(f"✅ Conversation created: {conversation_id}")
         return conversation
     
     async def get_user_conversations(self, user_id: str, limit: int = 20) -> List[Conversation]:
@@ -74,7 +95,7 @@ class ChatService:
             return conversations
             
         except Exception as e:
-            print(f"❌ Error getting conversations: {e}")
+            logger.error(f"❌ Error getting conversations: {e}")
             return []
     
     async def get_conversation_messages(self, conversation_id: str, limit: int = 50) -> List[Message]:
@@ -95,15 +116,19 @@ class ChatService:
             return messages
             
         except Exception as e:
-            print(f"❌ Error getting messages: {e}")
+            logger.error(f"❌ Error getting messages: {e}")
             return []
     
     async def send_message(self, user_id: str, conversation_id: str, content: str) -> Dict[str, Any]:
-        """Send message dengan Luna AI Core integration"""
+        """ENHANCED: Send message dengan IndoRoBERTa parser tracking"""
         
         try:
             now = now_for_db()
-            print(f"📨 Processing message from user {user_id}: '{content}'")
+            logger.info(f"📨 Processing message from user {user_id}: '{content}'")
+            
+            # Log parser type being used
+            parser_info = getattr(self.luna_ai, 'parser_type', 'Unknown')
+            logger.info(f"🔧 Using parser: {parser_info}")
             
             # Save user message
             user_message_data = {
@@ -130,14 +155,15 @@ class ChatService:
                 timestamp=now
             )
             
-            # Generate Luna response using Luna AI Core
+            # CRITICAL: Generate Luna response using FIXED Luna AI Core with IndoRoBERTa
+            logger.info(f"🤖 Generating Luna response with {parser_info} parser...")
             luna_response_text = await self.luna_ai.generate_response(
                 content, user_id, conversation_id, user_message_id
             )
             
             luna_timestamp = now_for_db()
             
-            # Save Luna response
+            # Save Luna response with parser metadata
             luna_message_data = {
                 "conversation_id": conversation_id,
                 "sender_id": None,
@@ -145,7 +171,11 @@ class ChatService:
                 "content": luna_response_text,
                 "message_type": MessageType.TEXT.value,
                 "status": "sent",
-                "timestamp": luna_timestamp
+                "timestamp": luna_timestamp,
+                "metadata": {
+                    "parser_type": parser_info,
+                    "response_generated_by": "IndoRoBERTa_Luna_AI_Core"
+                }
             }
             
             luna_result = self.db.messages.insert_one(luna_message_data)
@@ -159,51 +189,66 @@ class ChatService:
                 content=luna_response_text,
                 message_type=MessageType.TEXT,
                 status="sent",
-                timestamp=luna_timestamp
+                timestamp=luna_timestamp,
+                metadata={
+                    "parser_type": parser_info,
+                    "response_generated_by": "IndoRoBERTa_Luna_AI_Core"
+                }
             )
             
             # Update conversation
             await self._update_conversation_safe(conversation_id, content, luna_response_text, user_id)
             
-            print(f"✅ Message processed successfully")
+            logger.info(f"✅ Message processed successfully with {parser_info} parser")
             
             # Check for financial data metadata
             financial_metadata = {}
             response_type = "regular"
             
-            # If Luna response contains financial confirmation, add metadata
+            # Enhanced detection for financial responses
             if any(phrase in luna_response_text for phrase in ["detail transaksi", "target tabungan", "ketik **\"ya\"**"]):
                 financial_metadata = {
                     "contains_financial_data": True,
                     "requires_confirmation": True,
-                    "data_type": "confirmation_request"
+                    "data_type": "confirmation_request",
+                    "parser_used": parser_info
                 }
                 response_type = "financial_confirmation"
             elif any(phrase in luna_response_text for phrase in ["berhasil disimpan", "berhasil dibuat", "data dibatalkan"]):
                 financial_metadata = {
                     "contains_financial_data": True,
                     "requires_confirmation": False,
-                    "data_type": "financial_result"
+                    "data_type": "financial_result",
+                    "parser_used": parser_info
                 }
                 response_type = "financial_result"
             elif any(phrase in luna_response_text for phrase in ["total tabungan", "target bulan", "progress tabungan", "pengeluaran terbesar"]):
                 financial_metadata = {
                     "contains_financial_data": True,
                     "requires_confirmation": False,
-                    "data_type": "financial_query_result"
+                    "data_type": "financial_query_result",
+                    "parser_used": parser_info
                 }
                 response_type = "financial_info"
+            
+            # Log financial data detection
+            if financial_metadata:
+                logger.info(f"💰 Financial data detected by {parser_info}: {financial_metadata}")
             
             return {
                 "user_message": user_message,
                 "luna_response": luna_message,
                 "conversation_updated": True,
                 "financial_data": financial_metadata if financial_metadata else None,
-                "response_type": response_type
+                "response_type": response_type,
+                "parser_info": {
+                    "parser_type": parser_info,
+                    "message_processed_by": "IndoRoBERTa_Luna_AI_Core"
+                }
             }
             
         except Exception as e:
-            print(f"❌ Error in send_message: {e}")
+            logger.error(f"❌ Error in send_message: {e}")
             raise e
     
     async def _update_conversation_safe(self, conversation_id: str, user_message: str, luna_response: str, user_id: str):
@@ -242,7 +287,7 @@ class ChatService:
             )
             
         except Exception as e:
-            print(f"❌ Error updating conversation: {e}")
+            logger.error(f"❌ Error updating conversation: {e}")
     
     async def get_conversation_by_id(self, conversation_id: str) -> Optional[Conversation]:
         """Mengambil percakapan berdasarkan ID"""
@@ -256,7 +301,7 @@ class ChatService:
                 return Conversation.from_mongo(doc)
             return None
         except Exception as e:
-            print(f"Error getting conversation: {e}")
+            logger.error(f"Error getting conversation: {e}")
             return None
     
     async def delete_conversation(self, conversation_id: str, user_id: str) -> bool:
@@ -271,7 +316,7 @@ class ChatService:
             )
             return result.modified_count > 0
         except Exception as e:
-            print(f"❌ Error deleting conversation: {e}")
+            logger.error(f"❌ Error deleting conversation: {e}")
             return False
     
     async def auto_delete_empty_conversations(self, user_id: str) -> int:
@@ -309,7 +354,7 @@ class ChatService:
             return deleted_count
             
         except Exception as e:
-            print(f"❌ Error in auto_delete_empty_conversations: {e}")
+            logger.error(f"❌ Error in auto_delete_empty_conversations: {e}")
             return 0
     
     async def search_conversations(self, user_id: str, query: str) -> List[Conversation]:
@@ -341,7 +386,7 @@ class ChatService:
             
             return result
         except Exception as e:
-            print(f"Error searching conversations: {e}")
+            logger.error(f"Error searching conversations: {e}")
             return []
     
     async def cleanup_user_conversations(self, user_id: str) -> Dict[str, int]:
@@ -354,11 +399,11 @@ class ChatService:
                 "total_cleaned": empty_deleted
             }
         except Exception as e:
-            print(f"❌ Error in cleanup_user_conversations: {e}")
+            logger.error(f"❌ Error in cleanup_user_conversations: {e}")
             return {"empty_conversations_deleted": 0, "conversations_updated": 0, "total_cleaned": 0}
     
     async def get_chat_statistics(self, user_id: str) -> Dict[str, Any]:
-        """Statistik chat dengan timezone Indonesia"""
+        """Statistik chat dengan timezone Indonesia dan parser info"""
         try:
             total_conversations = self.db.conversations.count_documents({
                 "user_id": user_id,
@@ -383,26 +428,31 @@ class ChatService:
             
             last_activity = recent_activity.get("updated_at") if recent_activity else None
             
+            # Get parser info
+            parser_info = getattr(self.luna_ai, 'parser_type', 'Unknown')
+            
             return {
                 "total_conversations": total_conversations,
                 "total_messages": total_messages,
-                "today_messages": 0,  # Would need more complex query for accurate count
-                "weekly_messages": 0, # Would need more complex query for accurate count
+                "today_messages": 0,
+                "weekly_messages": 0,
                 "last_activity": last_activity,
                 "timezone": "Asia/Jakarta (WIB/GMT+7)",
                 "current_time_wib": IndonesiaDatetime.format(IndonesiaDatetime.now()),
-                "luna_ai_version": "Enhanced for Indonesian Students",
+                "luna_ai_version": "Enhanced with IndoRoBERTa Financial Parser",
+                "parser_type": parser_info,
                 "features_enabled": [
-                    "Financial Intelligence",
-                    "Auto Transaction Parsing",
-                    "Student Categories",
+                    "IndoRoBERTa Financial Intelligence",
+                    "Auto Transaction Parsing with ML",
+                    "Student Categories Recognition",
                     "Target Date Recognition",
                     "Real-time Financial Queries",
-                    "Bahasa Indonesia Support"
+                    "Bahasa Indonesia NLP Support",
+                    f"Parser: {parser_info}"
                 ]
             }
         except Exception as e:
-            print(f"Error getting chat statistics: {e}")
+            logger.error(f"Error getting chat statistics: {e}")
             return {
                 "total_conversations": 0,
                 "total_messages": 0,
@@ -411,10 +461,53 @@ class ChatService:
                 "last_activity": None,
                 "timezone": "Asia/Jakarta (WIB/GMT+7)",
                 "current_time_wib": IndonesiaDatetime.format(IndonesiaDatetime.now()),
+                "parser_type": "Unknown",
                 "error": str(e)
             }
     
-    # === FINANCIAL CHAT INTEGRATION METHODS ===
+    # ==========================================
+    # PARSER TESTING METHODS
+    # ==========================================
+    
+    def test_parser_integration(self, test_message: str = "Bayar kos 800 ribu") -> Dict[str, Any]:
+        """Test IndoRoBERTa parser integration"""
+        try:
+            logger.info(f"🧪 Testing parser integration with: '{test_message}'")
+            
+            if hasattr(self.luna_ai, 'test_parser_with_message'):
+                result = self.luna_ai.test_parser_with_message(test_message)
+                logger.info(f"🧪 Parser integration test result: {result}")
+                return result
+            else:
+                return {
+                    "error": "test_parser_with_message method not available",
+                    "parser_type": getattr(self.luna_ai, 'parser_type', 'Unknown')
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Parser integration test failed: {e}")
+            return {
+                "error": str(e),
+                "parser_type": getattr(self.luna_ai, 'parser_type', 'Unknown')
+            }
+    
+    def get_parser_status(self) -> Dict[str, Any]:
+        """Get comprehensive parser status"""
+        try:
+            if hasattr(self.luna_ai, 'get_parser_info'):
+                return self.luna_ai.get_parser_info()
+            else:
+                return {
+                    "parser_type": getattr(self.luna_ai, 'parser_type', 'Unknown'),
+                    "error": "get_parser_info method not available"
+                }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "parser_type": "Unknown"
+            }
+    
+    # === FINANCIAL CHAT INTEGRATION METHODS (unchanged) ===
     
     async def get_pending_financial_confirmations(self, user_id: str, conversation_id: str) -> List[Dict[str, Any]]:
         """Dapatkan financial data yang belum dikonfirmasi untuk conversation ini"""
@@ -439,7 +532,7 @@ class ChatService:
             
             return result
         except Exception as e:
-            print(f"Error getting pending confirmations: {e}")
+            logger.error(f"Error getting pending confirmations: {e}")
             return []
     
     async def confirm_financial_data_via_chat(self, user_id: str, conversation_id: str, 
@@ -463,7 +556,7 @@ class ChatService:
             
             return result
         except Exception as e:
-            print(f"Error confirming financial data via chat: {e}")
+            logger.error(f"Error confirming financial data via chat: {e}")
             return {"success": False, "message": f"Error: {str(e)}"}
     
     async def get_financial_chat_context(self, user_id: str) -> Dict[str, Any]:
@@ -481,17 +574,22 @@ class ChatService:
                 "monthly_target": dashboard["user_financial_settings"]["monthly_savings_target"],
                 "active_goals_count": dashboard["active_goals"]["count"],
                 "recent_transactions_count": len(dashboard["recent_activity"]["transactions"]),
-                "needs_sync": dashboard["sync_status"]["needs_sync"]
+                "needs_sync": dashboard["sync_status"]["needs_sync"],
+                "parser_type": getattr(self.luna_ai, 'parser_type', 'Unknown')
             }
             
             return context
         except Exception as e:
-            print(f"Error getting financial chat context: {e}")
+            logger.error(f"Error getting financial chat context: {e}")
             return {
                 "total_savings": 0,
                 "monthly_target": 0,
                 "active_goals_count": 0,
                 "recent_transactions_count": 0,
                 "needs_sync": False,
+                "parser_type": getattr(self.luna_ai, 'parser_type', 'Unknown'),
                 "error": str(e)
             }
+
+# Export the fixed version as the main class
+ChatService = ChatServiceFixed

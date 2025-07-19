@@ -4,7 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config/app_config.dart';
 
 class FinanceService {
-  static const String baseUrl = 'http://192.168.101.3:8000/api/v1';
+  static const String baseUrl = 'http://192.168.148.195:8000/api/v1';
   static const _storage = FlutterSecureStorage();
 
   Future<Map<String, String>> get _authHeaders async {

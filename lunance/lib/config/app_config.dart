@@ -2,12 +2,12 @@ class AppConfig {
   // Backend Configuration
   static const String _baseUrl = String.fromEnvironment(
     'BASE_URL',
-    defaultValue: 'http://192.168.101.3:8000', // Default untuk development
+    defaultValue: 'http://192.168.148.195:8000', // Default untuk development
   );
   
   static const String _wsUrl = String.fromEnvironment(
     'WS_URL', 
-    defaultValue: 'ws://192.168.101.3:8000', // Default untuk development
+    defaultValue: 'ws://192.168.148.195:8000', // Default untuk development
   );
 
   // API Endpoints

@@ -1,4 +1,4 @@
-# app/services/luna_ai_base.py - Core Luna AI functionality
+# app/services/luna_ai_base.py - CLEAN VERSION (IndoRoBERTa only)
 import re
 import random
 from datetime import datetime, timedelta
@@ -7,16 +7,58 @@ from bson import ObjectId
 
 from ..config.database import get_database
 from ..utils.timezone_utils import IndonesiaDatetime, now_for_db
-from .enhanced_financial_parser import EnhancedFinancialParser
-from .financial_categories import IndonesianStudentCategories
+
+# FIXED: Only import IndoRoBERTa parser - NO FALLBACK
+try:
+    from .indoroberta_financial_parser import IndoRoBERTaFinancialParser
+    print("✅ IndoRoBERTa Financial Parser imported successfully")
+    INDOROBERTA_AVAILABLE = True
+except ImportError as e:
+    print(f"❌ Failed to import IndoRoBERTa parser: {e}")
+    print("🚨 CRITICAL: IndoRoBERTa parser is required!")
+    INDOROBERTA_AVAILABLE = False
+
+try:
+    from .financial_categories import IndonesianStudentCategories
+except ImportError:
+    print("⚠️ IndonesianStudentCategories not found")
+    IndonesianStudentCategories = None
 
 
 class LunaAIBase:
-    """Base Luna AI dengan core functionality"""
+    """Base Luna AI dengan IndoRoBERTa integration ONLY - NO FALLBACK"""
     
     def __init__(self):
         self.db = get_database()
-        self.parser = EnhancedFinancialParser()
+        
+        # CRITICAL: Initialize IndoRoBERTa parser ONLY
+        if INDOROBERTA_AVAILABLE:
+            try:
+                print("🤖 Initializing IndoRoBERTa Financial Parser...")
+                self.parser = IndoRoBERTaFinancialParser()
+                
+                # Check if models are loaded
+                if hasattr(self.parser, 'models_loaded'):
+                    if self.parser.models_loaded:
+                        print("✅ IndoRoBERTa ML models loaded successfully!")
+                    else:
+                        print("📋 Using rule-based parser (IndoRoBERTa models not loaded)")
+                
+                # Log parser status
+                if hasattr(self.parser, 'get_model_status'):
+                    try:
+                        status = self.parser.get_model_status()
+                        print(f"📊 Parser Model Status: {status}")
+                    except Exception as e:
+                        print(f"⚠️ Could not get parser status: {e}")
+                
+            except Exception as e:
+                print(f"❌ Error initializing IndoRoBERTa parser: {e}")
+                print("🚨 CRITICAL: IndoRoBERTa parser initialization failed!")
+                self.parser = None
+        else:
+            print("❌ IndoRoBERTa parser not available - SYSTEM WILL NOT WORK PROPERLY")
+            self.parser = None
         
         # Confirmation keywords
         self.confirmation_yes = [
@@ -53,10 +95,9 @@ class LunaAIBase:
         
         # Responses untuk mahasiswa Indonesia
         self.greetings = [
-            "Halo! Saya Luna, asisten keuangan khusus untuk anda. Ada yang bisa saya bantu hari ini?",
-            "Hi! Luna di sini. Siap membantu Anda mengelola keuangan dengan lebih baik!",
-            "Selamat datang! Saya Luna, mari kita atur keuangan Anda bersama-sama.",
-            "Halo! Saya Luna, AI finansial yang paham betul kebutuhan mahasiswa Indonesia. Ada yang ingin dibahas?",
+            "Halo! Saya Luna, asisten keuangan dengan IndoRoBERTa AI. Ada yang bisa saya bantu hari ini?",
+            "Hi! Luna di sini dengan teknologi IndoRoBERTa untuk mengelola keuangan Anda!",
+            "Selamat datang! Saya Luna dengan AI parsing yang canggih untuk mahasiswa Indonesia.",
         ]
         
         # Tips khusus mahasiswa Indonesia
@@ -76,7 +117,40 @@ class LunaAIBase:
         return f"Rp {amount:,.0f}".replace(',', '.')
     
     # ==========================================
-    # DETECTION METHODS
+    # INDOROBERTA PARSING METHODS ONLY
+    # ==========================================
+    
+    def parse_financial_message(self, message: str) -> Dict[str, Any]:
+        """Parse financial message menggunakan IndoRoBERTa ONLY"""
+        if not self.parser:
+            print("❌ CRITICAL: No IndoRoBERTa parser available!")
+            return {
+                "is_financial_data": False, 
+                "error": "IndoRoBERTa parser not available",
+                "parsing_method": "none"
+            }
+        
+        try:
+            print(f"🔍 Parsing with IndoRoBERTa: '{message}'")
+            result = self.parser.parse_financial_data(message)
+            
+            # Add method info to result
+            if hasattr(self.parser, 'models_loaded'):
+                result["parsing_method"] = "IndoRoBERTa_ML" if self.parser.models_loaded else "IndoRoBERTa_Rules"
+            else:
+                result["parsing_method"] = "IndoRoBERTa"
+            
+            return result
+        except Exception as e:
+            print(f"❌ Error parsing with IndoRoBERTa: {e}")
+            return {
+                "is_financial_data": False, 
+                "error": str(e),
+                "parsing_method": "error"
+            }
+    
+    # ==========================================
+    # DETECTION METHODS (use IndoRoBERTa only)
     # ==========================================
     
     def is_confirmation_message(self, message: str) -> Optional[bool]:
@@ -91,7 +165,7 @@ class LunaAIBase:
         return None
     
     def is_purchase_intent(self, message: str) -> Optional[Dict[str, Any]]:
-        """Detect purchase intent dari pesan user"""
+        """Detect purchase intent menggunakan IndoRoBERTa"""
         message_lower = message.lower()
         
         # Check for purchase intent keywords
@@ -100,28 +174,29 @@ class LunaAIBase:
         if not has_purchase_intent:
             return None
         
-        # Parse amount dari message
-        amount = self.parser.parse_amount(message)
+        # Parse amount using IndoRoBERTa
+        if not self.parser:
+            print("❌ Cannot parse purchase intent - no IndoRoBERTa parser")
+            return None
         
+        amount = self.parser.parse_amount(message)
         if not amount:
             return None
         
         # Extract item name
         item_name = self._extract_item_name_from_purchase_intent(message, amount)
         
-        # Determine confidence
-        confidence = 0.8 if item_name and len(item_name) > 2 else 0.6
-        
         return {
             "item_name": item_name,
             "price": amount,
             "intent_type": "purchase_inquiry",
-            "confidence": confidence,
-            "original_message": message
+            "confidence": 0.8,
+            "original_message": message,
+            "parsed_by": "IndoRoBERTa"
         }
     
     def is_financial_query(self, message: str) -> Optional[str]:
-        """Deteksi apakah pesan adalah pertanyaan tentang data keuangan"""
+        """Deteksi financial queries"""
         message_lower = message.lower()
         
         query_patterns = {
@@ -131,7 +206,6 @@ class LunaAIBase:
             "progress_tabungan": ["progress tabungan", "kemajuan nabung", "target tabungan", "capaian target"],
             "list_targets": ["daftar target", "list target", "target saya", "semua target", "target apa saja"],
             "ringkasan": ["ringkasan", "summary", "laporan", "rekapan", "overview"],
-            "kategori": ["kategori", "jenis pengeluaran", "pembagian"],
             "financial_health": ["kesehatan keuangan", "kondisi keuangan", "financial health", "sehat keuangan"],
             "budget_performance": ["performa budget", "budget performance", "pencapaian budget", "budget bulan ini"],
             "spending_analysis": ["analisis pengeluaran", "pola pengeluaran", "spending pattern", "kebiasaan belanja"]
@@ -144,10 +218,10 @@ class LunaAIBase:
         return None
     
     def is_update_delete_command(self, message: str) -> Optional[Dict[str, Any]]:
-        """Deteksi perintah update/delete dengan klasifikasi yang lebih baik"""
+        """Deteksi perintah update/delete"""
         message_lower = message.lower().strip()
         
-        # Check for update commands
+        # Check for update/delete commands
         has_update = any(word in message_lower for word in self.update_keywords)
         has_delete = any(word in message_lower for word in self.delete_keywords)
         has_target = any(word in message_lower for word in self.target_keywords)
@@ -157,10 +231,10 @@ class LunaAIBase:
             item_name = self.extract_item_name_from_command(message_lower)
             
             if has_update:
-                # Determine update type for better UX
+                # Determine update type
                 update_type = self.determine_update_type(message_lower)
                 
-                # Check what fields to update (HANYA 1 field)
+                # Extract update fields using IndoRoBERTa
                 update_fields = self.extract_update_fields(message_lower)
                 
                 return {
@@ -168,13 +242,15 @@ class LunaAIBase:
                     "update_type": update_type,  
                     "item_name": item_name,
                     "update_fields": update_fields,
-                    "original_message": message
+                    "original_message": message,
+                    "parsed_by": "IndoRoBERTa"
                 }
             elif has_delete:
                 return {
                     "action": "delete",
                     "item_name": item_name,
-                    "original_message": message
+                    "original_message": message,
+                    "parsed_by": "IndoRoBERTa"
                 }
         
         # Special command to list all targets
@@ -187,7 +263,7 @@ class LunaAIBase:
         return None
     
     # ==========================================
-    # EXTRACTION METHODS
+    # EXTRACTION METHODS (using IndoRoBERTa)
     # ==========================================
     
     def _extract_item_name_from_purchase_intent(self, message: str, amount: float) -> str:
@@ -198,44 +274,24 @@ class LunaAIBase:
         for keyword in self.purchase_intent_keywords:
             clean_message = re.sub(rf'\b{keyword}\b', '', clean_message, flags=re.IGNORECASE)
         
-        # Remove amount patterns
-        for pattern in self.parser.money_patterns:
-            clean_message = re.sub(pattern, '', clean_message, flags=re.IGNORECASE)
-        
-        # Remove common connecting words
-        remove_words = ['seharga', 'dengan harga', 'harga', 'sekitar', 'kira-kira', 'kurang lebih']
-        for word in remove_words:
-            clean_message = re.sub(rf'\b{word}\b', '', clean_message, flags=re.IGNORECASE)
+        # Remove amount patterns using IndoRoBERTa if available
+        if self.parser and hasattr(self.parser, 'money_patterns'):
+            for pattern in self.parser.money_patterns:
+                clean_message = re.sub(pattern, '', clean_message, flags=re.IGNORECASE)
         
         # Clean up and return
         clean_message = re.sub(r'\s+', ' ', clean_message).strip()
         
-        # If too short, try to extract from common patterns
         if len(clean_message) < 2:
-            # Look for common item patterns
-            item_patterns = [
-                r'\b(laptop|notebook|macbook)\b',
-                r'\b(hp|handphone|smartphone|iphone|samsung)\b',
-                r'\b(motor|sepeda|mobil)\b',
-                r'\b(baju|kemeja|celana|sepatu)\b',
-                r'\b(tas|dompet|jaket)\b'
-            ]
-            
-            for pattern in item_patterns:
-                match = re.search(pattern, message.lower())
-                if match:
-                    return match.group(1).title()
-            
             return "barang"
         
         return clean_message.title()
     
     def extract_item_name_from_command(self, message_lower: str) -> str:
         """Extract nama barang dari perintah update/delete"""
-        # Remove action words
         clean_message = message_lower
         
-        # Remove update/delete keywords
+        # Remove action words
         for word in self.update_keywords + self.delete_keywords + self.target_keywords:
             clean_message = re.sub(rf'\b{word}\b', '', clean_message, flags=re.IGNORECASE)
         
@@ -244,7 +300,6 @@ class LunaAIBase:
         for word in remove_words:
             clean_message = re.sub(rf'\b{word}\b', '', clean_message, flags=re.IGNORECASE)
         
-        # Clean up and return
         clean_message = re.sub(r'\s+', ' ', clean_message).strip()
         return clean_message if clean_message else "target"
     
@@ -260,28 +315,21 @@ class LunaAIBase:
             return "unknown"
     
     def extract_update_fields(self, message_lower: str) -> Dict[str, Any]:
-        """Extract field yang akan diupdate dengan prioritas yang jelas"""
+        """Extract field yang akan diupdate menggunakan IndoRoBERTa"""
         update_fields = {}
         
-        # Check for date update first
-        date_update_indicators = [
-            'tanggal', 'waktu', 'deadline', 'target waktu', 'kapan', 'bulan', 'tahun'
-        ]
-        
+        # Check for date update using IndoRoBERTa
+        date_update_indicators = ['tanggal', 'waktu', 'deadline', 'target waktu', 'kapan', 'bulan', 'tahun']
         is_date_update = any(indicator in message_lower for indicator in date_update_indicators)
         
-        if is_date_update:
+        if is_date_update and self.parser and hasattr(self.parser, 'parse_target_date'):
             target_date = self.parser.parse_target_date(message_lower)
             if target_date:
                 update_fields["target_date"] = target_date
                 return update_fields
         
-        # Check for price update
-        price_update_indicators = [
-            'jadi', 'menjadi', 'ganti harga', 'ubah harga', 'harga jadi', 
-            'ribu', 'juta', 'rb', 'jt', 'rp', 'rupiah'
-        ]
-        
+        # Check for price update using IndoRoBERTa
+        price_update_indicators = ['jadi', 'menjadi', 'ganti harga', 'ubah harga', 'harga jadi', 'ribu', 'juta', 'rb', 'jt', 'rp', 'rupiah']
         is_price_update = any(indicator in message_lower for indicator in price_update_indicators)
         
         if is_price_update and not is_date_update:
@@ -291,10 +339,7 @@ class LunaAIBase:
                 return update_fields
         
         # Check for name update
-        name_update_indicators = [
-            'ganti nama', 'ubah nama', 'nama jadi', 'namanya', 'rename'
-        ]
-        
+        name_update_indicators = ['ganti nama', 'ubah nama', 'nama jadi', 'namanya', 'rename']
         is_name_update = any(indicator in message_lower for indicator in name_update_indicators)
         
         if is_name_update:
@@ -316,8 +361,8 @@ class LunaAIBase:
         return update_fields
     
     def parse_price_for_update(self, message_lower: str) -> Optional[float]:
-        """Parse harga khusus untuk update dengan filter tanggal yang lebih kuat"""
-        # Remove common date patterns to avoid confusion
+        """Parse harga untuk update menggunakan IndoRoBERTa"""
+        # Remove date patterns
         message_without_dates = message_lower
         
         date_removal_patterns = [
@@ -332,19 +377,18 @@ class LunaAIBase:
         for pattern in date_removal_patterns:
             message_without_dates = re.sub(pattern, '', message_without_dates, flags=re.IGNORECASE)
         
-        # Parse amount dari message yang sudah dibersihkan
-        amount = self.parser.parse_amount(message_without_dates)
+        # Parse amount using IndoRoBERTa
+        if self.parser and hasattr(self.parser, 'parse_amount'):
+            return self.parser.parse_amount(message_without_dates)
         
-        return amount
+        return None
     
     def clean_item_name_for_update(self, name: str) -> str:
-        """Clean item name untuk update (remove price/date artifacts)"""
+        """Clean item name untuk update"""
         clean_name = name
         
-        # Remove price indicators
+        # Remove price and date indicators
         clean_name = re.sub(r'\d+\s*(juta|ribu|rb|jt|m|k)', '', clean_name, flags=re.IGNORECASE)
-        
-        # Remove date indicators  
         clean_name = re.sub(r'\d+\s*(januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember)', '', clean_name, flags=re.IGNORECASE)
         clean_name = re.sub(r'\d{1,2}[-/]\d{1,2}[-/]\d{4}', '', clean_name)
         
@@ -353,9 +397,7 @@ class LunaAIBase:
         for word in time_words:
             clean_name = re.sub(rf'\b{word}\b', '', clean_name, flags=re.IGNORECASE)
         
-        # Clean up spaces
         clean_name = re.sub(r'\s+', ' ', clean_name).strip()
-        
         return clean_name
     
     # ==========================================
@@ -378,7 +420,7 @@ class LunaAIBase:
     def store_pending_data(self, user_id: str, conversation_id: str, message_id: str,
                           data_type: str, parsed_data: Dict[str, Any], 
                           original_message: str, confirmation_message: str) -> str:
-        """Store pending financial data dengan serialization yang benar"""
+        """Store pending financial data"""
         try:
             now = now_for_db()
             expires_at = now + timedelta(hours=24)
@@ -401,7 +443,8 @@ class LunaAIBase:
                 "luna_response": confirmation_message,
                 "is_confirmed": False,
                 "expires_at": expires_at,
-                "created_at": now
+                "created_at": now,
+                "parsed_by": "IndoRoBERTa"  # Add parser info
             }
             
             result = self.db.pending_financial_data.insert_one(pending_data)
@@ -429,7 +472,8 @@ class LunaAIBase:
                 "luna_response": confirmation_message,
                 "is_confirmed": False,
                 "expires_at": expires_at,
-                "created_at": now
+                "created_at": now,
+                "parsed_by": "IndoRoBERTa"  # Add parser info
             }
             
             result = self.db.pending_financial_data.insert_one(pending_data)
@@ -460,23 +504,23 @@ class LunaAIBase:
         
         # Priority keywords untuk judul
         priority_keywords = {
-            'budget': 'Budget Mahasiswa',
-            'anggaran': 'Perencanaan Anggaran',
-            'tabungan': 'Tips Menabung',
-            'hemat': 'Tips Hemat Mahasiswa',
+            'budget': 'Budget IndoRoBERTa',
+            'anggaran': 'Perencanaan Anggaran AI',
+            'tabungan': 'AI Tips Menabung',
+            'hemat': 'Tips Hemat AI',
             'uang saku': 'Manajemen Uang Saku',
-            'pengeluaran': 'Tracking Pengeluaran',
-            'pemasukan': 'Catat Pemasukan',
-            'keuangan': 'Konsultasi Keuangan',
-            'ingin beli': 'Analisis Pembelian',
-            'mau beli': 'Konsultasi Pembelian',
-            'nabung': 'Target Tabungan',
+            'pengeluaran': 'AI Tracking Pengeluaran',
+            'pemasukan': 'Catat Pemasukan AI',
+            'keuangan': 'Konsultasi Keuangan AI',
+            'ingin beli': 'AI Analisis Pembelian',
+            'mau beli': 'Konsultasi Pembelian AI',
+            'nabung': 'Target Tabungan AI',
             'laptop': 'Tabungan Laptop',
             'hp': 'Tabungan HP',
             'motor': 'Tabungan Motor',
-            'ubah target': 'Update Target Tabungan',
-            'hapus target': 'Kelola Target Tabungan',
-            'daftar target': 'Target Tabungan'
+            'ubah target': 'Update Target AI',
+            'hapus target': 'Kelola Target AI',
+            'daftar target': 'Target Tabungan AI'
         }
         
         user_lower = user_message.lower()
@@ -492,13 +536,14 @@ class LunaAIBase:
         }
         
         important_words = [word for word in words if word.lower() not in stop_words and len(word) > 2]
-        title_words = important_words[:4] if important_words else words[:4]
+        title_words = important_words[:3] if important_words else words[:3]  # Reduced to 3 words
         title = ' '.join(title_words)
         
         if title:
             title = title[0].upper() + title[1:] if len(title) > 1 else title.upper()
+            title = f"AI {title}"  # Add AI prefix
         else:
-            title = "Chat Keuangan"
+            title = "IndoRoBERTa Chat"
         
         if len(title) > 40:
             title = title[:37] + "..."
