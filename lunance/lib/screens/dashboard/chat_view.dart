@@ -144,6 +144,47 @@ class _ChatViewState extends State<ChatView> with WidgetsBindingObserver {
     }
   }
 
+  // Parse markdown-style bold text (**text**)
+  List<TextSpan> _parseMarkdownText(String text, TextStyle baseStyle) {
+    final List<TextSpan> spans = [];
+    final RegExp boldPattern = RegExp(r'\*\*(.*?)\*\*');
+    
+    int lastEnd = 0;
+    
+    for (final match in boldPattern.allMatches(text)) {
+      // Add normal text before the bold part
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(
+          text: text.substring(lastEnd, match.start),
+          style: baseStyle,
+        ));
+      }
+      
+      // Add bold text
+      spans.add(TextSpan(
+        text: match.group(1) ?? '',
+        style: baseStyle.copyWith(fontWeight: FontWeight.w700),
+      ));
+      
+      lastEnd = match.end;
+    }
+    
+    // Add remaining normal text
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(lastEnd),
+        style: baseStyle,
+      ));
+    }
+    
+    // If no bold text found, return original text
+    if (spans.isEmpty) {
+      spans.add(TextSpan(text: text, style: baseStyle));
+    }
+    
+    return spans;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<ChatProvider>(
@@ -470,12 +511,17 @@ class _ChatViewState extends State<ChatView> with WidgetsBindingObserver {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          message.content,
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: message.isUser 
-                                ? AppColors.white 
-                                : AppColors.gray800,
+                        // Parse and display message content with bold support
+                        RichText(
+                          text: TextSpan(
+                            children: _parseMarkdownText(
+                              message.content,
+                              AppTextStyles.bodyMedium.copyWith(
+                                color: message.isUser 
+                                    ? AppColors.white 
+                                    : AppColors.gray800,
+                              ),
+                            ),
                           ),
                         ),
                         const SizedBox(height: 4),
