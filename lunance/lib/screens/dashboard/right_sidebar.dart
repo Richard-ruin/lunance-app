@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/app_text_styles.dart';
 import '../../widgets/common_widgets.dart';
 import '../auth/login_screen.dart';
+import 'settings/edit_profile_screen.dart';
+import 'settings/change_password_screen.dart';
+import 'settings/financial_settings_screen.dart';
+import 'settings/help_support_screen.dart';
+import 'settings/terms_conditions_screen.dart';
 
 class RightSidebar extends StatefulWidget {
   final VoidCallback onToggleSidebar;
@@ -28,62 +34,68 @@ class _RightSidebarState extends State<RightSidebar> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 280,
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        border: Border(
-          left: BorderSide(color: AppColors.border, width: 1),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.shadow,
-            blurRadius: 10,
-            offset: const Offset(-2, 0),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          // Header with Profile
-          _buildHeader(),
-          
-          // Settings Content
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              children: [
-                // Profile Section
-                _buildProfileSection(),
-                
-                const SizedBox(height: 24),
-                
-                // Preferences Section
-                _buildPreferencesSection(),
-                
-                const SizedBox(height: 24),
-                
-                // Account Section
-                _buildAccountSection(),
-                
-                const SizedBox(height: 24),
-                
-                // App Info Section
-                _buildAppInfoSection(),
-              ],
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, child) {
+        final isDark = themeProvider.isDarkMode;
+        
+        return Container(
+          width: 280,
+          decoration: BoxDecoration(
+            color: AppColors.getSurface(isDark),
+            border: Border(
+              left: BorderSide(color: AppColors.getBorder(isDark), width: 1),
             ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.getShadow(isDark),
+                blurRadius: 10,
+                offset: const Offset(-2, 0),
+              ),
+            ],
           ),
-        ],
-      ),
+          child: Column(
+            children: [
+              // Header with Profile
+              _buildHeader(isDark),
+              
+              // Settings Content
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  children: [
+                    // Profile Section
+                    _buildProfileSection(isDark),
+                    
+                    const SizedBox(height: 24),
+                    
+                    // Preferences Section
+                    _buildPreferencesSection(isDark, themeProvider),
+                    
+                    const SizedBox(height: 24),
+                    
+                    // Account Section
+                    _buildAccountSection(isDark),
+                    
+                    const SizedBox(height: 24),
+                    
+                    // App Info Section
+                    _buildAppInfoSection(isDark),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(bool isDark) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(color: AppColors.border, width: 1),
+          bottom: BorderSide(color: AppColors.getBorder(isDark), width: 1),
         ),
       ),
       child: Row(
@@ -95,13 +107,13 @@ class _RightSidebarState extends State<RightSidebar> {
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.gray100,
+                color: isDark ? AppColors.gray700 : AppColors.gray100,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
                 Icons.close,
                 size: 20,
-                color: AppColors.gray600,
+                color: AppColors.getTextSecondary(isDark),
               ),
             ),
           ),
@@ -115,11 +127,11 @@ class _RightSidebarState extends State<RightSidebar> {
                   children: [
                     CircleAvatar(
                       radius: 20,
-                      backgroundColor: AppColors.gray200,
+                      backgroundColor: isDark ? AppColors.gray700 : AppColors.gray200,
                       child: Text(
                         user?.profile?.fullName?.substring(0, 1).toUpperCase() ?? 'U',
                         style: AppTextStyles.labelLarge.copyWith(
-                          color: AppColors.gray700,
+                          color: AppColors.getTextPrimary(isDark),
                         ),
                       ),
                     ),
@@ -130,13 +142,15 @@ class _RightSidebarState extends State<RightSidebar> {
                         children: [
                           Text(
                             user?.profile?.fullName ?? 'User',
-                            style: AppTextStyles.labelLarge,
+                            style: AppTextStyles.labelLarge.copyWith(
+                              color: AppColors.getTextPrimary(isDark),
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
                             'Selamat ${_getGreeting()}',
                             style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.textSecondary,
+                              color: AppColors.getTextSecondary(isDark),
                             ),
                           ),
                         ],
@@ -152,7 +166,7 @@ class _RightSidebarState extends State<RightSidebar> {
     );
   }
 
-  Widget _buildProfileSection() {
+  Widget _buildProfileSection(bool isDark) {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
         final user = authProvider.user;
@@ -162,7 +176,7 @@ class _RightSidebarState extends State<RightSidebar> {
             Text(
               'Profil',
               style: AppTextStyles.labelSmall.copyWith(
-                color: AppColors.gray600,
+                color: AppColors.getTextSecondary(isDark),
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -172,9 +186,9 @@ class _RightSidebarState extends State<RightSidebar> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.gray50,
+                color: isDark ? AppColors.gray800 : AppColors.gray50,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
+                border: Border.all(color: AppColors.getBorder(isDark)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -201,12 +215,13 @@ class _RightSidebarState extends State<RightSidebar> {
                               user?.profile?.fullName ?? 'User',
                               style: AppTextStyles.labelLarge.copyWith(
                                 fontWeight: FontWeight.w600,
+                                color: AppColors.getTextPrimary(isDark),
                               ),
                             ),
                             Text(
                               user?.email ?? '',
                               style: AppTextStyles.bodySmall.copyWith(
-                                color: AppColors.textSecondary,
+                                color: AppColors.getTextSecondary(isDark),
                               ),
                             ),
                           ],
@@ -222,14 +237,14 @@ class _RightSidebarState extends State<RightSidebar> {
                         Icon(
                           Icons.school_outlined,
                           size: 16,
-                          color: AppColors.textTertiary,
+                          color: AppColors.getTextTertiary(isDark),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             user!.profile!.university!,
                             style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.textSecondary,
+                              color: AppColors.getTextSecondary(isDark),
                             ),
                           ),
                         ),
@@ -244,14 +259,14 @@ class _RightSidebarState extends State<RightSidebar> {
                         Icon(
                           Icons.location_on_outlined,
                           size: 16,
-                          color: AppColors.textTertiary,
+                          color: AppColors.getTextTertiary(isDark),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             user!.profile!.city!,
                             style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.textSecondary,
+                              color: AppColors.getTextSecondary(isDark),
                             ),
                           ),
                         ),
@@ -266,7 +281,7 @@ class _RightSidebarState extends State<RightSidebar> {
             
             // Edit Profile Button
             InkWell(
-              onTap: () => _showEditProfileDialog(user, authProvider),
+              onTap: () => _navigateToEditProfile(),
               borderRadius: BorderRadius.circular(8),
               child: Container(
                 width: double.infinity,
@@ -301,7 +316,7 @@ class _RightSidebarState extends State<RightSidebar> {
     );
   }
 
-  Widget _buildPreferencesSection() {
+  Widget _buildPreferencesSection(bool isDark, ThemeProvider themeProvider) {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
         final user = authProvider.user;
@@ -313,11 +328,23 @@ class _RightSidebarState extends State<RightSidebar> {
             Text(
               'Preferensi',
               style: AppTextStyles.labelSmall.copyWith(
-                color: AppColors.gray600,
+                color: AppColors.getTextSecondary(isDark),
                 fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 12),
+            
+            // Theme selection
+            _buildPreferenceItem(
+              'Mode Gelap',
+              'Tema gelap untuk mata',
+              Icons.dark_mode_outlined,
+              user.preferences.darkMode,
+              (value) => _updateTheme(value, themeProvider),
+              isDark,
+            ),
+            
+            const SizedBox(height: 8),
             
             // Preferences list
             _buildPreferenceItem(
@@ -326,6 +353,7 @@ class _RightSidebarState extends State<RightSidebar> {
               Icons.notifications_outlined,
               user.preferences.notificationsEnabled,
               (value) => _updatePreference('notifications_enabled', value, authProvider),
+              isDark,
             ),
             
             const SizedBox(height: 8),
@@ -336,16 +364,7 @@ class _RightSidebarState extends State<RightSidebar> {
               Icons.mic_outlined,
               user.preferences.voiceEnabled,
               (value) => _updatePreference('voice_enabled', value, authProvider),
-            ),
-            
-            const SizedBox(height: 8),
-            
-            _buildPreferenceItem(
-              'Mode Gelap',
-              'Tema gelap untuk mata',
-              Icons.dark_mode_outlined,
-              user.preferences.darkMode,
-              (value) => _updatePreference('dark_mode', value, authProvider),
+              isDark,
             ),
             
             const SizedBox(height: 8),
@@ -356,6 +375,7 @@ class _RightSidebarState extends State<RightSidebar> {
               Icons.auto_fix_high_outlined,
               user.preferences.autoCategorization,
               (value) => _updatePreference('auto_categorization', value, authProvider),
+              isDark,
             ),
           ],
         );
@@ -363,14 +383,14 @@ class _RightSidebarState extends State<RightSidebar> {
     );
   }
 
-  Widget _buildAccountSection() {
+  Widget _buildAccountSection(bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Akun',
           style: AppTextStyles.labelSmall.copyWith(
-            color: AppColors.gray600,
+            color: AppColors.getTextSecondary(isDark),
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -381,7 +401,8 @@ class _RightSidebarState extends State<RightSidebar> {
           'Ubah Password',
           'Ganti password akun',
           Icons.lock_outline,
-          () => _showChangePasswordDialog(),
+          () => _navigateToChangePassword(),
+          isDark,
         ),
         
         const SizedBox(height: 8),
@@ -390,7 +411,8 @@ class _RightSidebarState extends State<RightSidebar> {
           'Pengaturan Keuangan',
           'Kelola budget dan kategori',
           Icons.account_balance_wallet_outlined,
-          () => _showFinancialSettingsDialog(),
+          () => _navigateToFinancialSettings(),
+          isDark,
         ),
         
         const SizedBox(height: 8),
@@ -400,20 +422,21 @@ class _RightSidebarState extends State<RightSidebar> {
           'Logout dari akun',
           Icons.logout,
           () => _showLogoutDialog(),
+          isDark,
           isDestructive: true,
         ),
       ],
     );
   }
 
-  Widget _buildAppInfoSection() {
+  Widget _buildAppInfoSection(bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Tentang',
           style: AppTextStyles.labelSmall.copyWith(
-            color: AppColors.gray600,
+            color: AppColors.getTextSecondary(isDark),
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -423,9 +446,9 @@ class _RightSidebarState extends State<RightSidebar> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: AppColors.gray50,
+            color: isDark ? AppColors.gray800 : AppColors.gray50,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(color: AppColors.getBorder(isDark)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -454,12 +477,13 @@ class _RightSidebarState extends State<RightSidebar> {
                           'Lunance',
                           style: AppTextStyles.labelMedium.copyWith(
                             fontWeight: FontWeight.w600,
+                            color: AppColors.getTextPrimary(isDark),
                           ),
                         ),
                         Text(
                           'AI Finansial untuk Mahasiswa',
                           style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.textSecondary,
+                            color: AppColors.getTextSecondary(isDark),
                           ),
                         ),
                       ],
@@ -475,13 +499,13 @@ class _RightSidebarState extends State<RightSidebar> {
                   Icon(
                     Icons.info_outline,
                     size: 14,
-                    color: AppColors.textTertiary,
+                    color: AppColors.getTextTertiary(isDark),
                   ),
                   const SizedBox(width: 6),
                   Text(
                     'Versi 1.0.0',
                     style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textTertiary,
+                      color: AppColors.getTextTertiary(isDark),
                     ),
                   ),
                 ],
@@ -497,7 +521,8 @@ class _RightSidebarState extends State<RightSidebar> {
           'Bantuan & Dukungan',
           'FAQ dan kontak support',
           Icons.help_outline,
-          () => _showHelpDialog(),
+          () => _navigateToHelp(),
+          isDark,
         ),
         
         const SizedBox(height: 8),
@@ -506,7 +531,8 @@ class _RightSidebarState extends State<RightSidebar> {
           'Syarat & Ketentuan',
           'Kebijakan penggunaan',
           Icons.description_outlined,
-          () => _showTermsDialog(),
+          () => _navigateToTerms(),
+          isDark,
         ),
       ],
     );
@@ -518,13 +544,14 @@ class _RightSidebarState extends State<RightSidebar> {
     IconData icon,
     bool value,
     Function(bool) onChanged,
+    bool isDark,
   ) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.gray50,
+        color: isDark ? AppColors.gray800 : AppColors.gray50,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: AppColors.getBorder(isDark)),
       ),
       child: Row(
         children: [
@@ -542,12 +569,13 @@ class _RightSidebarState extends State<RightSidebar> {
                   title,
                   style: AppTextStyles.bodySmall.copyWith(
                     fontWeight: FontWeight.w500,
+                    color: AppColors.getTextPrimary(isDark),
                   ),
                 ),
                 Text(
                   subtitle,
                   style: AppTextStyles.caption.copyWith(
-                    color: AppColors.textTertiary,
+                    color: AppColors.getTextTertiary(isDark),
                   ),
                 ),
               ],
@@ -568,7 +596,8 @@ class _RightSidebarState extends State<RightSidebar> {
     String title,
     String subtitle,
     IconData icon,
-    VoidCallback onTap, {
+    VoidCallback onTap,
+    bool isDark, {
     bool isDestructive = false,
   }) {
     return InkWell(
@@ -577,9 +606,9 @@ class _RightSidebarState extends State<RightSidebar> {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AppColors.gray50,
+          color: isDark ? AppColors.gray800 : AppColors.gray50,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: AppColors.getBorder(isDark)),
         ),
         child: Row(
           children: [
@@ -597,13 +626,15 @@ class _RightSidebarState extends State<RightSidebar> {
                     title,
                     style: AppTextStyles.bodySmall.copyWith(
                       fontWeight: FontWeight.w500,
-                      color: isDestructive ? AppColors.error : AppColors.textPrimary,
+                      color: isDestructive 
+                          ? AppColors.error 
+                          : AppColors.getTextPrimary(isDark),
                     ),
                   ),
                   Text(
                     subtitle,
                     style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textTertiary,
+                      color: AppColors.getTextTertiary(isDark),
                     ),
                   ),
                 ],
@@ -612,7 +643,7 @@ class _RightSidebarState extends State<RightSidebar> {
             Icon(
               Icons.arrow_forward_ios,
               size: 12,
-              color: AppColors.textTertiary,
+              color: AppColors.getTextTertiary(isDark),
             ),
           ],
         ),
@@ -620,57 +651,39 @@ class _RightSidebarState extends State<RightSidebar> {
     );
   }
 
-  // Dialog methods
-  void _showEditProfileDialog(user, AuthProvider authProvider) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Fitur edit profil akan segera tersedia'),
-        backgroundColor: AppColors.info,
-      ),
+  // Navigation methods
+  void _navigateToEditProfile() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const EditProfileScreen()),
     );
   }
 
-  void _showChangePasswordDialog() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Fitur ubah password akan segera tersedia'),
-        backgroundColor: AppColors.info,
-      ),
+  void _navigateToChangePassword() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ChangePasswordScreen()),
     );
   }
 
-  void _showFinancialSettingsDialog() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Fitur pengaturan keuangan akan segera tersedia'),
-        backgroundColor: AppColors.info,
-      ),
+  void _navigateToFinancialSettings() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const FinancialSettingsScreen()),
     );
   }
 
-  void _showHelpDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => CustomAlertDialog(
-        title: 'Bantuan & Dukungan',
-        message: 'Untuk bantuan lebih lanjut, Anda dapat menghubungi tim support kami melalui email atau chat dengan Luna AI.',
-        icon: Icons.help_outline,
-        iconColor: AppColors.info,
-        primaryButtonText: 'OK',
-      ),
+  void _navigateToHelp() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const HelpSupportScreen()),
     );
   }
 
-  void _showTermsDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => CustomAlertDialog(
-        title: 'Syarat & Ketentuan',
-        message: 'Dengan menggunakan Lunance, Anda menyetujui syarat dan ketentuan yang berlaku. Silakan baca kebijakan privasi kami untuk informasi lebih lanjut.',
-        icon: Icons.description_outlined,
-        iconColor: AppColors.info,
-        primaryButtonText: 'OK',
-      ),
+  void _navigateToTerms() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const TermsConditionsScreen()),
     );
   }
 
@@ -700,11 +713,16 @@ class _RightSidebarState extends State<RightSidebar> {
     );
   }
 
+  // Update theme
+  void _updateTheme(bool isDark, ThemeProvider themeProvider) {
+    themeProvider.setTheme(isDark ? AppTheme.dark : AppTheme.light);
+  }
+
+  // Update preferences
   Future<void> _updatePreference(String key, bool value, AuthProvider authProvider) async {
     final success = await authProvider.updateProfile(
       notificationsEnabled: key == 'notifications_enabled' ? value : null,
       voiceEnabled: key == 'voice_enabled' ? value : null,
-      darkMode: key == 'dark_mode' ? value : null,
       autoCategorization: key == 'auto_categorization' ? value : null,
     );
 
