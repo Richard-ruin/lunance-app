@@ -1,4 +1,4 @@
-# app/services/indoroberta_financial_parser.py - FIXED MODEL PATH
+# app/services/indoroberta_financial_parser.py - COMPLETE FIXED VERSION
 import re
 import json
 import logging
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class IndoRoBERTaFinancialParser:
     """
-    FIXED: Enhanced Financial Parser dengan proper model path detection
+    COMPLETE FIXED: Enhanced Financial Parser dengan proper ML model handling
     """
     
     def __init__(self, model_path: str = None):
@@ -82,7 +82,7 @@ class IndoRoBERTaFinancialParser:
         return None
     
     def _load_models(self):
-        """Load fine-tuned IndoBERT models"""
+        """Load fine-tuned IndoBERT models with proper error handling"""
         try:
             # Check if we have transformers installed
             import torch
@@ -103,19 +103,24 @@ class IndoRoBERTaFinancialParser:
             self.category_tokenizer = AutoTokenizer.from_pretrained(category_model_path)
             self.category_model = AutoModelForSequenceClassification.from_pretrained(category_model_path)
             
-            # Create pipelines
+            # Create pipelines with proper device handling
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            logger.info(f"Device set to use {device}")
+            
             self.intent_pipeline = pipeline(
                 "text-classification",
                 model=self.intent_model,
                 tokenizer=self.intent_tokenizer,
-                top_k=None
+                device=0 if device == "cuda" else -1,
+                return_all_scores=True
             )
             
             self.category_pipeline = pipeline(
                 "text-classification",
                 model=self.category_model,
                 tokenizer=self.category_tokenizer,
-                top_k=None
+                device=0 if device == "cuda" else -1,
+                return_all_scores=True
             )
             
             self.models_loaded = True
@@ -239,21 +244,30 @@ class IndoRoBERTaFinancialParser:
             ],
             "Transportasi Wajib": ["transport", "angkot", "bus", "kereta", "ojol", "bensin"],
             "Pendidikan": ["buku", "alat tulis", "fotocopy", "print", "ukt", "spp"],
+            "Internet & Komunikasi": ["internet", "wifi", "pulsa", "paket data", "telkom"],
+            "Kesehatan & Kebersihan": ["obat", "dokter", "sabun", "shampo", "pasta gigi"],
             
             # WANTS
             "Hiburan & Sosial": ["nonton", "bioskop", "game", "netflix", "hangout"],
             "Jajan & Snack": ["jajan", "snack", "es", "kopi", "bubble tea", "martabak"],
             "Pakaian & Aksesoris": ["baju", "celana", "sepatu", "sandal", "tas"],
+            "Organisasi & Event": ["organisasi", "event", "seminar", "workshop"],
+            "Target Tabungan Barang": ["target", "nabung", "saving goal"],
+            "Lainnya (Wants)": ["lainnya", "wants", "keinginan"],
             
             # SAVINGS
             "Tabungan Umum": ["tabungan", "saving", "simpan", "deposito"],
             "Dana Darurat": ["dana darurat", "emergency", "darurat", "cadangan"],
+            "Investasi Masa Depan": ["investasi", "reksadana", "saham", "masa depan"],
+            "Tabungan Jangka Panjang": ["jangka panjang", "long term", "retirement"],
             
             # INCOME
             "Uang Saku/Kiriman Ortu": ["uang saku", "kiriman", "ortu", "mama", "papa"],
             "Part-time Job": ["part time", "kerja", "jual", "jualan", "ojol"],
             "Freelance/Project": ["freelance", "project", "tugas", "design", "coding"],
             "Beasiswa": ["beasiswa", "scholarship", "bidikmisi", "pip"],
+            "Hadiah/Bonus": ["hadiah", "bonus", "menang", "juara"],
+            "Lainnya": ["lainnya", "other", "misc"]
         }
     
     # ==========================================
@@ -313,23 +327,37 @@ class IndoRoBERTaFinancialParser:
             return self._detect_transaction_type_rule(text)
     
     def _detect_transaction_type_ml(self, text: str) -> Optional[str]:
-        """Deteksi menggunakan ML model"""
+        """FIXED: Deteksi menggunakan ML model dengan proper error handling"""
         try:
             result = self.intent_pipeline(text)
             
-            # Get highest score prediction
-            best_prediction = max(result, key=lambda x: x['score'])
-            
-            logger.info(f"🎯 ML prediction: {best_prediction['label']} (confidence: {best_prediction['score']:.3f})")
-            
-            if best_prediction['score'] > 0.7:  # Confidence threshold
-                label = best_prediction['label'].lower()
+                            # FIXED: Proper handling of result structure
+            if isinstance(result, list) and len(result) > 0:
+                # Get the first result (since we passed a single text)
+                predictions = result[0] if isinstance(result[0], list) else result
                 
-                if label in ['income', 'expense', 'savings_goal']:
-                    return label
+                # Find highest score prediction
+                best_prediction = None
+                best_score = 0
+                
+                for pred in predictions:
+                    if isinstance(pred, dict) and 'score' in pred and 'label' in pred:
+                        if pred['score'] > best_score:
+                            best_score = pred['score']
+                            best_prediction = pred
+                
+                if best_prediction:
+                    logger.info(f"🎯 ML prediction: {best_prediction['label']} (confidence: {best_prediction['score']:.3f})")
+                    
+                    if best_prediction['score'] > 0.7:  # Confidence threshold
+                        label = best_prediction['label'].lower()
+                        
+                        if label in ['income', 'expense', 'savings_goal']:
+                            return label
+                    else:
+                        logger.info("🔄 ML confidence too low, falling back to rule-based")
             
             # Fallback to rule-based
-            logger.info("🔄 ML confidence too low, falling back to rule-based")
             return self._detect_transaction_type_rule(text)
             
         except Exception as e:
@@ -446,7 +474,7 @@ class IndoRoBERTaFinancialParser:
             }
     
     # ==========================================
-    # HELPER METHODS (rest of the methods remain same)
+    # HELPER METHODS
     # ==========================================
     
     def parse_target_date(self, text: str) -> Optional[datetime]:
@@ -512,7 +540,7 @@ class IndoRoBERTaFinancialParser:
         text_lower = text.lower()
         
         for category, keywords in self.category_keywords.items():
-            if any(budget_type in self.budget_types["income"]["categories"] for budget_type in [category]):
+            if category in self.budget_types["income"]["categories"]:
                 if any(keyword in text_lower for keyword in keywords):
                     return category
         
@@ -524,6 +552,10 @@ class IndoRoBERTaFinancialParser:
         
         # Check all expense categories with priority
         for category, keywords in self.category_keywords.items():
+            # Skip income categories
+            if category in self.budget_types["income"]["categories"]:
+                continue
+                
             for keyword in keywords:
                 if keyword in text_lower:
                     # Special handling for "uang kos" 

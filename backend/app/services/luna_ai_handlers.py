@@ -1,5 +1,6 @@
-# app/services/luna_ai_handlers.py - FIXED dengan Consistent Confirmation Flow
+# app/services/luna_ai_handlers.py - COMPLETE FIXED Event Loop Issues
 import random
+import asyncio
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from bson import ObjectId
@@ -12,12 +13,17 @@ from .finance_advisor import FinanceAdvisor
 
 
 class LunaAIHandlers(LunaAIBase):
-    """Luna AI Handlers untuk transaction input & savings goal CRUD operations - FIXED VERSION"""
+    """COMPLETE FIXED Luna AI Handlers - Event Loop Issues Resolved"""
     
     def __init__(self):
         super().__init__()
-        self.analyzer = FinanceAnalyzer()
-        self.advisor = FinanceAdvisor()
+        try:
+            self.analyzer = FinanceAnalyzer()
+            self.advisor = FinanceAdvisor()
+        except Exception as e:
+            print(f"⚠️ Warning: Could not initialize analyzer/advisor: {e}")
+            self.analyzer = None
+            self.advisor = None
     
     # ==========================================
     # FINANCIAL DATA INPUT HANDLERS - FIXED
@@ -25,7 +31,7 @@ class LunaAIHandlers(LunaAIBase):
     
     async def handle_financial_data(self, user_id: str, conversation_id: str, message_id: str,
                                   transaction_type: str, amount: float, original_message: str) -> str:
-        """FIXED: Handle financial data input dengan CONSISTENT confirmation flow"""
+        """FIXED: Handle financial data input dengan ASYNC confirmation flow"""
         
         # Get user's monthly income for budget calculation
         user_doc = self.db.users.find_one({"_id": ObjectId(user_id)})
@@ -134,7 +140,7 @@ Apakah informasi ini sudah benar? Ketik **"ya"** untuk menyimpan atau **"tidak"*
     # ==========================================
     
     async def handle_confirmation(self, user_id: str, conversation_id: str, confirmed: bool) -> str:
-        """FIXED: Handle konfirmasi dengan response yang sesuai dokumentasi"""
+        """FIXED: Handle konfirmasi dengan async support"""
         print(f"🔄 Processing confirmation: {confirmed}")
         
         # Get latest pending data
@@ -142,7 +148,6 @@ Apakah informasi ini sudah benar? Ketik **"ya"** untuk menyimpan atau **"tidak"*
         
         if not pending_data:
             print("❌ No pending data found")
-            # Return generic response instead of treating as regular message
             return "Saya tidak menemukan data yang perlu dikonfirmasi. Silakan coba input transaksi atau target tabungan baru."
         
         data_type = pending_data.get("data_type")
@@ -159,13 +164,15 @@ Apakah informasi ini sudah benar? Ketik **"ya"** untuk menyimpan atau **"tidak"*
                 return await self.cancel_financial_data(user_id, pending_data)
     
     async def confirm_financial_data(self, user_id: str, pending_data: dict) -> str:
-        """FIXED: Konfirmasi dan simpan data keuangan dengan response sesuai dokumentasi"""
+        """FIXED: Konfirmasi dengan proper async handling"""
         try:
             # Import finance service
             from .finance_service import FinanceService
             finance_service = FinanceService()
             
             pending_id = str(pending_data["_id"])
+            
+            # FIXED: Use sync confirm_pending_data to avoid event loop conflicts
             result = finance_service.confirm_pending_data(pending_id, user_id, True)
             
             if result["success"]:
@@ -186,25 +193,33 @@ Apakah informasi ini sudah benar? Ketik **"ya"** untuk menyimpan atau **"tidak"*
 
 """
                     
-                    # Generate post-transaction advice
-                    post_advice = await self.advisor.generate_post_transaction_advice(user_id, created_data)
-                    
-                    if post_advice.get("has_advice"):
-                        # Add main advice
-                        if post_advice.get("advice"):
-                            response += "💡 **Saran untuk Anda:**\n"
-                            for advice in post_advice["advice"][:2]:  # Limit to 2 points
-                                response += f"• {advice}\n"
-                            response += "\n"
-                        
-                        # Add warnings if any
-                        if post_advice.get("warnings"):
-                            response += "⚠️ **Peringatan:**\n"
-                            for warning in post_advice["warnings"][:1]:  # Limit to 1 warning
-                                response += f"• {warning}\n"
-                            response += "\n"
-                    else:
-                        # Fallback advice
+                    # Generate post-transaction advice asynchronously
+                    try:
+                        if self.advisor:
+                            post_advice = await self.advisor.generate_post_transaction_advice(user_id, created_data)
+                            
+                            if post_advice.get("has_advice"):
+                                # Add main advice
+                                if post_advice.get("advice"):
+                                    response += "💡 **Saran untuk Anda:**\n"
+                                    for advice in post_advice["advice"][:2]:  # Limit to 2 points
+                                        response += f"• {advice}\n"
+                                    response += "\n"
+                                
+                                # Add warnings if any
+                                if post_advice.get("warnings"):
+                                    response += "⚠️ **Peringatan:**\n"
+                                    for warning in post_advice["warnings"][:1]:  # Limit to 1 warning
+                                        response += f"• {warning}\n"
+                                    response += "\n"
+                            else:
+                                # Fallback advice
+                                response += f"💡 **Tips**: {random.choice(self.student_tips)}\n\n"
+                        else:
+                            # Fallback when advisor not available
+                            response += f"💡 **Tips**: {random.choice(self.student_tips)}\n\n"
+                    except Exception as e:
+                        print(f"⚠️ Post-advice generation failed: {e}")
                         response += f"💡 **Tips**: {random.choice(self.student_tips)}\n\n"
                     
                     response += "Silakan input transaksi lainnya atau tanyakan analisis keuangan Anda! 😊"
@@ -234,13 +249,15 @@ Selamat menabung! Saya siap membantu track progress Anda. 🏆"""
             return "😅 Maaf, terjadi kesalahan sistem saat menyimpan data. Silakan coba input ulang transaksi Anda."
     
     async def cancel_financial_data(self, user_id: str, pending_data: dict) -> str:
-        """FIXED: Batalkan data keuangan dengan response yang friendly"""
+        """FIXED: Batalkan data keuangan dengan proper async handling"""
         try:
             # Import finance service
             from .finance_service import FinanceService
             finance_service = FinanceService()
             
             pending_id = str(pending_data["_id"])
+            
+            # FIXED: Use sync confirm_pending_data to avoid event loop conflicts
             result = finance_service.confirm_pending_data(pending_id, user_id, False)
             
             if result["success"]:
@@ -357,11 +374,11 @@ Siap membantu Anda mencapai financial goals! 💪✨"""
             return random.choice(default_responses)
     
     # ==========================================
-    # OTHER METHODS (unchanged from original)
+    # UPDATE/DELETE HANDLERS - ASYNC COMPATIBLE
     # ==========================================
     
     async def handle_update_delete_command(self, user_id: str, conversation_id: str, message_id: str, command: Dict[str, Any]) -> str:
-        """Handle perintah update/delete savings goal"""
+        """Handle perintah update/delete savings goal dengan async support"""
         action = command["action"]
         
         if action == "list":
@@ -409,7 +426,7 @@ Contoh: *"ubah target {matching_goals[0]['item_name']} jadi 15 juta"*"""
             return await self.handle_delete_savings_goal(user_id, conversation_id, message_id, goal, command)
     
     async def find_matching_savings_goals(self, user_id: str, search_term: str) -> List[Dict[str, Any]]:
-        """Cari savings goals yang cocok dengan search term"""
+        """Cari savings goals yang cocok dengan search term - async compatible"""
         try:
             # Get all active savings goals
             goals_cursor = self.db.savings_goals.find({
@@ -440,6 +457,99 @@ Contoh: *"ubah target {matching_goals[0]['item_name']} jadi 15 juta"*"""
         except Exception as e:
             print(f"❌ Error finding matching savings goals: {e}")
             return []
+    
+    async def handle_list_savings_goals(self, user_id: str) -> str:
+        """Handle request untuk list semua savings goals"""
+        try:
+            # Get all savings goals
+            goals_cursor = self.db.savings_goals.find({
+                "user_id": user_id,
+                "status": {"$in": ["active", "paused", "completed"]}
+            }).sort("created_at", -1)
+            
+            goals = list(goals_cursor)
+            
+            if not goals:
+                return """🎯 **Belum Ada Target Tabungan**
+
+Anda belum memiliki target tabungan. Yuk buat target pertama!
+
+**Contoh membuat target:**
+• "Mau nabung buat beli laptop 10 juta pada tanggal 22 januari 2026"
+• "Target beli motor 25 juta dalam 1 tahun"
+• "Pengen beli hp 5 juta"
+
+💡 Target tabungan akan membantu Anda lebih fokus dan disiplin dalam menabung!"""
+            
+            # Group by status
+            active_goals = [g for g in goals if g["status"] == "active"]
+            completed_goals = [g for g in goals if g["status"] == "completed"]
+            paused_goals = [g for g in goals if g["status"] == "paused"]
+            
+            response = "🎯 **Target Tabungan Anda**:\n\n"
+            
+            # Active goals
+            if active_goals:
+                response += "**🟢 Target Aktif:**\n"
+                for goal in active_goals:
+                    progress = (goal["current_amount"] / goal["target_amount"] * 100) if goal["target_amount"] > 0 else 0
+                    progress_bar = "🟩" * int(progress // 10) + "⬜" * (10 - int(progress // 10))
+                    
+                    target_date_str = ""
+                    if goal.get("target_date"):
+                        target_date = goal["target_date"]
+                        if isinstance(target_date, str):
+                            try:
+                                target_date = datetime.fromisoformat(target_date.replace('Z', '+00:00'))
+                            except:
+                                target_date = None
+                        
+                        if target_date:
+                            days_remaining = (target_date - datetime.now()).days
+                            if days_remaining > 0:
+                                target_date_str = f" (⏰ {days_remaining} hari lagi)"
+                            elif days_remaining == 0:
+                                target_date_str = " (⏰ hari ini!)"
+                            else:
+                                target_date_str = f" (⚠️ lewat {abs(days_remaining)} hari)"
+                    
+                    response += f"• **{goal['item_name']}**{target_date_str}\n"
+                    response += f"  {progress_bar} {progress:.1f}%\n"
+                    response += f"  💰 {self.format_currency(goal['current_amount'])} / {self.format_currency(goal['target_amount'])}\n\n"
+            
+            # Completed goals
+            if completed_goals:
+                response += "**🎉 Target Tercapai:**\n"
+                for goal in completed_goals[:3]:  # Show max 3
+                    response += f"• **{goal['item_name']}** - {self.format_currency(goal['target_amount'])} ✅\n"
+                if len(completed_goals) > 3:
+                    response += f"• *...dan {len(completed_goals) - 3} target lainnya*\n"
+                response += "\n"
+            
+            # Paused goals
+            if paused_goals:
+                response += "**⏸️ Target Dipause:**\n"
+                for goal in paused_goals[:2]:  # Show max 2
+                    progress = (goal["current_amount"] / goal["target_amount"] * 100) if goal["target_amount"] > 0 else 0
+                    response += f"• **{goal['item_name']}** ({progress:.1f}%) - {self.format_currency(goal['target_amount'])}\n"
+                response += "\n"
+            
+            response += """**🛠️ Perintah yang bisa digunakan:**
+• *"ubah target [nama] tanggal [tanggal baru]"* - Ubah target waktu saja
+• *"ubah target [nama] jadi [harga baru]"* - Ubah harga saja
+• *"ganti nama [nama] jadi [nama baru]"* - Ubah nama saja
+• *"hapus target [nama]"* - Hapus target
+• *"progress tabungan"* - Lihat progress detail
+
+⚠️ **INGAT**: Hanya 1 perubahan per pesan untuk hasil yang akurat!
+
+💡 *Tip: Sebutkan nama barang yang spesifik untuk perintah yang lebih akurat*"""
+            
+            return response
+            
+        except Exception as e:
+            print(f"❌ Error listing savings goals: {e}")
+            return "😅 Maaf, terjadi kesalahan saat mengambil daftar target. Coba lagi ya!"
     
     async def handle_update_savings_goal(self, user_id: str, conversation_id: str, message_id: str, 
                                        goal: Dict[str, Any], command: Dict[str, Any]) -> str:
@@ -620,99 +730,6 @@ Apakah Anda yakin ingin menghapus target ini? Ketik **"ya"** untuk menghapus ata
         )
         
         return confirmation_message
-    
-    async def handle_list_savings_goals(self, user_id: str) -> str:
-        """Handle request untuk list semua savings goals"""
-        try:
-            # Get all savings goals
-            goals_cursor = self.db.savings_goals.find({
-                "user_id": user_id,
-                "status": {"$in": ["active", "paused", "completed"]}
-            }).sort("created_at", -1)
-            
-            goals = list(goals_cursor)
-            
-            if not goals:
-                return """🎯 **Belum Ada Target Tabungan**
-
-Anda belum memiliki target tabungan. Yuk buat target pertama!
-
-**Contoh membuat target:**
-• "Mau nabung buat beli laptop 10 juta pada tanggal 22 januari 2026"
-• "Target beli motor 25 juta dalam 1 tahun"
-• "Pengen beli hp 5 juta"
-
-💡 Target tabungan akan membantu Anda lebih fokus dan disiplin dalam menabung!"""
-            
-            # Group by status
-            active_goals = [g for g in goals if g["status"] == "active"]
-            completed_goals = [g for g in goals if g["status"] == "completed"]
-            paused_goals = [g for g in goals if g["status"] == "paused"]
-            
-            response = "🎯 **Target Tabungan Anda**:\n\n"
-            
-            # Active goals
-            if active_goals:
-                response += "**🟢 Target Aktif:**\n"
-                for goal in active_goals:
-                    progress = (goal["current_amount"] / goal["target_amount"] * 100) if goal["target_amount"] > 0 else 0
-                    progress_bar = "🟩" * int(progress // 10) + "⬜" * (10 - int(progress // 10))
-                    
-                    target_date_str = ""
-                    if goal.get("target_date"):
-                        target_date = goal["target_date"]
-                        if isinstance(target_date, str):
-                            try:
-                                target_date = datetime.fromisoformat(target_date.replace('Z', '+00:00'))
-                            except:
-                                target_date = None
-                        
-                        if target_date:
-                            days_remaining = (target_date - datetime.now()).days
-                            if days_remaining > 0:
-                                target_date_str = f" (⏰ {days_remaining} hari lagi)"
-                            elif days_remaining == 0:
-                                target_date_str = " (⏰ hari ini!)"
-                            else:
-                                target_date_str = f" (⚠️ lewat {abs(days_remaining)} hari)"
-                    
-                    response += f"• **{goal['item_name']}**{target_date_str}\n"
-                    response += f"  {progress_bar} {progress:.1f}%\n"
-                    response += f"  💰 {self.format_currency(goal['current_amount'])} / {self.format_currency(goal['target_amount'])}\n\n"
-            
-            # Completed goals
-            if completed_goals:
-                response += "**🎉 Target Tercapai:**\n"
-                for goal in completed_goals[:3]:  # Show max 3
-                    response += f"• **{goal['item_name']}** - {self.format_currency(goal['target_amount'])} ✅\n"
-                if len(completed_goals) > 3:
-                    response += f"• *...dan {len(completed_goals) - 3} target lainnya*\n"
-                response += "\n"
-            
-            # Paused goals
-            if paused_goals:
-                response += "**⏸️ Target Dipause:**\n"
-                for goal in paused_goals[:2]:  # Show max 2
-                    progress = (goal["current_amount"] / goal["target_amount"] * 100) if goal["target_amount"] > 0 else 0
-                    response += f"• **{goal['item_name']}** ({progress:.1f}%) - {self.format_currency(goal['target_amount'])}\n"
-                response += "\n"
-            
-            response += """**🛠️ Perintah yang bisa digunakan:**
-• *"ubah target [nama] tanggal [tanggal baru]"* - Ubah target waktu saja
-• *"ubah target [nama] jadi [harga baru]"* - Ubah harga saja
-• *"ganti nama [nama] jadi [nama baru]"* - Ubah nama saja
-• *"hapus target [nama]"* - Hapus target
-• *"progress tabungan"* - Lihat progress detail
-
-⚠️ **INGAT**: Hanya 1 perubahan per pesan untuk hasil yang akurat!
-
-💡 *Tip: Sebutkan nama barang yang spesifik untuk perintah yang lebih akurat*"""
-            
-            return response
-            
-        except Exception as e:
-            print(f"❌ Error listing savings goals: {e}")
-            return "😅 Maaf, terjadi kesalahan saat mengambil daftar target. Coba lagi ya!"
     
     async def confirm_update_delete_action(self, user_id: str, pending_data: dict) -> str:
         """Konfirmasi dan eksekusi update/delete savings goal"""

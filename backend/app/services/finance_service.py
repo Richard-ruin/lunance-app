@@ -1,4 +1,4 @@
-# app/services/finance_service.py - COMPLETE VERSION with IndoRoBERTa integration
+# app/services/finance_service.py - COMPLETE FIXED VERSION
 import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
@@ -24,7 +24,7 @@ except ImportError as e:
     INDOROBERTA_AVAILABLE = False
 
 class FinanceService:
-    """Complete Finance Service dengan IndoRoBERTa parser integration"""
+    """COMPLETE FIXED Finance Service - Event Loop Issues Resolved"""
     
     def __init__(self):
         self.db = get_database()
@@ -860,11 +860,11 @@ class FinanceService:
             }
     
     # ==========================================
-    # PENDING DATA METHODS
+    # PENDING DATA METHODS - FIXED EVENT LOOP ISSUES
     # ==========================================
     
     def confirm_pending_data(self, pending_id: str, user_id: str, confirmed: bool) -> Dict[str, Any]:
-        """Confirm pending financial data"""
+        """FIXED: Confirm pending financial data - Synchronous approach to avoid event loop conflicts"""
         try:
             # Get pending data
             pending_doc = self.db.pending_financial_data.find_one({
@@ -882,7 +882,7 @@ class FinanceService:
                 parsed_data = pending_doc["parsed_data"]
                 
                 if data_type in ["income", "expense", "transaction"]:
-                    # Create transaction
+                    # Create transaction - FIXED: Use sync approach
                     transaction_data = {
                         "type": parsed_data.get("type", data_type),
                         "amount": parsed_data["amount"],
@@ -894,28 +894,23 @@ class FinanceService:
                         "conversation_id": pending_doc["conversation_id"]
                     }
                     
-                    # Use async context if needed
-                    import asyncio
-                    if asyncio.iscoroutinefunction(self.create_transaction):
-                        loop = asyncio.get_event_loop()
-                        transaction = loop.run_until_complete(self.create_transaction(user_id, transaction_data))
-                    else:
-                        transaction = self.create_transaction(user_id, transaction_data)
+                    # CRITICAL FIX: Use sync method to create transaction
+                    transaction = self._create_transaction_sync(user_id, transaction_data)
                     
                     result_data = {
                         "type": "transaction",
                         "data": {
-                            "id": transaction.id,
-                            "type": transaction.type.value,
-                            "amount": transaction.amount,
-                            "category": transaction.category,
-                            "description": transaction.description,
-                            "date": transaction.date
+                            "id": transaction["id"],
+                            "type": transaction["type"],
+                            "amount": transaction["amount"],
+                            "category": transaction["category"],
+                            "description": transaction["description"],
+                            "date": transaction["date"]
                         }
                     }
                     
                 elif data_type == "savings_goal":
-                    # Create savings goal
+                    # Create savings goal - FIXED: Use sync approach
                     goal_data = {
                         "item_name": parsed_data["item_name"],
                         "target_amount": parsed_data["target_amount"],
@@ -926,22 +921,17 @@ class FinanceService:
                         "conversation_id": pending_doc["conversation_id"]
                     }
                     
-                    # Use async context if needed
-                    import asyncio
-                    if asyncio.iscoroutinefunction(self.create_savings_goal):
-                        loop = asyncio.get_event_loop()
-                        goal = loop.run_until_complete(self.create_savings_goal(user_id, goal_data))
-                    else:
-                        goal = self.create_savings_goal(user_id, goal_data)
+                    # CRITICAL FIX: Use sync method to create savings goal
+                    goal = self._create_savings_goal_sync(user_id, goal_data)
                     
                     result_data = {
                         "type": "savings_goal",
                         "data": {
-                            "id": goal.id,
-                            "item_name": goal.item_name,
-                            "target_amount": goal.target_amount,
-                            "description": goal.description,
-                            "target_date": goal.target_date
+                            "id": goal["id"],
+                            "item_name": goal["item_name"],
+                            "target_amount": goal["target_amount"],
+                            "description": goal["description"],
+                            "target_date": goal["target_date"]
                         }
                     }
                 
@@ -982,6 +972,88 @@ class FinanceService:
                 "message": str(e),
                 "parser_info": self.get_parser_info()
             }
+    
+    def _create_transaction_sync(self, user_id: str, transaction_data: Dict[str, Any]) -> Dict[str, Any]:
+        """FIXED: Synchronous transaction creation to avoid event loop conflicts"""
+        try:
+            now = now_for_db()
+            
+            # Create transaction document
+            transaction_doc = {
+                "user_id": user_id,
+                "type": transaction_data["type"],
+                "amount": transaction_data["amount"],
+                "category": transaction_data["category"],
+                "description": transaction_data.get("description", ""),
+                "date": transaction_data.get("date", now),
+                "status": TransactionStatus.CONFIRMED.value,
+                "source": transaction_data.get("source", "manual"),
+                "tags": transaction_data.get("tags", []),
+                "notes": transaction_data.get("notes"),
+                "chat_message_id": transaction_data.get("chat_message_id"),
+                "conversation_id": transaction_data.get("conversation_id"),
+                "created_at": now,
+                "updated_at": now,
+                "confirmed_at": now
+            }
+            
+            result = self.db.transactions.insert_one(transaction_doc)
+            transaction_id = str(result.inserted_id)
+            
+            logger.info(f"✅ Transaction created (sync): {transaction_id}")
+            
+            return {
+                "id": transaction_id,
+                "type": transaction_data["type"],
+                "amount": transaction_data["amount"],
+                "category": transaction_data["category"],
+                "description": transaction_data.get("description", ""),
+                "date": transaction_data.get("date", now)
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Error creating transaction (sync): {e}")
+            raise
+    
+    def _create_savings_goal_sync(self, user_id: str, goal_data: Dict[str, Any]) -> Dict[str, Any]:
+        """FIXED: Synchronous savings goal creation to avoid event loop conflicts"""
+        try:
+            now = now_for_db()
+            
+            goal_doc = {
+                "user_id": user_id,
+                "item_name": goal_data["item_name"],
+                "target_amount": goal_data["target_amount"],
+                "current_amount": goal_data.get("current_amount", 0.0),
+                "description": goal_data.get("description"),
+                "target_date": goal_data.get("target_date"),
+                "status": SavingsGoalStatus.ACTIVE.value,
+                "monthly_target": goal_data.get("monthly_target"),
+                "source": goal_data.get("source", "manual"),
+                "tags": goal_data.get("tags", []),
+                "notes": goal_data.get("notes"),
+                "chat_message_id": goal_data.get("chat_message_id"),
+                "conversation_id": goal_data.get("conversation_id"),
+                "created_at": now,
+                "updated_at": now
+            }
+            
+            result = self.db.savings_goals.insert_one(goal_doc)
+            goal_id = str(result.inserted_id)
+            
+            logger.info(f"✅ Savings goal created (sync): {goal_id}")
+            
+            return {
+                "id": goal_id,
+                "item_name": goal_data["item_name"],
+                "target_amount": goal_data["target_amount"],
+                "description": goal_data.get("description"),
+                "target_date": goal_data.get("target_date")
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Error creating savings goal (sync): {e}")
+            raise
     
     # ==========================================
     # UTILITY METHODS
@@ -1071,3 +1143,4 @@ class FinanceService:
             return 'Baru saja'
         except Exception:
             return 'Unknown'
+        
