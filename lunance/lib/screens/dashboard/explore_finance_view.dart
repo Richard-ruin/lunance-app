@@ -10,7 +10,7 @@ import '../../widgets/common_widgets.dart';
 import 'finance/dashboard_tab.dart';
 import 'finance/analytics_tab.dart';
 import 'finance/history_tab.dart';
-import 'finance/predictions_tab.dart';
+import 'finance/reports_tab.dart'; // CHANGED: reports instead of predictions
 
 class ExploreFinanceView extends StatefulWidget {
   const ExploreFinanceView({Key? key}) : super(key: key);
@@ -26,6 +26,7 @@ class _ExploreFinanceViewState extends State<ExploreFinanceView>
   bool _hasError = false;
   String? _errorMessage;
 
+  // UPDATED: Replace predictions with reports
   final List<Tab> _tabs = [
     const Tab(
       icon: Icon(Icons.dashboard_outlined),
@@ -40,8 +41,8 @@ class _ExploreFinanceViewState extends State<ExploreFinanceView>
       text: 'History',
     ),
     const Tab(
-      icon: Icon(Icons.trending_up_outlined),
-      text: 'Predictions',
+      icon: Icon(Icons.assessment_outlined), // CHANGED: reports icon
+      text: 'Reports', // CHANGED: reports text
     ),
   ];
 
@@ -237,7 +238,7 @@ class _ExploreFinanceViewState extends State<ExploreFinanceView>
             _buildSafeTab(const DashboardTab()),
             _buildSafeTab(const AnalyticsTab()),
             _buildSafeTab(const HistoryTab()),
-            _buildSafeTab(const PredictionsTab()),
+            _buildSafeTab(const ReportsTab()), // CHANGED: ReportsTab instead of PredictionsTab
           ],
         );
       },

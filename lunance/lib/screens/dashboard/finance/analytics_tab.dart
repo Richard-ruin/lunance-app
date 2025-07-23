@@ -1,3 +1,5 @@
+// lib/screens/dashboard/finance/analytics_tab.dart - ENHANCED with Bar Chart & Scroll
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -56,16 +58,15 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
             
             const SizedBox(height: 24),
             
-            // Time Series Chart
-            _buildTimeSeriesChart(),
+            // ENHANCED: Bar Chart with Horizontal Scroll
+            _buildBarChartWithScroll(),
             
             const SizedBox(height: 24),
             
-            // Category Analysis
-            _buildCategoryAnalysis(),
+            // ENHANCED: Category Analysis with Better Colors
+            _buildEnhancedCategoryAnalysis(),
             
             const SizedBox(height: 24),
-
 
             _buildSpendingInsightCard(),
 
@@ -74,8 +75,6 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
             _buildTrendInsightCard(),
 
             const SizedBox(height: 24),
-            
-            
           ],
         ),
       ),
@@ -207,7 +206,8 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
     );
   }
 
-  Widget _buildTimeSeriesChart() {
+  // ENHANCED: Bar Chart with Horizontal Scroll
+  Widget _buildBarChartWithScroll() {
     return Consumer<FinanceProvider>(
       builder: (context, financeProvider, child) {
         if (financeProvider.isLoadingCharts) {
@@ -233,13 +233,13 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
               Row(
                 children: [
                   Icon(
-                    Icons.timeline,
+                    Icons.bar_chart,
                     color: AppColors.primary,
                     size: 20,
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Trend Keuangan',
+                    'Trend Keuangan (Bar Chart)',
                     style: AppTextStyles.labelLarge.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
@@ -257,7 +257,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                          Icons.timeline,
+                          Icons.bar_chart,
                           size: 48,
                           color: AppColors.gray400,
                         ),
@@ -273,99 +273,145 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                   ),
                 )
               else
-                SizedBox(
-                  height: 250,
-                  child: LineChart(
-                    LineChartData(
-                      gridData: FlGridData(
-                        show: true,
-                        drawHorizontalLine: true,
-                        drawVerticalLine: false,
-                        horizontalInterval: 1000000,
-                        getDrawingHorizontalLine: (value) {
-                          return FlLine(
-                            color: AppColors.gray200,
-                            strokeWidth: 1,
-                          );
-                        },
-                      ),
-                      titlesData: FlTitlesData(
-                        leftTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            interval: 1000000,
-                            getTitlesWidget: (value, meta) {
-                              return Text(
-                                FormatUtils.formatCompactNumber(value),
-                                style: AppTextStyles.caption.copyWith(
-                                  color: AppColors.textTertiary,
+                // ENHANCED: Horizontal Scrollable Bar Chart
+                Column(
+                  children: [
+                    SizedBox(
+                      height: 250,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Container(
+                          width: rawData.length * 80.0, // Dynamic width based on data
+                          padding: const EdgeInsets.only(right: 16),
+                          child: BarChart(
+                            BarChartData(
+                              alignment: BarChartAlignment.spaceAround,
+                              maxY: _getMaxValue(rawData) * 1.2,
+                              barTouchData: BarTouchData(
+                                enabled: true,
+                                touchTooltipData: BarTouchTooltipData(
+                                  tooltipBgColor: AppColors.primary.withOpacity(0.8),
+                                  getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                                    final dataItem = rawData[groupIndex];
+                                    String label;
+                                    double value;
+                                    
+                                    if (rodIndex == 0) {
+                                      label = 'Pemasukan';
+                                      value = (dataItem['income'] as num?)?.toDouble() ?? 0;
+                                    } else {
+                                      label = 'Pengeluaran';
+                                      value = (dataItem['expense'] as num?)?.toDouble() ?? 0;
+                                    }
+                                    
+                                    return BarTooltipItem(
+                                      '$label\n${FormatUtils.formatCurrency(value)}',
+                                      AppTextStyles.caption.copyWith(
+                                        color: AppColors.white,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    );
+                                  },
                                 ),
-                              );
-                            },
-                          ),
-                        ),
-                        bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            interval: 1,
-                            getTitlesWidget: (value, meta) {
-                              if (value.toInt() >= 0 && value.toInt() < rawData.length) {
-                                final item = rawData[value.toInt()];
-                                final period = item['period'] as String? ?? '';
-                                return Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: Text(
-                                    period.length > 8 ? period.substring(0, 8) : period,
-                                    style: AppTextStyles.caption.copyWith(
-                                      color: AppColors.textTertiary,
-                                    ),
+                              ),
+                              titlesData: FlTitlesData(
+                                leftTitles: AxisTitles(
+                                  sideTitles: SideTitles(
+                                    showTitles: true,
+                                    reservedSize: 60,
+                                    getTitlesWidget: (value, meta) {
+                                      return Text(
+                                        FormatUtils.formatCompactNumber(value),
+                                        style: AppTextStyles.caption.copyWith(
+                                          color: AppColors.textTertiary,
+                                        ),
+                                      );
+                                    },
                                   ),
+                                ),
+                                bottomTitles: AxisTitles(
+                                  sideTitles: SideTitles(
+                                    showTitles: true,
+                                    reservedSize: 30,
+                                    getTitlesWidget: (value, meta) {
+                                      if (value.toInt() >= 0 && value.toInt() < rawData.length) {
+                                        final item = rawData[value.toInt()];
+                                        final period = item['period'] as String? ?? '';
+                                        return Padding(
+                                          padding: const EdgeInsets.only(top: 8),
+                                          child: Text(
+                                            period.length > 6 ? period.substring(0, 6) : period,
+                                            style: AppTextStyles.caption.copyWith(
+                                              color: AppColors.textTertiary,
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                      return const Text('');
+                                    },
+                                  ),
+                                ),
+                                topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                              ),
+                              borderData: FlBorderData(show: false),
+                              barGroups: rawData.asMap().entries.map((entry) {
+                                final index = entry.key;
+                                final data = entry.value;
+                                final income = (data['income'] as num?)?.toDouble() ?? 0;
+                                final expense = (data['expense'] as num?)?.toDouble() ?? 0;
+                                
+                                return BarChartGroupData(
+                                  x: index,
+                                  barRods: [
+                                    BarChartRodData(
+                                      toY: income,
+                                      color: AppColors.success,
+                                      width: 12,
+                                      borderRadius: const BorderRadius.only(
+                                        topLeft: Radius.circular(4),
+                                        topRight: Radius.circular(4),
+                                      ),
+                                    ),
+                                    BarChartRodData(
+                                      toY: expense,
+                                      color: AppColors.error,
+                                      width: 12,
+                                      borderRadius: const BorderRadius.only(
+                                        topLeft: Radius.circular(4),
+                                        topRight: Radius.circular(4),
+                                      ),
+                                    ),
+                                  ],
+                                  barsSpace: 4,
                                 );
-                              }
-                              return const Text('');
-                            },
+                              }).toList(),
+                            ),
                           ),
                         ),
-                        topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
                       ),
-                      borderData: FlBorderData(show: false),
-                      lineBarsData: [
-                        LineChartBarData(
-                          spots: rawData.asMap().entries.map((entry) {
-                            final index = entry.key.toDouble();
-                            final data = entry.value;
-                            final income = (data['income'] as num?)?.toDouble() ?? 0;
-                            return FlSpot(index, income);
-                          }).toList(),
-                          isCurved: true,
-                          color: AppColors.success,
-                          barWidth: 3,
-                          dotData: FlDotData(show: false),
-                          belowBarData: BarAreaData(
-                            show: true,
-                            color: AppColors.success.withOpacity(0.1),
-                          ),
+                    ),
+                    
+                    // Scroll indicator
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.swipe_left,
+                          size: 16,
+                          color: AppColors.textTertiary,
                         ),
-                        LineChartBarData(
-                          spots: rawData.asMap().entries.map((entry) {
-                            final index = entry.key.toDouble();
-                            final data = entry.value;
-                            final expense = (data['expense'] as num?)?.toDouble() ?? 0;
-                            return FlSpot(index, expense);
-                          }).toList(),
-                          isCurved: true,
-                          color: AppColors.error,
-                          barWidth: 3,
-                          dotData: FlDotData(show: false),
-                          belowBarData: BarAreaData(
-                            show: true,
-                            color: AppColors.error.withOpacity(0.1),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Geser untuk melihat data lainnya',
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.textTertiary,
                           ),
                         ),
                       ],
                     ),
-                  ),
+                  ],
                 ),
               
               const SizedBox(height: 16),
@@ -386,7 +432,8 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
     );
   }
 
-  Widget _buildCategoryAnalysis() {
+  // ENHANCED: Category Analysis with Better Color Distribution
+  Widget _buildEnhancedCategoryAnalysis() {
     return Consumer<FinanceProvider>(
       builder: (context, financeProvider, child) {
         if (financeProvider.isLoadingCharts) {
@@ -398,6 +445,9 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
 
         final categories = categoryData['categories'] as List? ?? [];
         final summary = categoryData['summary'] ?? {};
+
+        // ENHANCED: Generate better color distribution
+        final enhancedCategories = _enhanceColorsForCategories(categories);
 
         return CustomCard(
           child: Column(
@@ -422,7 +472,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
               
               const SizedBox(height: 20),
               
-              if (categories.isEmpty)
+              if (enhancedCategories.isEmpty)
                 SizedBox(
                   height: 200,
                   child: Center(
@@ -455,9 +505,9 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                         height: 200,
                         child: PieChart(
                           PieChartData(
-                            sections: categories.map<PieChartSectionData>((category) {
+                            sections: enhancedCategories.map<PieChartSectionData>((category) {
                               final percentage = category['percentage'] as num? ?? 0;
-                              final color = _getColorFromHex(category['color'] as String? ?? '#6B7280');
+                              final color = Color(int.parse(category['enhanced_color'].replaceFirst('#', '0xFF')));
                               
                               return PieChartSectionData(
                                 value: percentage.toDouble(),
@@ -479,7 +529,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                     
                     const SizedBox(width: 20),
                     
-                    // Legend & Details
+                    // Legend & Details with Enhanced Colors
                     Expanded(
                       flex: 3,
                       child: Column(
@@ -493,8 +543,8 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                           ),
                           const SizedBox(height: 16),
                           
-                          ...categories.take(5).map((category) {
-                            final color = _getColorFromHex(category['color'] as String? ?? '#6B7280');
+                          ...enhancedCategories.take(5).map((category) {
+                            final color = Color(int.parse(category['enhanced_color'].replaceFirst('#', '0xFF')));
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 8),
                               child: Row(
@@ -536,6 +586,98 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
     );
   }
 
+  // ENHANCED: Better color distribution algorithm
+  List<Map<String, dynamic>> _enhanceColorsForCategories(List<dynamic> categories) {
+    if (categories.isEmpty) return [];
+
+    // Define a palette of distinct colors
+    final colorPalette = [
+      '#3B82F6', // Blue
+      '#EF4444', // Red
+      '#10B981', // Green
+      '#F59E0B', // Amber
+      '#8B5CF6', // Purple
+      '#EC4899', // Pink
+      '#06B6D4', // Cyan
+      '#84CC16', // Lime
+      '#F97316', // Orange
+      '#6366F1', // Indigo
+      '#14B8A6', // Teal
+      '#F43F5E', // Rose
+      '#8B5A3C', // Brown
+      '#6B7280', // Gray
+      '#DC2626', // Dark Red
+    ];
+
+    final enhancedCategories = <Map<String, dynamic>>[];
+    final usedColors = <String>[];
+
+    for (int i = 0; i < categories.length; i++) {
+      final category = Map<String, dynamic>.from(categories[i]);
+      
+      // Get next available color
+      String assignedColor;
+      if (i < colorPalette.length) {
+        assignedColor = colorPalette[i];
+      } else {
+        // Generate additional colors for extra categories
+        assignedColor = _generateDistinctColor(usedColors);
+      }
+      
+      category['enhanced_color'] = assignedColor;
+      usedColors.add(assignedColor);
+      enhancedCategories.add(category);
+    }
+
+    return enhancedCategories;
+  }
+
+  String _generateDistinctColor(List<String> usedColors) {
+    // Generate a random distinct color
+    final random = DateTime.now().millisecondsSinceEpoch;
+    final hue = (random % 360).toDouble();
+    final saturation = 0.7;
+    final lightness = 0.5;
+    
+    // Convert HSL to RGB (simplified)
+    final c = (1 - (2 * lightness - 1).abs()) * saturation;
+    final x = c * (1 - ((hue / 60) % 2 - 1).abs());
+    final m = lightness - c / 2;
+    
+    double r, g, b;
+    if (hue < 60) {
+      r = c; g = x; b = 0;
+    } else if (hue < 120) {
+      r = x; g = c; b = 0;
+    } else if (hue < 180) {
+      r = 0; g = c; b = x;
+    } else if (hue < 240) {
+      r = 0; g = x; b = c;
+    } else if (hue < 300) {
+      r = x; g = 0; b = c;
+    } else {
+      r = c; g = 0; b = x;
+    }
+    
+    final red = ((r + m) * 255).round().clamp(0, 255);
+    final green = ((g + m) * 255).round().clamp(0, 255);
+    final blue = ((b + m) * 255).round().clamp(0, 255);
+    
+    return '#${red.toRadixString(16).padLeft(2, '0')}${green.toRadixString(16).padLeft(2, '0')}${blue.toRadixString(16).padLeft(2, '0')}';
+  }
+
+  double _getMaxValue(List<dynamic> rawData) {
+    double maxValue = 0;
+    for (final item in rawData) {
+      final income = (item['income'] as num?)?.toDouble() ?? 0;
+      final expense = (item['expense'] as num?)?.toDouble() ?? 0;
+      maxValue = [maxValue, income, expense].reduce((a, b) => a > b ? a : b);
+    }
+    return maxValue;
+  }
+
+  // ... (keep other existing methods unchanged: _buildSpendingInsightCard, _buildTrendInsightCard, etc.)
+  
   Widget _buildSpendingInsightCard() {
     return Consumer<FinanceProvider>(
       builder: (context, financeProvider, child) {
@@ -768,13 +910,5 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
         ),
       ),
     );
-  }
-
-  Color _getColorFromHex(String hexColor) {
-    try {
-      return Color(int.parse(hexColor.replaceFirst('#', '0xFF')));
-    } catch (e) {
-      return AppColors.primary;
-    }
   }
 }

@@ -286,6 +286,14 @@ class _LeftSidebarState extends State<LeftSidebar> {
                   onTap: () => widget.onNavigationItemSelected(1),
                 ),
                 
+                // NEW: Predictions Menu Item
+                _buildSidebarItem(
+                  icon: Icons.trending_up_outlined,
+                  title: 'Prediksi Keuangan',
+                  isSelected: widget.selectedIndex == 3, // NEW: index 3 for predictions
+                  onTap: () => widget.onNavigationItemSelected(3), // NEW: navigate to predictions
+                ),
+                
                 const SizedBox(height: 24),
                 
                 // Divider

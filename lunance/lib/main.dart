@@ -4,6 +4,7 @@ import 'providers/auth_provider.dart';
 import 'providers/chat_provider.dart';
 import 'providers/finance_provider.dart';
 import 'providers/theme_provider.dart'; // Add this import
+import 'providers/prediction_provider.dart';
 import 'screens/splash_screen.dart';
 import 'utils/timezone_utils.dart';
 import 'config/app_config.dart';
@@ -34,6 +35,7 @@ class LunanceApp extends StatelessWidget {
         ChangeNotifierProvider(create: (context) => AuthProvider()),
         ChangeNotifierProvider(create: (context) => ChatProvider()),
         ChangeNotifierProvider(create: (context) => FinanceProvider()),
+        ChangeNotifierProvider(create: (context) => PredictionProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {

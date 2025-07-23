@@ -4,7 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config/app_config.dart';
 
 class FinanceService {
-  static const String baseUrl = 'http://192.168.148.195:8000/api/v1';
+  static const String baseUrl = 'http://192.168.101.8:8000/api/v1';
   static const _storage = FlutterSecureStorage();
 
   Future<Map<String, String>> get _authHeaders async {
@@ -15,7 +15,7 @@ class FinanceService {
     };
   }
 
-  // ===== CLEANED: HANYA 3 ENDPOINTS YANG DIPAKAI DI TAB =====
+  // ===== MAIN FINANCE ENDPOINTS (Dashboard, Analytics, History) =====
 
   // 1. Dashboard dengan 50/30/20 Method (Dashboard Tab)
   Future<Map<String, dynamic>> getStudentDashboard() async {
@@ -118,9 +118,73 @@ class FinanceService {
     }
   }
 
+  // ===== NEW: EXPORT/REPORTS ENDPOINTS (Reports Tab) =====
+
+  // 4. Export Financial Data (Reports Tab)
+  Future<Map<String, dynamic>> exportFinancialData({
+    String format = 'csv', // csv, json, excel
+    String? type, // income, expense, goals, all
+    DateTime? startDate,
+    DateTime? endDate,
+    bool includeSummary = true,
+  }) async {
+    try {
+      final queryParams = <String, String>{
+        'format': format,
+        'include_summary': includeSummary.toString(),
+      };
+
+      if (type != null) queryParams['type'] = type;
+      if (startDate != null) queryParams['start_date'] = startDate.toIso8601String();
+      if (endDate != null) queryParams['end_date'] = endDate.toIso8601String();
+
+      final uri = Uri.parse('$baseUrl/finance/export').replace(queryParameters: queryParams);
+      
+      final response = await http.get(
+        uri,
+        headers: await _authHeaders,
+      );
+      return _handleResponse(response);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Gagal export data: ${e.toString()}',
+      };
+    }
+  }
+
+  // 5. Generate Summary Report (Reports Tab)
+  Future<Map<String, dynamic>> generateSummaryReport({
+    String period = 'monthly', // weekly, monthly, quarterly, yearly
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    try {
+      final queryParams = <String, String>{
+        'period': period,
+      };
+
+      if (startDate != null) queryParams['start_date'] = startDate.toIso8601String();
+      if (endDate != null) queryParams['end_date'] = endDate.toIso8601String();
+
+      final uri = Uri.parse('$baseUrl/finance/reports/summary').replace(queryParameters: queryParams);
+      
+      final response = await http.get(
+        uri,
+        headers: await _authHeaders,
+      );
+      return _handleResponse(response);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Gagal generate summary report: ${e.toString()}',
+      };
+    }
+  }
+
   // ===== MINIMAL HELPER ENDPOINTS =====
 
-  // 4. Categories (untuk dropdown di History Tab)
+  // 6. Categories (untuk dropdown di History Tab)
   Future<Map<String, dynamic>> getCategories() async {
     try {
       final response = await http.get(
@@ -136,7 +200,7 @@ class FinanceService {
     }
   }
 
-  // 5. Basic Stats (untuk Dashboard Tab)
+  // 7. Basic Stats (untuk Dashboard Tab)
   Future<Map<String, dynamic>> getStats() async {
     try {
       final response = await http.get(
@@ -149,6 +213,69 @@ class FinanceService {
         'success': false,
         'message': 'Gagal mengambil statistik: ${e.toString()}',
       };
+    }
+  }
+
+  // ===== VALIDATION HELPERS =====
+
+  /// Validate export format
+  bool isValidExportFormat(String format) {
+    return ['csv', 'json', 'excel'].contains(format.toLowerCase());
+  }
+
+  /// Validate export type
+  bool isValidExportType(String type) {
+    return ['income', 'expense', 'goals', 'all'].contains(type.toLowerCase());
+  }
+
+  /// Validate report period
+  bool isValidReportPeriod(String period) {
+    return ['weekly', 'monthly', 'quarterly', 'yearly'].contains(period.toLowerCase());
+  }
+
+  /// Get export format display name
+  String getExportFormatName(String format) {
+    switch (format.toLowerCase()) {
+      case 'csv':
+        return 'CSV (Comma-Separated Values)';
+      case 'json':
+        return 'JSON (JavaScript Object Notation)';
+      case 'excel':
+        return 'Excel (Microsoft Excel)';
+      default:
+        return 'Unknown Format';
+    }
+  }
+
+  /// Get export type display name
+  String getExportTypeName(String type) {
+    switch (type.toLowerCase()) {
+      case 'income':
+        return 'Data Pemasukan';
+      case 'expense':
+        return 'Data Pengeluaran';
+      case 'goals':
+        return 'Target Tabungan';
+      case 'all':
+        return 'Semua Data';
+      default:
+        return 'Data Keuangan';
+    }
+  }
+
+  /// Get report period display name
+  String getReportPeriodName(String period) {
+    switch (period.toLowerCase()) {
+      case 'weekly':
+        return 'Laporan Mingguan';
+      case 'monthly':
+        return 'Laporan Bulanan';
+      case 'quarterly':
+        return 'Laporan Kuartalan';
+      case 'yearly':
+        return 'Laporan Tahunan';
+      default:
+        return 'Laporan Keuangan';
     }
   }
 
@@ -240,6 +367,4 @@ class FinanceService {
       };
     }
   }
-
-  
 }

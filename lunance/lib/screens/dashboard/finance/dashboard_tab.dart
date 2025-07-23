@@ -512,107 +512,152 @@ class _DashboardTabState extends State<DashboardTab> {
     );
   }
 
-  Widget _buildFinancialSummaryCard() {
-    return Consumer<FinanceProvider>(
-      builder: (context, financeProvider, child) {
-        if (financeProvider.isLoadingDashboard) {
-          return _buildLoadingCard(height: 160);
-        }
+  
+Widget _buildFinancialSummaryCard() {
+  return Consumer<FinanceProvider>(
+    builder: (context, financeProvider, child) {
+      if (financeProvider.isLoadingDashboard) {
+        return _buildLoadingCard(height: 200); // Increased height
+      }
 
-        final dashboardData = financeProvider.dashboardData;
-        if (dashboardData == null) return Container();
+      final dashboardData = financeProvider.dashboardData;
+      if (dashboardData == null) return Container();
 
-        final financialSummary = FormatUtils.formatFinancialSummary(dashboardData['financial_summary']);
-        final monthlyIncome = FormatUtils.safeDouble(
-          FormatUtils.safeGetNested(dashboardData, ['financial_summary', 'monthly_income'])
-        );
-        final monthlyExpense = FormatUtils.safeDouble(
-          FormatUtils.safeGetNested(dashboardData, ['financial_summary', 'monthly_expense'])
-        );
-        final netBalance = FormatUtils.safeDouble(
-          FormatUtils.safeGetNested(dashboardData, ['financial_summary', 'net_balance'])
-        );
-        final savingsRate = FormatUtils.safeDouble(
-          FormatUtils.safeGetNested(dashboardData, ['financial_summary', 'savings_rate'])
-        );
+      final financialSummary = FormatUtils.formatFinancialSummary(dashboardData['financial_summary']);
+      final monthlyIncome = FormatUtils.safeDouble(
+        FormatUtils.safeGetNested(dashboardData, ['financial_summary', 'monthly_income'])
+      );
+      final monthlyExpense = FormatUtils.safeDouble(
+        FormatUtils.safeGetNested(dashboardData, ['financial_summary', 'monthly_expense'])
+      );
+      final netBalance = FormatUtils.safeDouble(
+        FormatUtils.safeGetNested(dashboardData, ['financial_summary', 'net_balance'])
+      );
+      final savingsRate = FormatUtils.safeDouble(
+        FormatUtils.safeGetNested(dashboardData, ['financial_summary', 'savings_rate'])
+      );
 
-        return CustomCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.assessment_outlined,
-                    color: AppColors.info,
-                    size: 20,
+      // FIXED: Calculate monthly income vs this month's income
+      final currentSpending = FormatUtils.safeGetNested(dashboardData, ['quick_stats', 'current_month_spending']) ?? {};
+      final totalThisMonthExpense = FormatUtils.safeDouble(currentSpending['needs']) + 
+                                   FormatUtils.safeDouble(currentSpending['wants']) + 
+                                   FormatUtils.safeDouble(currentSpending['savings']);
+
+      return CustomCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.assessment_outlined,
+                  color: AppColors.info,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    'Ringkasan Bulanan',
+                    style: AppTextStyles.labelLarge.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      'Ringkasan Bulanan',
-                      style: AppTextStyles.labelLarge.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                      overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // UPDATED: Monthly Income (budget vs actual)
+            IntrinsicHeight(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildSummaryItem(
+                      'Pemasukan Bulanan',
+                      FormatUtils.formatCurrency(monthlyIncome),
+                      Icons.trending_up,
+                      AppColors.success,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildSummaryItem(
+                      'Pengeluaran Bulan Ini',
+                      FormatUtils.formatCurrency(totalThisMonthExpense),
+                      Icons.trending_down,
+                      AppColors.error,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              IntrinsicHeight(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _buildSummaryItem(
-                        'Pemasukan',
-                        FormatUtils.formatCurrency(monthlyIncome),
-                        Icons.arrow_upward,
-                        AppColors.success,
-                      ),
+            ),
+            const SizedBox(height: 16),
+            
+            // Net Balance and Savings Rate
+            IntrinsicHeight(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildSummaryItem(
+                      'Saldo Bersih',
+                      FormatUtils.formatCurrency(monthlyIncome - totalThisMonthExpense),
+                      (monthlyIncome - totalThisMonthExpense) >= 0 ? Icons.trending_up : Icons.trending_down,
+                      (monthlyIncome - totalThisMonthExpense) >= 0 ? AppColors.success : AppColors.error,
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _buildSummaryItem(
-                        'Pengeluaran',
-                        FormatUtils.formatCurrency(monthlyExpense),
-                        Icons.arrow_downward,
-                        AppColors.error,
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildSummaryItem(
+                      'Savings Rate',
+                      FormatUtils.formatPercentage(
+                        monthlyIncome > 0 
+                          ? ((monthlyIncome - totalThisMonthExpense) / monthlyIncome * 100)
+                          : 0
                       ),
+                      Icons.savings_outlined,
+                      AppColors.primary,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              IntrinsicHeight(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _buildSummaryItem(
-                        'Saldo Bersih',
-                        FormatUtils.formatCurrency(netBalance),
-                        netBalance >= 0 ? Icons.trending_up : Icons.trending_down,
-                        netBalance >= 0 ? AppColors.success : AppColors.error,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _buildSummaryItem(
-                        'Savings Rate',
-                        FormatUtils.formatPercentage(savingsRate),
-                        Icons.savings_outlined,
-                        AppColors.primary,
-                      ),
-                    ),
-                  ],
-                ),
+            ),
+            
+            // Additional info
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.info.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.info.withOpacity(0.3)),
               ),
-            ],
-          ),
-        );
-      },
-    );
-  }
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: AppColors.info,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Pemasukan Bulanan = Budget yang ditetapkan\nPengeluaran Bulan Ini = Total spending real-time',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.info,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
 
   Widget _buildSavingsGoalsCard() {
     return Consumer<FinanceProvider>(

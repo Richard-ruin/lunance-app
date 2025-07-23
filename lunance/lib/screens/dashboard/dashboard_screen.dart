@@ -7,6 +7,7 @@ import 'right_sidebar.dart';
 import 'chat_view.dart';
 import 'explore_finance_view.dart';
 import 'chat_history_view.dart';
+import 'predictions_view.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({Key? key}) : super(key: key);
@@ -175,6 +176,8 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         return const ChatView();
       case 1:
         return const ExploreFinanceView();
+      case 3:
+      return const PredictionsView();
       case 2:
         return const ChatHistoryView();
       default:
@@ -426,6 +429,8 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         return 'Explore Finance';
       case 2:
         return 'Chat History';
+      case 3:
+        return 'Prediksi';
       default:
         return 'Chat dengan Luna AI';
     }

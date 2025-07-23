@@ -220,10 +220,10 @@ class EnhancedIndoRoBERTaFinancialParser:
         # Possible model locations (prioritize enhanced version)
         possible_paths = [
             # Enhanced version first
-            current_dir.parent.parent / "models" / "indoroberta-financial-enhanced",
-            current_dir.parent.parent / "backend" / "models" / "indoroberta-financial-enhanced", 
-            Path("models") / "indoroberta-financial-enhanced",
-            Path("D:/kuliah/semester 6/Tugas Akhir/aplikasi/maybe/lunance/backend/models/indoroberta-financial-enhanced"),
+            current_dir.parent.parent / "models" / "indoroberta-balanced",
+            current_dir.parent.parent / "backend" / "models" / "indoroberta-balanced", 
+            Path("models") / "indoroberta-balanced",
+            Path("D:/kuliah/semester 6/Tugas Akhir/aplikasi/maybe/lunance/backend/models/indoroberta-balanced"),
             
             # Standard version as backup
             current_dir.parent.parent / "models" / "indoroberta-financial",

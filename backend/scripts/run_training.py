@@ -15,7 +15,7 @@ def main():
     
     try:
         # Import training script
-        from scripts.train_indobert_financial import main as train_main
+        from backend.scripts.train.train_indobert_financial import main as train_main
         train_main()
     except ImportError as e:
         print(f"Import error: {e}")

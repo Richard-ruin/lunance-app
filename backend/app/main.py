@@ -400,6 +400,19 @@ def safe_import_routers():
         main_logger.error("🛑 Server cannot start without finance router")
         sys.exit(1)
     
+    # NEW: Predictions router
+    try:
+        from .routers import predictions
+        app.include_router(predictions.router, prefix="/api/v1")
+        routers_loaded.append("predictions")
+        main_logger.info("✅ Predictions router loaded")
+    except ImportError as e:
+        error_logger.error(f"WARNING: Predictions router missing Prophet dependency: {e}")
+        main_logger.warning("⚠️ Predictions router skipped - install Prophet: pip install prophet")
+    except Exception as e:
+        error_logger.error(f"WARNING: Predictions router failed to load: {e}")
+        main_logger.warning("⚠️ Predictions router skipped - check dependencies")
+    
     return routers_loaded
 
 # ============================================================================

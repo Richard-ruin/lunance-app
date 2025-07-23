@@ -636,46 +636,50 @@ class FinanceService:
                 "parser_info": self.get_parser_info()
             }
     
-    async def get_current_month_spending_by_budget_type(self, user_id: str) -> Dict[str, float]:
-        """Get current month spending categorized by budget type (needs/wants/savings)"""
+    async def get_current_month_spending_by_budget_type_fixed(self, user_id: str) -> Dict[str, float]:
+        """
+    FIXED: Get current month spending categorized by budget type (needs/wants/savings)
+    Uses the SAME logic as history tab for consistency
+    """
         try:
-            # Get current month date range
+        # Get current month date range
             now = datetime.now()
             start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             end_date = now
-            
-            # Query current month expenses
+        
+        # Query current month expenses
             query = {
                 "user_id": user_id,
                 "type": "expense",
                 "status": TransactionStatus.CONFIRMED.value,
                 "date": {"$gte": start_date, "$lte": end_date}
             }
-            
+        
             transactions = list(self.db.transactions.find(query))
-            
-            # Initialize spending by budget type
+        
+        # Initialize spending by budget type
             spending = {
                 "needs": 0.0,
                 "wants": 0.0,
                 "savings": 0.0
             }
-            
-            # Categorize spending by budget type
+        
+        # CRITICAL FIX: Use IndonesianStudentCategories like history does
             for trans in transactions:
                 category = trans["category"]
                 amount = trans["amount"]
-                
-                # Determine budget type from category
-                budget_type = self._get_budget_type_from_category(category)
+            
+            # FIXED: Use the SAME logic as history tab
+                budget_type = self._get_budget_type_from_category_fixed(category)
                 spending[budget_type] += amount
-            
-            logger.info(f"💳 Current month spending calculated with {self.parser_type}")
+        
+            logger.info(f"💳 Current month spending calculated (FIXED): {spending}")
             return spending
-            
+        
         except Exception as e:
             logger.error(f"❌ Error calculating current month spending: {e}")
-            return {"needs": 0.0, "wants": 0.0, "savings": 0.0}
+        return {"needs": 0.0, "wants": 0.0, "savings": 0.0}
+
     
     async def _calculate_real_total_savings(self, user_id: str) -> float:
         """Calculate real total savings (income - expenses + initial savings)"""

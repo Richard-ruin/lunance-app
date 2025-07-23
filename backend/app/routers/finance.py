@@ -63,8 +63,8 @@ async def get_finance_dashboard(
     current_user: User = Depends(get_current_user)
 ):
     """
-    TAB 1: DASHBOARD - FIXED Overview lengkap keuangan dengan metode 50/30/20
-    ONLY DASHBOARD CHANGED - Analytics and History remain unchanged
+    TAB 1: DASHBOARD - FIXED Budget categorization 
+    The issue: Dashboard was not properly categorizing needs/wants like history does
     """
     try:
         print(f"Dashboard request for user: {current_user.id}")
@@ -101,12 +101,12 @@ async def get_finance_dashboard(
                 "data": {"setup_required": True}
             })
         
-        # Get budget performance dengan enhanced error handling
+        # CRITICAL FIX: Get budget performance dengan proper categorization
         budget_performance = {}
         try:
             budget_performance = dashboard_data.get("budget_performance", {})
             if not budget_performance or not budget_performance.get("has_budget", False):
-                print("Getting budget performance directly...")
+                print("Getting budget performance directly with proper categorization...")
                 budget_performance = await finance_service.get_monthly_budget_performance(current_user.id)
         except Exception as e:
             print(f"Error getting budget performance: {e}")
@@ -116,14 +116,15 @@ async def get_finance_dashboard(
         user_financial_settings = dashboard_data.get("user_financial_settings", {})
         monthly_income = user_financial_settings.get("monthly_income", 0.0)
         
-        # Get current month spending by budget type
+        # CRITICAL FIX: Get current month spending with PROPER categorization
         current_spending = {"needs": 0.0, "wants": 0.0, "savings": 0.0}
         try:
-            current_spending = await finance_service.get_current_month_spending_by_budget_type(current_user.id)
+            # Use the fixed categorization method
+            current_spending = await finance_service.get_current_month_spending_by_budget_type_fixed(current_user.id)
         except Exception as e:
             print(f"Error getting current month spending: {e}")
         
-        # Calculate quick_stats - RESTORED from original
+        # Calculate quick_stats
         real_total_savings = dashboard_data.get("real_total_savings", 0.0)
         total_spending = sum(current_spending.values())
         net_balance = monthly_income - total_spending
@@ -152,7 +153,7 @@ async def get_finance_dashboard(
             }
         }
         
-        # Calculate financial_summary - RESTORED from original
+        # Calculate financial_summary
         financial_summary = {
             "monthly_income": monthly_income,
             "monthly_expense": total_spending,
@@ -162,7 +163,6 @@ async def get_finance_dashboard(
             "formatted_monthly_expense": format_currency(total_spending),
             "formatted_net_balance": format_currency(net_balance),
             "formatted_savings_rate": f"{savings_rate:.1f}%",
-            # RESTORED additional fields
             "real_total_savings": real_total_savings,
             "formatted_real_total_savings": format_currency(real_total_savings),
             "initial_savings": user_financial_settings.get("initial_savings", 0),
@@ -171,30 +171,30 @@ async def get_finance_dashboard(
             "last_budget_reset": _safe_datetime_to_string(user_financial_settings.get("last_budget_reset"))
         }
         
-        # COMPLETE Format dashboard response with ALL features
+        # COMPLETE Format dashboard response with FIXED budget allocation
         dashboard_response = {
             "method": "50/30/20 Elizabeth Warren",
             "current_month": datetime.now().strftime("%B %Y"),
             "setup_completed": True,
             
-            # RESTORED: Quick stats yang dibutuhkan frontend
+            # Quick stats
             "quick_stats": quick_stats,
             
-            # RESTORED: Financial summary lengkap
+            # Financial summary
             "financial_summary": financial_summary,
 
-            # FIXED: Budget Overview dengan allocation yang BENAR dan COMPLETE
+            # FIXED: Budget Overview dengan categorization yang BENAR
             "budget_overview": {
                 "monthly_income": monthly_income,
                 "formatted_monthly_income": format_currency(monthly_income),
                 "allocation": {
-                    "needs": _safe_get_allocation_data_complete(budget_performance, "needs", monthly_income, current_spending),
-                    "wants": _safe_get_allocation_data_complete(budget_performance, "wants", monthly_income, current_spending),
-                    "savings": _safe_get_allocation_data_complete(budget_performance, "savings", monthly_income, current_spending)
+                    "needs": _safe_get_allocation_data_complete_fixed(budget_performance, "needs", monthly_income, current_spending),
+                    "wants": _safe_get_allocation_data_complete_fixed(budget_performance, "wants", monthly_income, current_spending),
+                    "savings": _safe_get_allocation_data_complete_fixed(budget_performance, "savings", monthly_income, current_spending)
                 }
             },
             
-            # ENHANCED: Budget Health & Status dengan persentase 50/30/20
+            # Budget Health & Status
             "budget_health": {
                 "overall_status": budget_performance.get("overall", {}).get("budget_health", "good"),
                 "total_spent": total_spending,
@@ -205,7 +205,6 @@ async def get_finance_dashboard(
                 "strongest_category": dashboard_data.get("insights", {}).get("strongest_category", "unknown"),
                 "needs_attention": dashboard_data.get("insights", {}).get("needs_attention", "none"),
                 "recommendations": budget_performance.get("recommendations", []),
-                # ADDED: Explicit 50/30/20 health indicators
                 "budget_health_by_type": {
                     "needs": _calculate_budget_health("needs", current_spending.get("needs", 0), monthly_income * 0.5),
                     "wants": _calculate_budget_health("wants", current_spending.get("wants", 0), monthly_income * 0.3),
@@ -213,10 +212,10 @@ async def get_finance_dashboard(
                 }
             },
             
-            # RESTORED: Savings Goals dengan safe access
+            # Savings Goals
             "wants_savings_goals": _safe_get_savings_goals_complete(dashboard_data),
             
-            # RESTORED: Recent Activity dengan safe access dan datetime serialization
+            # Recent Activity
             "recent_activity": {
                 "transactions": _safe_serialize_transactions(dashboard_data.get("recent_activity", {}).get("transactions", [])[:10]),
                 "transaction_count": dashboard_data.get("recent_activity", {}).get("transaction_count", 0)
@@ -252,6 +251,104 @@ async def get_finance_dashboard(
             
             "next_reset": "Tanggal 1 bulan depan",
             "timezone": "Asia/Jakarta (WIB)"
+        }
+        
+        print("Dashboard response prepared successfully")
+        return safe_json_response(200, {
+            "success": True,
+            "message": "Dashboard keuangan 50/30/20 berhasil diambil",
+            "data": dashboard_response
+        })
+        
+    except Exception as e:
+        print(f"Critical error in get_finance_dashboard: {e}")
+        traceback.print_exc()
+        
+        return safe_json_response(500, {
+            "success": False,
+            "message": f"Gagal mengambil dashboard: {str(e)}",
+            "data": {"setup_required": True}
+        })
+
+
+# HELPER FUNCTION FIXES
+def _safe_get_allocation_data_complete_fixed(budget_performance: Dict, category: str, monthly_income: float, current_spending: Dict) -> Dict[str, Any]:
+    """FIXED allocation data dengan categorization yang BENAR seperti di history"""
+    try:
+        # Define 50/30/20 percentages
+        percentages = {
+            "needs": 0.50,    # 50%
+            "wants": 0.30,    # 30%
+            "savings": 0.20   # 20%
+        }
+        
+        # Calculate budget allocation
+        budget = monthly_income * percentages.get(category, 0)
+        
+        # CRITICAL FIX: Get spent amount from current_spending yang sudah diperbaiki
+        spent = current_spending.get(category, 0.0)
+        
+        # Calculate remaining and percentage
+        remaining = budget - spent
+        percentage_used = (spent / budget * 100) if budget > 0 else 0
+        
+        # Determine status based on percentage used
+        if percentage_used > 100:
+            status = "over_budget"
+        elif percentage_used > 80:
+            status = "warning"
+        elif percentage_used > 50:
+            status = "good"
+        else:
+            status = "excellent"
+        
+        return {
+            "budget": budget,
+            "spent": spent,
+            "remaining": remaining,
+            "percentage_used": percentage_used,
+            "status": status,
+            "formatted_budget": format_currency(budget),
+            "formatted_spent": format_currency(spent),
+            "formatted_remaining": format_currency(remaining),
+            "allocation_percentage": int(percentages.get(category, 0) * 100),
+            "budget_type": category,
+            "budget_color": {
+                "needs": "#22C55E",    # Green
+                "wants": "#F59E0B",    # Orange
+                "savings": "#3B82F6"   # Blue
+            }.get(category, "#6B7280"),
+            "is_over_budget": percentage_used > 100,
+            "is_warning": percentage_used > 80,
+            "percentage_remaining": max(0, 100 - percentage_used)
+        }
+        
+    except Exception as e:
+        print(f"Error in _safe_get_allocation_data_complete_fixed for {category}: {e}")
+        
+        # Fallback
+        percentages = {"needs": 0.50, "wants": 0.30, "savings": 0.20}
+        budget = monthly_income * percentages.get(category, 0)
+        
+        return {
+            "budget": budget,
+            "spent": 0.0,
+            "remaining": budget,
+            "percentage_used": 0.0,
+            "status": "excellent",
+            "formatted_budget": format_currency(budget),
+            "formatted_spent": format_currency(0),
+            "formatted_remaining": format_currency(budget),
+            "allocation_percentage": int(percentages.get(category, 0) * 100),
+            "budget_type": category,
+            "budget_color": {
+                "needs": "#22C55E",
+                "wants": "#F59E0B", 
+                "savings": "#3B82F6"
+            }.get(category, "#6B7280"),
+            "is_over_budget": False,
+            "is_warning": False,
+            "percentage_remaining": 100.0
         }
         
         print("Dashboard response prepared successfully")
@@ -1360,3 +1457,319 @@ async def get_basic_stats(
             "success": False,
             "message": f"Gagal mengambil statistik: {str(e)}"
         })
+    
+
+@router.get("/export")
+async def export_financial_data(
+    format: str = Query("csv", description="csv, json, excel"),
+    type: Optional[str] = Query(None, description="income, expense, goals, all"),
+    start_date: Optional[datetime] = Query(None),
+    end_date: Optional[datetime] = Query(None),
+    include_summary: bool = Query(True),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    TAB 4: EXPORT/REPORTS - Export laporan keuangan dalam berbagai format
+    Menggantikan predictions tab dengan fitur export yang lebih berguna
+    """
+    try:
+        print(f"Export request for user: {current_user.id}, format: {format}, type: {type}")
+        
+        # Check financial setup
+        financial_setup_completed = getattr(current_user, 'financial_setup_completed', False)
+        
+        if not financial_setup_completed:
+            return safe_json_response(400, {
+                "success": False,
+                "message": "Setup keuangan belum dilakukan untuk export",
+                "data": {"setup_required": True}
+            })
+        
+        # Initialize finance service
+        finance_service = FinanceService()
+        
+        # Set default date range if not provided
+        if not start_date or not end_date:
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=90)  # Default 3 months
+        
+        # Get export data based on type
+        export_data = await _prepare_export_data(
+            finance_service, current_user.id, type, start_date, end_date, include_summary
+        )
+        
+        if "error" in export_data:
+            return safe_json_response(400, {
+                "success": False,
+                "message": export_data["error"],
+                "data": {"export_type": type, "format": format}
+            })
+        
+        # Format export response
+        export_response = {
+            "export_info": {
+                "format": format,
+                "type": type or "all",
+                "date_range": {
+                    "start": start_date.strftime("%Y-%m-%d"),
+                    "end": end_date.strftime("%Y-%m-%d")
+                },
+                "generated_at": IndonesiaDatetime.now().isoformat(),
+                "method": "50/30/20 Elizabeth Warren"
+            },
+            
+            # User info
+            "user_info": {
+                "username": current_user.username,
+                "email": current_user.email,
+                "export_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            },
+            
+            # Export data
+            "data": export_data,
+            
+            # Download info
+            "download_info": {
+                "filename": f"lunance_export_{current_user.username}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{format}",
+                "size_estimate": len(str(export_data)),
+                "records_count": _count_records(export_data)
+            }
+        }
+        
+        return safe_json_response(200, {
+            "success": True,
+            "message": f"Data export {format} berhasil disiapkan",
+            "data": export_response
+        })
+        
+    except Exception as e:
+        print(f"Error in export_financial_data: {e}")
+        traceback.print_exc()
+        
+        return safe_json_response(500, {
+            "success": False,
+            "message": f"Gagal export data: {str(e)}",
+            "data": {"export_type": type, "format": format}
+        })
+
+@router.get("/reports/summary")
+async def get_financial_summary_report(
+    period: str = Query("monthly", description="weekly, monthly, quarterly, yearly"),
+    start_date: Optional[datetime] = Query(None),
+    end_date: Optional[datetime] = Query(None),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Generate comprehensive financial summary report
+    """
+    try:
+        print(f"Summary report request for user: {current_user.id}, period: {period}")
+        
+        # Check financial setup
+        financial_setup_completed = getattr(current_user, 'financial_setup_completed', False)
+        
+        if not financial_setup_completed:
+            return safe_json_response(400, {
+                "success": False,
+                "message": "Setup keuangan belum dilakukan"
+            })
+        
+        # Initialize finance service
+        finance_service = FinanceService()
+        
+        # Get financial summary
+        summary = await finance_service.get_financial_summary(current_user.id, period, start_date, end_date)
+        if not summary:
+            return safe_json_response(400, {
+                "success": False,
+                "message": "Gagal mengambil summary data"
+            })
+        
+        # Get budget performance
+        budget_performance = await finance_service.get_monthly_budget_performance(current_user.id)
+        
+        # Get real total savings
+        real_total_savings = await finance_service._calculate_real_total_savings(current_user.id)
+        
+        # Format comprehensive report
+        report_data = {
+            "report_info": {
+                "type": "financial_summary",
+                "period": period,
+                "generated_at": IndonesiaDatetime.now().isoformat(),
+                "method": "50/30/20 Elizabeth Warren"
+            },
+            
+            # Summary totals
+            "financial_totals": {
+                "total_income": summary.total_income,
+                "total_expense": summary.total_expense,
+                "net_balance": summary.net_balance,
+                "real_total_savings": real_total_savings,
+                "formatted_income": format_currency(summary.total_income),
+                "formatted_expense": format_currency(summary.total_expense),
+                "formatted_net_balance": format_currency(summary.net_balance),
+                "formatted_savings": format_currency(real_total_savings)
+            },
+            
+            # Budget analysis
+            "budget_analysis": budget_performance,
+            
+            # Category breakdown
+            "category_breakdown": {
+                "income_categories": summary.income_categories,
+                "expense_categories": summary.expense_categories,
+                "formatted_income_categories": {
+                    category: format_currency(amount) 
+                    for category, amount in summary.income_categories.items()
+                },
+                "formatted_expense_categories": {
+                    category: format_currency(amount) 
+                    for category, amount in summary.expense_categories.items()
+                }
+            },
+            
+            # Counts
+            "transaction_counts": {
+                "income_transactions": summary.income_count,
+                "expense_transactions": summary.expense_count,
+                "total_transactions": summary.income_count + summary.expense_count
+            },
+            
+            # Period info
+            "period_info": {
+                "start_date": summary.start_date.isoformat(),
+                "end_date": summary.end_date.isoformat(),
+                "days_covered": (summary.end_date - summary.start_date).days
+            }
+        }
+        
+        return safe_json_response(200, {
+            "success": True,
+            "message": f"Financial summary report {period} berhasil dibuat",
+            "data": report_data
+        })
+        
+    except Exception as e:
+        print(f"Error in get_financial_summary_report: {e}")
+        traceback.print_exc()
+        
+        return safe_json_response(500, {
+            "success": False,
+            "message": f"Gagal membuat summary report: {str(e)}"
+        })
+
+# ==========================================
+# HELPER FUNCTIONS FOR EXPORT
+# ==========================================
+
+async def _prepare_export_data(finance_service, user_id: str, export_type: Optional[str], 
+                               start_date: datetime, end_date: datetime, include_summary: bool) -> Dict[str, Any]:
+    """Prepare data for export based on type"""
+    try:
+        export_data = {}
+        
+        if export_type in [None, "all", "transactions", "income", "expense"]:
+            # Get transactions
+            filters = {"status": "confirmed"}
+            if start_date and end_date:
+                filters["date"] = {"$gte": start_date, "$lte": end_date}
+            if export_type in ["income", "expense"]:
+                filters["type"] = export_type
+            
+            transactions = await finance_service.get_user_transactions(user_id, filters, limit=1000)
+            
+            export_data["transactions"] = [
+                {
+                    "id": trans.id,
+                    "date": trans.date.isoformat() if trans.date else None,
+                    "type": trans.type.value,
+                    "amount": trans.amount,
+                    "category": trans.category,
+                    "description": trans.description,
+                    "status": trans.status.value,
+                    "source": trans.source,
+                    "budget_type": _get_budget_type_safe(trans.category)
+                }
+                for trans in transactions
+            ]
+        
+        if export_type in [None, "all", "goals"]:
+            # Get savings goals
+            goals = await finance_service.get_user_savings_goals(user_id)
+            
+            export_data["savings_goals"] = [
+                {
+                    "id": goal.id,
+                    "item_name": goal.item_name,
+                    "target_amount": goal.target_amount,
+                    "current_amount": goal.current_amount,
+                    "progress_percentage": goal.progress_percentage,
+                    "status": goal.status.value,
+                    "target_date": goal.target_date.isoformat() if goal.target_date else None,
+                    "created_at": goal.created_at.isoformat() if goal.created_at else None
+                }
+                for goal in goals
+            ]
+        
+        if include_summary:
+            # Add summary statistics
+            summary = await finance_service.get_financial_summary(user_id, "monthly", start_date, end_date)
+            if summary:
+                export_data["summary"] = {
+                    "total_income": summary.total_income,
+                    "total_expense": summary.total_expense,
+                    "net_balance": summary.net_balance,
+                    "income_categories": summary.income_categories,
+                    "expense_categories": summary.expense_categories,
+                    "transaction_counts": {
+                        "income": summary.income_count,
+                        "expense": summary.expense_count
+                    }
+                }
+        
+        return export_data
+        
+    except Exception as e:
+        print(f"Error preparing export data: {e}")
+        return {"error": str(e)}
+
+def _count_records(export_data: Dict[str, Any]) -> int:
+    """Count total records in export data"""
+    count = 0
+    if "transactions" in export_data:
+        count += len(export_data["transactions"])
+    if "savings_goals" in export_data:
+        count += len(export_data["savings_goals"])
+    return count
+
+def _get_budget_type_safe(category: str) -> str:
+    """Safe way to get budget type dengan fallback"""
+    try:
+        # Simple keyword-based categorization
+        category_lower = category.lower()
+        
+        # NEEDS keywords
+        needs_keywords = ['makan', 'makanan', 'kos', 'sewa', 'transport', 'transportasi', 'pendidikan', 'buku', 'kuliah', 'kampus', 'listrik', 'air', 'internet', 'pulsa', 'kesehatan', 'obat', 'sabun', 'pasta']
+        for keyword in needs_keywords:
+            if keyword in category_lower:
+                return "needs"
+        
+        # SAVINGS keywords
+        savings_keywords = ['tabungan', 'saving', 'investasi', 'deposito', 'darurat', 'masa depan', 'reksadana', 'saham']
+        for keyword in savings_keywords:
+            if keyword in category_lower:
+                return "savings"
+        
+        # WANTS keywords (or default)
+        wants_keywords = ['jajan', 'hiburan', 'game', 'nonton', 'cafe', 'baju', 'sepatu', 'gadget', 'hp', 'laptop', 'motor', 'organisasi', 'event']
+        for keyword in wants_keywords:
+            if keyword in category_lower:
+                return "wants"
+        
+        # Default to wants
+        return "wants"
+        
+    except Exception as e:
+        print(f"Error in _get_budget_type_safe: {e}")
+        return "wants"
