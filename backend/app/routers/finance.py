@@ -1,4 +1,4 @@
-# app/routers/finance.py - FIXED ONLY DASHBOARD, keep analytics & history unchanged
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Any, Optional

@@ -1,9 +1,14 @@
+// lib/providers/finance_provider.dart - UPDATED with Service Exposure
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../services/finance_service.dart';
 
 class FinanceProvider with ChangeNotifier {
   final FinanceService _financeService = FinanceService();
+
+  // ADDED: Expose the service for direct API calls (needed for reports)
+  FinanceService get financeService => _financeService;
 
   // ===== LOADING STATES =====
   bool _isLoadingDashboard = false;
@@ -48,6 +53,7 @@ class FinanceProvider with ChangeNotifier {
     });
 
     try {
+      debugPrint('🔍 FinanceProvider: Loading dashboard...');
       final response = await _financeService.getStudentDashboard();
       
       if (response['success'] == true) {
@@ -56,16 +62,17 @@ class FinanceProvider with ChangeNotifier {
         _dashboardData = _convertToTypeSafeMap(data);
         _dashboardError = null;
         
-        debugPrint('Dashboard loaded successfully');
+        debugPrint('✅ FinanceProvider: Dashboard loaded successfully');
+        debugPrint('📊 Dashboard data keys: ${_dashboardData?.keys.toList()}');
       } else {
         _dashboardError = response['message']?.toString() ?? 'Gagal memuat dashboard';
         _dashboardData = null;
-        debugPrint('Dashboard loading failed: $_dashboardError');
+        debugPrint('❌ FinanceProvider: Dashboard loading failed: $_dashboardError');
       }
     } catch (e) {
       _dashboardError = 'Terjadi kesalahan: ${e.toString()}';
       _dashboardData = null;
-      debugPrint('Dashboard loading error: $e');
+      debugPrint('❌ FinanceProvider: Dashboard loading error: $e');
     } finally {
       _isLoadingDashboard = false;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -90,6 +97,7 @@ class FinanceProvider with ChangeNotifier {
     });
 
     try {
+      debugPrint('🔍 FinanceProvider: Loading analytics for period $period...');
       final response = await _financeService.getAnalytics(
         period: period,
         startDate: startDate,
@@ -102,16 +110,16 @@ class FinanceProvider with ChangeNotifier {
         _analyticsData = _convertToTypeSafeMap(data);
         _analyticsError = null;
         
-        debugPrint('Analytics loaded successfully');
+        debugPrint('✅ FinanceProvider: Analytics loaded successfully');
       } else {
         _analyticsError = response['message']?.toString() ?? 'Gagal memuat analytics';
         _analyticsData = null;
-        debugPrint('Analytics loading failed: $_analyticsError');
+        debugPrint('❌ FinanceProvider: Analytics loading failed: $_analyticsError');
       }
     } catch (e) {
       _analyticsError = 'Terjadi kesalahan: ${e.toString()}';
       _analyticsData = null;
-      debugPrint('Analytics loading error: $e');
+      debugPrint('❌ FinanceProvider: Analytics loading error: $e');
     } finally {
       _isLoadingAnalytics = false;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -143,6 +151,7 @@ class FinanceProvider with ChangeNotifier {
     });
 
     try {
+      debugPrint('🔍 FinanceProvider: Loading history...');
       final response = await _financeService.getHistory(
         type: type,
         budgetType: budgetType,
@@ -162,21 +171,59 @@ class FinanceProvider with ChangeNotifier {
         _historyData = _convertToTypeSafeMap(data);
         _historyError = null;
         
-        debugPrint('History loaded successfully');
+        debugPrint('✅ FinanceProvider: History loaded successfully');
       } else {
         _historyError = response['message']?.toString() ?? 'Gagal memuat history';
         _historyData = null;
-        debugPrint('History loading failed: $_historyError');
+        debugPrint('❌ FinanceProvider: History loading failed: $_historyError');
       }
     } catch (e) {
       _historyError = 'Terjadi kesalahan: ${e.toString()}';
       _historyData = null;
-      debugPrint('History loading error: $e');
+      debugPrint('❌ FinanceProvider: History loading error: $e');
     } finally {
       _isLoadingHistory = false;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         notifyListeners();
       });
+    }
+  }
+
+  // ===== REPORTS SPECIFIC METHODS =====
+
+  /// Load Categories for History Tab dropdown
+  Future<void> loadCategories() async {
+    try {
+      debugPrint('🔍 FinanceProvider: Loading categories...');
+      final response = await _financeService.getCategories();
+      debugPrint('📂 Categories loaded: ${response['success']}');
+    } catch (e) {
+      debugPrint('❌ FinanceProvider: Error loading categories: $e');
+    }
+  }
+
+  /// Load Stats for Dashboard Tab
+  Future<void> loadStats() async {
+    try {
+      debugPrint('🔍 FinanceProvider: Loading stats...');
+      final response = await _financeService.getStats();
+      debugPrint('📈 Stats loaded: ${response['success']}');
+    } catch (e) {
+      debugPrint('❌ FinanceProvider: Error loading stats: $e');
+    }
+  }
+
+  /// Test API Connection
+  Future<bool> testConnection() async {
+    try {
+      debugPrint('🔍 FinanceProvider: Testing connection...');
+      final response = await _financeService.testConnection();
+      final isConnected = response['success'] == true;
+      debugPrint('🌐 Connection test result: $isConnected');
+      return isConnected;
+    } catch (e) {
+      debugPrint('❌ FinanceProvider: Connection test error: $e');
+      return false;
     }
   }
 
@@ -197,11 +244,11 @@ class FinanceProvider with ChangeNotifier {
         // Convert other Map types
         return _deepConvertMap(data.map((key, value) => MapEntry(key.toString(), value)));
       } else {
-        debugPrint('Unexpected data type: ${data.runtimeType}');
+        debugPrint('❌ FinanceProvider: Unexpected data type: ${data.runtimeType}');
         return null;
       }
     } catch (e) {
-      debugPrint('Error converting data to type-safe map: $e');
+      debugPrint('❌ FinanceProvider: Error converting data to type-safe map: $e');
       return null;
     }
   }
@@ -243,31 +290,12 @@ class FinanceProvider with ChangeNotifier {
     }).toList();
   }
 
-  // ===== HELPER METHODS =====
-
-  /// Load Categories (untuk History Tab dropdown)
-  Future<void> loadCategories() async {
-    try {
-      final response = await _financeService.getCategories();
-      debugPrint('Categories loaded: ${response['success']}');
-    } catch (e) {
-      debugPrint('Error loading categories: $e');
-    }
-  }
-
-  /// Load Stats (untuk Dashboard Tab)
-  Future<void> loadStats() async {
-    try {
-      final response = await _financeService.getStats();
-      debugPrint('Stats loaded: ${response['success']}');
-    } catch (e) {
-      debugPrint('Error loading stats: $e');
-    }
-  }
+  // ===== UTILITY METHODS =====
 
   /// Load Essential Data (untuk initialization)
   Future<void> loadAllEssentialData() async {
     try {
+      debugPrint('🔍 FinanceProvider: Loading all essential data...');
       final futures = <Future<void>>[];
       
       if (_dashboardData == null && !_isLoadingDashboard) {
@@ -276,15 +304,15 @@ class FinanceProvider with ChangeNotifier {
       
       // Wait for all to complete
       await Future.wait(futures, eagerError: false);
-      debugPrint('All essential data loaded');
+      debugPrint('✅ FinanceProvider: All essential data loaded');
     } catch (e) {
-      debugPrint('Error loading essential data: $e');
+      debugPrint('❌ FinanceProvider: Error loading essential data: $e');
     }
   }
 
   /// Refresh All Data
   Future<void> refreshAllData() async {
-    debugPrint('Refreshing all finance data...');
+    debugPrint('🔄 FinanceProvider: Refreshing all finance data...');
     clearAllData();
     await loadAllEssentialData();
   }
@@ -302,9 +330,11 @@ class FinanceProvider with ChangeNotifier {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       notifyListeners();
     });
+    
+    debugPrint('🗑️ FinanceProvider: All data cleared');
   }
 
-  // ===== UTILITY METHODS =====
+  // ===== BUDGET TYPE UTILITY METHODS =====
 
   /// Get Budget Health Color
   Color getBudgetHealthColor(String? health) {
@@ -395,7 +425,7 @@ class FinanceProvider with ChangeNotifier {
       }
       return current as T? ?? defaultValue;
     } catch (e) {
-      debugPrint('Error getting dashboard data for keys $keys: $e');
+      debugPrint('❌ FinanceProvider: Error getting dashboard data for keys $keys: $e');
       return defaultValue;
     }
   }
@@ -415,7 +445,7 @@ class FinanceProvider with ChangeNotifier {
       }
       return current as T? ?? defaultValue;
     } catch (e) {
-      debugPrint('Error getting analytics data for keys $keys: $e');
+      debugPrint('❌ FinanceProvider: Error getting analytics data for keys $keys: $e');
       return defaultValue;
     }
   }
@@ -435,7 +465,7 @@ class FinanceProvider with ChangeNotifier {
       }
       return current as T? ?? defaultValue;
     } catch (e) {
-      debugPrint('Error getting history data for keys $keys: $e');
+      debugPrint('❌ FinanceProvider: Error getting history data for keys $keys: $e');
       return defaultValue;
     }
   }
@@ -483,7 +513,7 @@ class FinanceProvider with ChangeNotifier {
       try {
         return value.cast<T>();
       } catch (e) {
-        debugPrint('Error casting list to List<$T>: $e');
+        debugPrint('❌ FinanceProvider: Error casting list to List<$T>: $e');
         return defaultValue;
       }
     }
@@ -498,10 +528,35 @@ class FinanceProvider with ChangeNotifier {
       try {
         return value.cast<String, dynamic>();
       } catch (e) {
-        debugPrint('Error casting map to Map<String, dynamic>: $e');
+        debugPrint('❌ FinanceProvider: Error casting map to Map<String, dynamic>: $e');
         return defaultValue;
       }
     }
     return defaultValue;
+  }
+
+  // ===== SERVICE INFORMATION =====
+
+  /// Get service status for debugging
+  Map<String, dynamic> getServiceStatus() {
+    return {
+      'provider': 'FinanceProvider',
+      'service_status': _financeService.getServiceStatus(),
+      'data_loaded': {
+        'dashboard': _dashboardData != null,
+        'analytics': _analyticsData != null,
+        'history': _historyData != null,
+      },
+      'loading_states': {
+        'dashboard': _isLoadingDashboard,
+        'analytics': _isLoadingAnalytics,
+        'history': _isLoadingHistory,
+      },
+      'errors': {
+        'dashboard': _dashboardError,
+        'analytics': _analyticsError,
+        'history': _historyError,
+      },
+    };
   }
 }

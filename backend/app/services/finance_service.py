@@ -1,4 +1,4 @@
-# app/services/finance_service.py - COMPLETE FIXED VERSION
+# app/services/finance_service.py - COMPLETE FIXED VERSION with Chatbot Integration
 import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
@@ -12,7 +12,7 @@ from ..models.user import User
 from ..utils.timezone_utils import IndonesiaDatetime, now_for_db
 from .financial_categories import IndonesianStudentCategories
 
-# CRITICAL: Import IndoRoBERTa parser directly
+# CRITICAL: Import IndoRoBERTa parser directly for chatbot integration
 try:
     from .indoroberta_financial_parser import IndoRoBERTaFinancialParser
     INDOROBERTA_AVAILABLE = True
@@ -24,12 +24,12 @@ except ImportError as e:
     INDOROBERTA_AVAILABLE = False
 
 class FinanceService:
-    """COMPLETE FIXED Finance Service - Event Loop Issues Resolved"""
+    """COMPLETE FIXED Finance Service with Chatbot Integration"""
     
     def __init__(self):
         self.db = get_database()
         
-        # CRITICAL: Initialize IndoRoBERTa parser directly
+        # CRITICAL: Initialize IndoRoBERTa parser for chatbot integration
         if INDOROBERTA_AVAILABLE:
             try:
                 logger.info("🔧 Initializing IndoRoBERTa parser in FinanceService...")
@@ -72,7 +72,7 @@ class FinanceService:
         return f"Rp {amount:,.0f}".replace(',', '.')
     
     # ==========================================
-    # PARSER METHODS
+    # CHATBOT INTEGRATION METHODS
     # ==========================================
     
     def parse_financial_message(self, message: str) -> Dict[str, Any]:
@@ -114,7 +114,7 @@ class FinanceService:
             }
     
     def get_parser_info(self) -> Dict[str, Any]:
-        """Get detailed parser information"""
+        """Get detailed parser information for chatbot"""
         return {
             "parser_type": self.parser_type,
             "parser_available": self.financial_parser is not None,
@@ -543,8 +543,8 @@ class FinanceService:
             wants_budget = monthly_income * 0.3
             savings_budget = monthly_income * 0.2
             
-            # Get current month spending by budget type
-            spending = await self.get_current_month_spending_by_budget_type(user_id)
+            # Get current month spending by budget type (FIXED VERSION)
+            spending = await self.get_current_month_spending_by_budget_type_fixed(user_id)
             
             needs_spent = spending.get("needs", 0)
             wants_spent = spending.get("wants", 0)
@@ -636,50 +636,103 @@ class FinanceService:
                 "parser_info": self.get_parser_info()
             }
     
+    # CRITICAL FIX: This method ensures consistency with History tab
     async def get_current_month_spending_by_budget_type_fixed(self, user_id: str) -> Dict[str, float]:
         """
-    FIXED: Get current month spending categorized by budget type (needs/wants/savings)
-    Uses the SAME logic as history tab for consistency
-    """
+        FIXED: Get current month spending categorized by budget type (needs/wants/savings)
+        Uses the SAME logic as history tab for consistency
+        """
         try:
-        # Get current month date range
+            # Get current month date range
             now = datetime.now()
             start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             end_date = now
-        
-        # Query current month expenses
+            
+            # Query current month expenses
             query = {
                 "user_id": user_id,
                 "type": "expense",
                 "status": TransactionStatus.CONFIRMED.value,
                 "date": {"$gte": start_date, "$lte": end_date}
             }
-        
+            
             transactions = list(self.db.transactions.find(query))
-        
-        # Initialize spending by budget type
+            
+            # Initialize spending by budget type
             spending = {
                 "needs": 0.0,
                 "wants": 0.0,
                 "savings": 0.0
             }
-        
-        # CRITICAL FIX: Use IndonesianStudentCategories like history does
+            
+            # CRITICAL FIX: Use IndonesianStudentCategories like history does
             for trans in transactions:
                 category = trans["category"]
                 amount = trans["amount"]
-            
-            # FIXED: Use the SAME logic as history tab
+                
+                # FIXED: Use the SAME logic as history tab
                 budget_type = self._get_budget_type_from_category_fixed(category)
                 spending[budget_type] += amount
-        
+            
             logger.info(f"💳 Current month spending calculated (FIXED): {spending}")
             return spending
-        
+            
         except Exception as e:
             logger.error(f"❌ Error calculating current month spending: {e}")
-        return {"needs": 0.0, "wants": 0.0, "savings": 0.0}
-
+            return {"needs": 0.0, "wants": 0.0, "savings": 0.0}
+    
+    def _get_budget_type_from_category_fixed(self, category: str) -> str:
+        """
+        FIXED: Get budget type using the SAME logic as IndonesianStudentCategories
+        This method ensures CONSISTENCY between dashboard and history
+        """
+        try:
+            # Use the official method from the categories class
+            return IndonesianStudentCategories.get_budget_type(category)
+            
+        except Exception as e:
+            logger.error(f"❌ Error getting budget type for category '{category}': {e}")
+            
+            # FALLBACK: Use keyword-based categorization (same as the class uses)
+            category_lower = category.lower()
+            
+            # NEEDS keywords (same as IndonesianStudentCategories)
+            needs_keywords = [
+                'kos', 'kost', 'sewa', 'listrik', 'air', 'tempat tinggal',
+                'makan', 'makanan', 'nasi', 'lauk', 'groceries', 'masak',
+                'transport', 'transportasi', 'angkot', 'bus', 'bensin', 'parkir',
+                'buku', 'alat tulis', 'print', 'ukt', 'spp', 'kuliah', 'pendidikan',
+                'internet', 'wifi', 'pulsa', 'kuota', 'komunikasi',
+                'obat', 'dokter', 'shampo', 'sabun', 'pasta gigi', 'kesehatan'
+            ]
+            
+            # SAVINGS keywords (same as IndonesianStudentCategories)
+            savings_keywords = [
+                'tabungan', 'saving', 'simpan', 'deposito', 'menabung',
+                'dana darurat', 'emergency', 'darurat', 'cadangan',
+                'investasi', 'reksadana', 'saham', 'obligasi', 'crypto',
+                'modal usaha', 'masa depan', 'pensiun'
+            ]
+            
+            # Check NEEDS first (highest priority)
+            for keyword in needs_keywords:
+                if keyword in category_lower:
+                    return "needs"
+            
+            # Check SAVINGS second
+            for keyword in savings_keywords:
+                if keyword in category_lower:
+                    return "savings"
+            
+            # Default to WANTS (everything else goes here)
+            return "wants"
+    
+    # Wrapper method for backward compatibility
+    async def get_current_month_spending_by_budget_type(self, user_id: str) -> Dict[str, float]:
+        """
+        Wrapper method that calls the fixed version for backward compatibility
+        """
+        return await self.get_current_month_spending_by_budget_type_fixed(user_id)
     
     async def _calculate_real_total_savings(self, user_id: str) -> float:
         """Calculate real total savings (income - expenses + initial savings)"""
@@ -864,7 +917,7 @@ class FinanceService:
             }
     
     # ==========================================
-    # PENDING DATA METHODS - FIXED EVENT LOOP ISSUES
+    # PENDING DATA METHODS - FOR CHATBOT INTEGRATION
     # ==========================================
     
     def confirm_pending_data(self, pending_id: str, user_id: str, confirmed: bool) -> Dict[str, Any]:
@@ -1063,27 +1116,6 @@ class FinanceService:
     # UTILITY METHODS
     # ==========================================
     
-    def _get_budget_type_from_category(self, category: str) -> str:
-        """Get budget type (needs/wants/savings) from category"""
-        try:
-            return IndonesianStudentCategories.get_budget_type(category)
-        except:
-            # Fallback logic
-            category_lower = category.lower()
-            
-            needs_keywords = ['kos', 'makan', 'transport', 'pendidikan', 'kesehatan', 'listrik', 'air']
-            savings_keywords = ['tabungan', 'saving', 'investasi', 'deposito', 'darurat']
-            
-            for keyword in needs_keywords:
-                if keyword in category_lower:
-                    return "needs"
-            
-            for keyword in savings_keywords:
-                if keyword in category_lower:
-                    return "savings"
-            
-            return "wants"  # Default
-    
     def _get_categories_by_budget_type(self, budget_type: str) -> List[str]:
         """Get categories that belong to a budget type"""
         try:
@@ -1147,4 +1179,3 @@ class FinanceService:
             return 'Baru saja'
         except Exception:
             return 'Unknown'
-        

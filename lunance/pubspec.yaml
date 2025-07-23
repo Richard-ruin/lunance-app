@@ -39,9 +39,16 @@ dependencies:
   intl: ^0.18.1
   timezone: ^0.9.2
 
-  # 🆕 ADDED: File handling and permissions for download functionality
+  # 🆕 UPDATED: File handling and permissions for download functionality
   path_provider: ^2.1.1
   permission_handler: ^11.1.0
+  
+  # 🆕 NEW: Excel/XLSX generation
+  excel: ^4.0.2
+  
+  # 🆕 NEW: File picker and sharing (optional, for better UX)
+  file_picker: ^6.1.1
+  share_plus: ^7.2.1
 
 dev_dependencies:
   flutter_test:

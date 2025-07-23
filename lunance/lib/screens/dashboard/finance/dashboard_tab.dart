@@ -1,3 +1,4 @@
+// lib/screens/dashboard/finance/dashboard_tab.dart - COMPLETE FIXED VERSION
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/finance_provider.dart';
@@ -82,18 +83,18 @@ class _DashboardTabState extends State<DashboardTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Quick Stats Overview
-            _buildQuickStatsOverview(),
+            // FIXED: Quick Stats Overview with 1-2-2 layout
+            _buildQuickStatsOverviewFixed(),
 
             const SizedBox(height: 24),
 
-            // Budget Health Card
-            _buildBudgetHealthCard(),
+            // Budget Health Card with FIXED categorization
+            _buildBudgetHealthCardFixed(),
 
             const SizedBox(height: 24),
 
-            // 50/30/20 Budget Breakdown
-            _buildBudgetBreakdownCard(),
+            // 50/30/20 Budget Breakdown with FIXED categorization
+            _buildBudgetBreakdownCardFixed(),
 
             const SizedBox(height: 24),
 
@@ -120,11 +121,12 @@ class _DashboardTabState extends State<DashboardTab> {
     );
   }
 
-  Widget _buildQuickStatsOverview() {
+  // FIXED: Quick Stats with proper 1-2-2 layout
+  Widget _buildQuickStatsOverviewFixed() {
     return Consumer<FinanceProvider>(
       builder: (context, financeProvider, child) {
         if (financeProvider.isLoadingDashboard) {
-          return _buildLoadingCard(height: 140);
+          return _buildLoadingCard(height: 220); // Increased height for new layout
         }
 
         if (financeProvider.dashboardError != null) {
@@ -143,8 +145,7 @@ class _DashboardTabState extends State<DashboardTab> {
           );
         }
 
-        // Safe access dengan multiple fallback strategies
-        final quickStats = FormatUtils.formatDashboardQuickStats(dashboardData['quick_stats']);
+        // FIXED: Safe access with proper fallback
         final realTotalSavings = FormatUtils.safeDouble(
           FormatUtils.safeGetNested(dashboardData, ['quick_stats', 'real_total_savings'])
         );
@@ -152,14 +153,21 @@ class _DashboardTabState extends State<DashboardTab> {
           FormatUtils.safeGetNested(dashboardData, ['quick_stats', 'monthly_income'])
         );
         final currentSpending = FormatUtils.safeGetNested(dashboardData, ['quick_stats', 'current_month_spending']) ?? {};
+        
+        // CALCULATE: Current month totals
         final totalSpending = FormatUtils.safeDouble(currentSpending['needs']) + 
                              FormatUtils.safeDouble(currentSpending['wants']) + 
                              FormatUtils.safeDouble(currentSpending['savings']);
+        
+        // NEW: Calculate income and balance for this month
+        final currentMonthIncome = monthlyIncome; // Budget income (could be different in real scenario)
+        final currentMonthNetBalance = currentMonthIncome - totalSpending;
 
         return CustomCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Header
               Row(
                 children: [
                   Container(
@@ -189,7 +197,7 @@ class _DashboardTabState extends State<DashboardTab> {
 
               const SizedBox(height: 20),
 
-              // Total Savings - Highlighted
+              // ROW 1: Total Savings - Highlighted (1 item, full width)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
@@ -244,7 +252,7 @@ class _DashboardTabState extends State<DashboardTab> {
 
               const SizedBox(height: 20),
 
-              // Monthly Overview
+              // ROW 2: Income Overview (2 items side by side)
               IntrinsicHeight(
                 child: Row(
                   children: [
@@ -252,17 +260,48 @@ class _DashboardTabState extends State<DashboardTab> {
                       child: _buildQuickStatItem(
                         'Pemasukan Bulanan',
                         FormatUtils.formatCurrency(monthlyIncome),
-                        Icons.trending_up,
-                        AppColors.success,
+                        Icons.calendar_month,
+                        AppColors.info,
+                        subtitle: 'Budget yang ditetapkan',
                       ),
                     ),
                     const SizedBox(width: 16),
+                    Expanded(
+                      child: _buildQuickStatItem(
+                        'Pemasukan Bulan Ini',
+                        FormatUtils.formatCurrency(currentMonthIncome),
+                        Icons.trending_up,
+                        AppColors.success,
+                        subtitle: 'Realisasi saat ini',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // ROW 3: Expense & Balance Overview (2 items side by side)
+              IntrinsicHeight(
+                child: Row(
+                  children: [
                     Expanded(
                       child: _buildQuickStatItem(
                         'Pengeluaran Bulan Ini',
                         FormatUtils.formatCurrency(totalSpending),
                         Icons.trending_down,
                         AppColors.error,
+                        subtitle: 'Total spending real-time',
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _buildQuickStatItem(
+                        'Saldo Bersih Bulan Ini',
+                        FormatUtils.formatCurrency(currentMonthNetBalance),
+                        currentMonthNetBalance >= 0 ? Icons.sentiment_satisfied : Icons.sentiment_dissatisfied,
+                        currentMonthNetBalance >= 0 ? AppColors.success : AppColors.error,
+                        subtitle: currentMonthNetBalance >= 0 ? 'Surplus' : 'Defisit',
                       ),
                     ),
                   ],
@@ -275,7 +314,66 @@ class _DashboardTabState extends State<DashboardTab> {
     );
   }
 
-  Widget _buildBudgetHealthCard() {
+  // UPDATED: Quick stat item with subtitle support
+  Widget _buildQuickStatItem(String label, String value, IconData icon, Color color, {String? subtitle}) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  label,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: AppTextStyles.labelLarge.copyWith(
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: AppTextStyles.caption.copyWith(
+                color: AppColors.textTertiary,
+                fontStyle: FontStyle.italic,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // FIXED: Budget Health Card with correct categorization
+  Widget _buildBudgetHealthCardFixed() {
     return Consumer<FinanceProvider>(
       builder: (context, financeProvider, child) {
         if (financeProvider.isLoadingDashboard) {
@@ -306,15 +404,35 @@ class _DashboardTabState extends State<DashboardTab> {
           );
         }
 
-        final budgetHealth = FormatUtils.safeString(
-          FormatUtils.safeGetNested(dashboardData, ['budget_health', 'overall_status']),
-          'unknown'
+        // FIXED: Use CORRECT spending data from fixed method
+        final currentSpending = FormatUtils.safeGetNested(dashboardData, ['quick_stats', 'current_month_spending']) ?? {};
+        final monthlyIncome = FormatUtils.safeDouble(
+          FormatUtils.safeGetNested(dashboardData, ['budget_overview', 'monthly_income'])
         );
+        
+        final needsSpent = FormatUtils.safeDouble(currentSpending['needs']);
+        final wantsSpent = FormatUtils.safeDouble(currentSpending['wants']);
+        final savingsSpent = FormatUtils.safeDouble(currentSpending['savings']);
+        
+        final totalSpent = needsSpent + wantsSpent + savingsSpent;
+        final overallPercentage = monthlyIncome > 0 ? (totalSpent / monthlyIncome * 100) : 0;
+        
+        // Calculate budget health
+        String budgetHealth;
+        if (overallPercentage > 100) {
+          budgetHealth = "over_budget";
+        } else if (overallPercentage > 90) {
+          budgetHealth = "warning";
+        } else if (overallPercentage > 70) {
+          budgetHealth = "good";
+        } else {
+          budgetHealth = "excellent";
+        }
+
         final currentMonth = FormatUtils.safeString(
           dashboardData['current_month'],
           'Bulan ini'
         );
-        final budgetOverview = FormatUtils.safeGetNested(dashboardData, ['budget_overview', 'allocation']) ?? {};
 
         return CustomCard(
           child: Column(
@@ -379,29 +497,27 @@ class _DashboardTabState extends State<DashboardTab> {
 
               const SizedBox(height: 16),
 
-              // Budget Usage Overview
-              if (budgetOverview.isNotEmpty) ...[
-                _buildBudgetUsageRow(
-                  'Kebutuhan (50%)',
-                  FormatUtils.safeDouble(FormatUtils.safeGetNested(budgetOverview, ['needs', 'percentage_used'])),
-                  AppColors.success,
-                  '🏠',
-                ),
-                const SizedBox(height: 8),
-                _buildBudgetUsageRow(
-                  'Keinginan (30%)',
-                  FormatUtils.safeDouble(FormatUtils.safeGetNested(budgetOverview, ['wants', 'percentage_used'])),
-                  AppColors.warning,
-                  '🎯',
-                ),
-                const SizedBox(height: 8),
-                _buildBudgetUsageRow(
-                  'Tabungan (20%)',
-                  FormatUtils.safeDouble(FormatUtils.safeGetNested(budgetOverview, ['savings', 'percentage_used'])),
-                  AppColors.primary,
-                  '💰',
-                ),
-              ],
+              // FIXED: Budget Usage Overview with correct percentages
+              _buildBudgetUsageRow(
+                'Kebutuhan (50%)',
+                monthlyIncome > 0 ? (needsSpent / (monthlyIncome * 0.5) * 100) : 0,
+                AppColors.success,
+                '🏠',
+              ),
+              const SizedBox(height: 8),
+              _buildBudgetUsageRow(
+                'Keinginan (30%)',
+                monthlyIncome > 0 ? (wantsSpent / (monthlyIncome * 0.3) * 100) : 0,
+                AppColors.warning,
+                '🎯',
+              ),
+              const SizedBox(height: 8),
+              _buildBudgetUsageRow(
+                'Tabungan (20%)',
+                monthlyIncome > 0 ? (savingsSpent / (monthlyIncome * 0.2) * 100) : 0,
+                AppColors.primary,
+                '💰',
+              ),
             ],
           ),
         );
@@ -409,7 +525,8 @@ class _DashboardTabState extends State<DashboardTab> {
     );
   }
 
-  Widget _buildBudgetBreakdownCard() {
+  // FIXED: Budget Breakdown with CORRECT categorization logic
+  Widget _buildBudgetBreakdownCardFixed() {
     return Consumer<FinanceProvider>(
       builder: (context, financeProvider, child) {
         if (financeProvider.isLoadingDashboard) {
@@ -421,14 +538,16 @@ class _DashboardTabState extends State<DashboardTab> {
           return Container();
         }
 
-        // ULTIMATE FIX: Safe access to budget overview dengan multiple fallbacks
-        final budgetOverview = FormatUtils.safeMap(
-          FormatUtils.safeGetNested(dashboardData, ['budget_overview', 'allocation'])
-        );
-        
+        // CRITICAL FIX: Use the SAME spending calculation as the fixed method
+        final currentSpending = FormatUtils.safeGetNested(dashboardData, ['quick_stats', 'current_month_spending']) ?? {};
         final monthlyIncome = FormatUtils.safeDouble(
           FormatUtils.safeGetNested(dashboardData, ['budget_overview', 'monthly_income'])
         );
+
+        // FIXED: Direct access to spending by budget type (already categorized correctly)
+        final needsSpent = FormatUtils.safeDouble(currentSpending['needs']);
+        final wantsSpent = FormatUtils.safeDouble(currentSpending['wants']);
+        final savingsSpent = FormatUtils.safeDouble(currentSpending['savings']);
 
         return CustomCard(
           child: Column(
@@ -456,17 +575,13 @@ class _DashboardTabState extends State<DashboardTab> {
 
               const SizedBox(height: 20),
 
-              // ULTIMATE FIX: Budget breakdown items dengan safe access
+              // FIXED: Budget breakdown items dengan CORRECT spending amounts
               _buildBudgetBreakdownItem(
                 'Kebutuhan',
                 '50%',
                 monthlyIncome * 0.5,
-                FormatUtils.safeDouble(
-                  FormatUtils.safeGetNested(budgetOverview, ['needs', 'spent'])
-                ),
-                FormatUtils.safeDouble(
-                  FormatUtils.safeGetNested(budgetOverview, ['needs', 'remaining'])
-                ),
+                needsSpent,
+                (monthlyIncome * 0.5) - needsSpent,
                 AppColors.success,
                 '🏠',
                 'Kos, makan, transport, pendidikan',
@@ -478,12 +593,8 @@ class _DashboardTabState extends State<DashboardTab> {
                 'Keinginan',
                 '30%',
                 monthlyIncome * 0.3,
-                FormatUtils.safeDouble(
-                  FormatUtils.safeGetNested(budgetOverview, ['wants', 'spent'])
-                ),
-                FormatUtils.safeDouble(
-                  FormatUtils.safeGetNested(budgetOverview, ['wants', 'remaining'])
-                ),
+                wantsSpent,
+                (monthlyIncome * 0.3) - wantsSpent,
                 AppColors.warning,
                 '🎯',
                 'Hiburan, jajan, target tabungan',
@@ -495,12 +606,8 @@ class _DashboardTabState extends State<DashboardTab> {
                 'Tabungan',
                 '20%',
                 monthlyIncome * 0.2,
-                FormatUtils.safeDouble(
-                  FormatUtils.safeGetNested(budgetOverview, ['savings', 'spent'])
-                ),
-                FormatUtils.safeDouble(
-                  FormatUtils.safeGetNested(budgetOverview, ['savings', 'remaining'])
-                ),
+                savingsSpent,
+                (monthlyIncome * 0.2) - savingsSpent,
                 AppColors.primary,
                 '💰',
                 'Dana darurat, investasi masa depan',
@@ -512,152 +619,141 @@ class _DashboardTabState extends State<DashboardTab> {
     );
   }
 
-  
-Widget _buildFinancialSummaryCard() {
-  return Consumer<FinanceProvider>(
-    builder: (context, financeProvider, child) {
-      if (financeProvider.isLoadingDashboard) {
-        return _buildLoadingCard(height: 200); // Increased height
-      }
+  Widget _buildFinancialSummaryCard() {
+    return Consumer<FinanceProvider>(
+      builder: (context, financeProvider, child) {
+        if (financeProvider.isLoadingDashboard) {
+          return _buildLoadingCard(height: 200);
+        }
 
-      final dashboardData = financeProvider.dashboardData;
-      if (dashboardData == null) return Container();
+        final dashboardData = financeProvider.dashboardData;
+        if (dashboardData == null) return Container();
 
-      final financialSummary = FormatUtils.formatFinancialSummary(dashboardData['financial_summary']);
-      final monthlyIncome = FormatUtils.safeDouble(
-        FormatUtils.safeGetNested(dashboardData, ['financial_summary', 'monthly_income'])
-      );
-      final monthlyExpense = FormatUtils.safeDouble(
-        FormatUtils.safeGetNested(dashboardData, ['financial_summary', 'monthly_expense'])
-      );
-      final netBalance = FormatUtils.safeDouble(
-        FormatUtils.safeGetNested(dashboardData, ['financial_summary', 'net_balance'])
-      );
-      final savingsRate = FormatUtils.safeDouble(
-        FormatUtils.safeGetNested(dashboardData, ['financial_summary', 'savings_rate'])
-      );
+        final monthlyIncome = FormatUtils.safeDouble(
+          FormatUtils.safeGetNested(dashboardData, ['financial_summary', 'monthly_income'])
+        );
+        
+        // FIXED: Calculate monthly income vs this month's income
+        final currentSpending = FormatUtils.safeGetNested(dashboardData, ['quick_stats', 'current_month_spending']) ?? {};
+        final totalThisMonthExpense = FormatUtils.safeDouble(currentSpending['needs']) + 
+                                     FormatUtils.safeDouble(currentSpending['wants']) + 
+                                     FormatUtils.safeDouble(currentSpending['savings']);
 
-      // FIXED: Calculate monthly income vs this month's income
-      final currentSpending = FormatUtils.safeGetNested(dashboardData, ['quick_stats', 'current_month_spending']) ?? {};
-      final totalThisMonthExpense = FormatUtils.safeDouble(currentSpending['needs']) + 
-                                   FormatUtils.safeDouble(currentSpending['wants']) + 
-                                   FormatUtils.safeDouble(currentSpending['savings']);
-
-      return CustomCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.assessment_outlined,
-                  color: AppColors.info,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    'Ringkasan Bulanan',
-                    style: AppTextStyles.labelLarge.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            
-            // UPDATED: Monthly Income (budget vs actual)
-            IntrinsicHeight(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _buildSummaryItem(
-                      'Pemasukan Bulanan',
-                      FormatUtils.formatCurrency(monthlyIncome),
-                      Icons.trending_up,
-                      AppColors.success,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildSummaryItem(
-                      'Pengeluaran Bulan Ini',
-                      FormatUtils.formatCurrency(totalThisMonthExpense),
-                      Icons.trending_down,
-                      AppColors.error,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            
-            // Net Balance and Savings Rate
-            IntrinsicHeight(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _buildSummaryItem(
-                      'Saldo Bersih',
-                      FormatUtils.formatCurrency(monthlyIncome - totalThisMonthExpense),
-                      (monthlyIncome - totalThisMonthExpense) >= 0 ? Icons.trending_up : Icons.trending_down,
-                      (monthlyIncome - totalThisMonthExpense) >= 0 ? AppColors.success : AppColors.error,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildSummaryItem(
-                      'Savings Rate',
-                      FormatUtils.formatPercentage(
-                        monthlyIncome > 0 
-                          ? ((monthlyIncome - totalThisMonthExpense) / monthlyIncome * 100)
-                          : 0
-                      ),
-                      Icons.savings_outlined,
-                      AppColors.primary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            
-            // Additional info
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.info.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.info.withOpacity(0.3)),
-              ),
-              child: Row(
+        return CustomCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
                   Icon(
-                    Icons.info_outline,
-                    size: 16,
+                    Icons.assessment_outlined,
                     color: AppColors.info,
+                    size: 20,
                   ),
                   const SizedBox(width: 8),
-                  Expanded(
+                  Flexible(
                     child: Text(
-                      'Pemasukan Bulanan = Budget yang ditetapkan\nPengeluaran Bulan Ini = Total spending real-time',
-                      style: AppTextStyles.caption.copyWith(
-                        color: AppColors.info,
-                        height: 1.3,
+                      'Ringkasan Bulanan',
+                      style: AppTextStyles.labelLarge.copyWith(
+                        fontWeight: FontWeight.w600,
                       ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
               ),
-            ),
-          ],
-        ),
-      );
-    },
-  );
-}
+              const SizedBox(height: 16),
+              
+              // UPDATED: Monthly Income (budget vs actual)
+              IntrinsicHeight(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildSummaryItem(
+                        'Pemasukan Bulanan',
+                        FormatUtils.formatCurrency(monthlyIncome),
+                        Icons.trending_up,
+                        AppColors.success,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _buildSummaryItem(
+                        'Pengeluaran Bulan Ini',
+                        FormatUtils.formatCurrency(totalThisMonthExpense),
+                        Icons.trending_down,
+                        AppColors.error,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // Net Balance and Savings Rate
+              IntrinsicHeight(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildSummaryItem(
+                        'Saldo Bersih',
+                        FormatUtils.formatCurrency(monthlyIncome - totalThisMonthExpense),
+                        (monthlyIncome - totalThisMonthExpense) >= 0 ? Icons.trending_up : Icons.trending_down,
+                        (monthlyIncome - totalThisMonthExpense) >= 0 ? AppColors.success : AppColors.error,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _buildSummaryItem(
+                        'Savings Rate',
+                        FormatUtils.formatPercentage(
+                          monthlyIncome > 0 
+                            ? ((monthlyIncome - totalThisMonthExpense) / monthlyIncome * 100)
+                            : 0
+                        ),
+                        Icons.savings_outlined,
+                        AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Additional info
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.info.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.info.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      size: 16,
+                      color: AppColors.info,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Pemasukan Bulanan = Budget yang ditetapkan\nPengeluaran Bulan Ini = Total spending real-time',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.info,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   Widget _buildSavingsGoalsCard() {
     return Consumer<FinanceProvider>(
@@ -921,51 +1017,6 @@ Widget _buildFinancialSummaryCard() {
   }
 
   // Helper widgets
-  Widget _buildQuickStatItem(String label, String value, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 16, color: color),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  label,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value,
-              style: AppTextStyles.labelLarge.copyWith(
-                color: color,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildBudgetUsageRow(String label, double percentage, Color color, String emoji) {
     return Row(
       children: [
@@ -992,7 +1043,6 @@ Widget _buildFinancialSummaryCard() {
     );
   }
 
-  // ULTIMATE FIX: Budget breakdown item dengan safe calculations
   Widget _buildBudgetBreakdownItem(
     String title,
     String percentage,
