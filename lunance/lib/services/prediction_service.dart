@@ -5,7 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config/app_config.dart';
 
 class PredictionService {
-  static const String baseUrl = 'http://192.168.101.8:8000/api/v1';
+  static const String baseUrl = 'http://192.168.148.195:8000/api/v1';
   static const _storage = FlutterSecureStorage();
 
   Future<Map<String, String>> get _authHeaders async {
@@ -259,7 +259,8 @@ class PredictionService {
 
       // Load budget performance prediction
       try {
-        final budgetResult = await predictBudgetPerformance(forecastDays: forecastDays);
+        final budgetResult =
+            await predictBudgetPerformance(forecastDays: forecastDays);
         results['budget_performance'] = budgetResult;
       } catch (e) {
         results['budget_performance'] = {

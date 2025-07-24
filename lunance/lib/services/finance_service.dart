@@ -6,7 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config/app_config.dart';
 
 class FinanceService {
-  static const String baseUrl = 'http://192.168.101.8:8000/api/v1';
+  static const String baseUrl = 'http://192.168.148.195:8000/api/v1';
   static const _storage = FlutterSecureStorage();
 
   Future<Map<String, String>> get _authHeaders async {
@@ -26,19 +26,19 @@ class FinanceService {
         Uri.parse('$baseUrl/finance/dashboard'),
         headers: await _authHeaders,
       );
-      
+
       final result = _handleResponse(response);
-      
+
       // Add fallback mechanism untuk backward compatibility
       if (result['success'] == true && result['data'] != null) {
         final data = result['data'] as Map<String, dynamic>;
-        
+
         // Ensure all required fields exist with safe defaults
         _ensureRequiredFields(data);
-        
+
         return result;
       }
-      
+
       return result;
     } catch (e) {
       return {
@@ -59,16 +59,18 @@ class FinanceService {
         'period': period,
       };
 
-      if (startDate != null) queryParams['start_date'] = startDate.toIso8601String();
+      if (startDate != null)
+        queryParams['start_date'] = startDate.toIso8601String();
       if (endDate != null) queryParams['end_date'] = endDate.toIso8601String();
 
-      final uri = Uri.parse('$baseUrl/finance/analytics').replace(queryParameters: queryParams);
-      
+      final uri = Uri.parse('$baseUrl/finance/analytics')
+          .replace(queryParameters: queryParams);
+
       final response = await http.get(
         uri,
         headers: await _authHeaders,
       );
-      
+
       return _handleResponse(response);
     } catch (e) {
       return {
@@ -102,17 +104,19 @@ class FinanceService {
       if (type != null) queryParams['type'] = type;
       if (budgetType != null) queryParams['budget_type'] = budgetType;
       if (category != null) queryParams['category'] = category;
-      if (startDate != null) queryParams['start_date'] = startDate.toIso8601String();
+      if (startDate != null)
+        queryParams['start_date'] = startDate.toIso8601String();
       if (endDate != null) queryParams['end_date'] = endDate.toIso8601String();
       if (search != null) queryParams['search'] = search;
 
-      final uri = Uri.parse('$baseUrl/finance/history').replace(queryParameters: queryParams);
-      
+      final uri = Uri.parse('$baseUrl/finance/history')
+          .replace(queryParameters: queryParams);
+
       final response = await http.get(
         uri,
         headers: await _authHeaders,
       );
-      
+
       return _handleResponse(response);
     } catch (e) {
       return {
@@ -137,16 +141,18 @@ class FinanceService {
       };
 
       if (type != null) queryParams['type'] = type;
-      if (startDate != null) queryParams['start_date'] = startDate.toIso8601String();
+      if (startDate != null)
+        queryParams['start_date'] = startDate.toIso8601String();
       if (endDate != null) queryParams['end_date'] = endDate.toIso8601String();
 
-      final uri = Uri.parse('$baseUrl/finance/export').replace(queryParameters: queryParams);
-      
+      final uri = Uri.parse('$baseUrl/finance/export')
+          .replace(queryParameters: queryParams);
+
       final response = await http.get(
         uri,
         headers: await _authHeaders,
       );
-      
+
       return _handleResponse(response);
     } catch (e) {
       return {
@@ -167,16 +173,18 @@ class FinanceService {
         'period': period,
       };
 
-      if (startDate != null) queryParams['start_date'] = startDate.toIso8601String();
+      if (startDate != null)
+        queryParams['start_date'] = startDate.toIso8601String();
       if (endDate != null) queryParams['end_date'] = endDate.toIso8601String();
 
-      final uri = Uri.parse('$baseUrl/finance/reports/summary').replace(queryParameters: queryParams);
-      
+      final uri = Uri.parse('$baseUrl/finance/reports/summary')
+          .replace(queryParameters: queryParams);
+
       final response = await http.get(
         uri,
         headers: await _authHeaders,
       );
-      
+
       return _handleResponse(response);
     } catch (e) {
       return {
@@ -195,7 +203,7 @@ class FinanceService {
         Uri.parse('$baseUrl/finance/categories'),
         headers: await _authHeaders,
       );
-      
+
       return _handleResponse(response);
     } catch (e) {
       return {
@@ -212,7 +220,7 @@ class FinanceService {
         Uri.parse('$baseUrl/finance/stats'),
         headers: await _authHeaders,
       );
-      
+
       return _handleResponse(response);
     } catch (e) {
       return {
@@ -273,7 +281,7 @@ class FinanceService {
   }) async {
     try {
       final body = <String, dynamic>{};
-      
+
       if (type != null) body['type'] = type;
       if (amount != null) body['amount'] = amount;
       if (category != null) body['category'] = category;
@@ -360,11 +368,12 @@ class FinanceService {
   }) async {
     try {
       final body = <String, dynamic>{};
-      
+
       if (itemName != null) body['item_name'] = itemName;
       if (targetAmount != null) body['target_amount'] = targetAmount;
       if (description != null) body['description'] = description;
-      if (targetDate != null) body['target_date'] = targetDate.toIso8601String();
+      if (targetDate != null)
+        body['target_date'] = targetDate.toIso8601String();
       if (monthlyTarget != null) body['monthly_target'] = monthlyTarget;
       if (status != null) body['status'] = status;
 
@@ -486,7 +495,8 @@ class FinanceService {
 
   /// Validate report period
   bool isValidReportPeriod(String period) {
-    return ['weekly', 'monthly', 'quarterly', 'yearly'].contains(period.toLowerCase());
+    return ['weekly', 'monthly', 'quarterly', 'yearly']
+        .contains(period.toLowerCase());
   }
 
   /// Validate transaction type
@@ -589,7 +599,7 @@ class FinanceService {
           .replaceAll(' ', '')
           .replaceAll('.', '')
           .trim();
-      
+
       return double.parse(cleanString);
     } catch (e) {
       return 0.0;
@@ -633,19 +643,20 @@ class FinanceService {
         }
       };
     }
-    
+
     // Ensure financial_summary exists
     if (data['financial_summary'] == null) {
       final quickStats = data['quick_stats'];
       if (quickStats != null) {
         final monthlyIncome = _safeDouble(quickStats['monthly_income']);
         final spending = quickStats['current_month_spending'] ?? {};
-        final totalExpense = _safeDouble(spending['needs']) + 
-                            _safeDouble(spending['wants']) + 
-                            _safeDouble(spending['savings']);
+        final totalExpense = _safeDouble(spending['needs']) +
+            _safeDouble(spending['wants']) +
+            _safeDouble(spending['savings']);
         final netBalance = monthlyIncome - totalExpense;
-        final savingsRate = monthlyIncome > 0 ? (netBalance / monthlyIncome * 100) : 0.0;
-        
+        final savingsRate =
+            monthlyIncome > 0 ? (netBalance / monthlyIncome * 100) : 0.0;
+
         data['financial_summary'] = {
           'monthly_income': monthlyIncome,
           'monthly_expense': totalExpense,
@@ -661,27 +672,42 @@ class FinanceService {
       if (quickStats != null) {
         final monthlyIncome = _safeDouble(quickStats['monthly_income']);
         final spending = quickStats['current_month_spending'] ?? {};
-        
+
         data['budget_overview'] = {
           'monthly_income': monthlyIncome,
           'allocation': {
             'needs': {
               'budget': monthlyIncome * 0.5,
               'spent': _safeDouble(spending['needs']),
-              'remaining': (monthlyIncome * 0.5) - _safeDouble(spending['needs']),
-              'percentage_used': monthlyIncome > 0 ? (_safeDouble(spending['needs']) / (monthlyIncome * 0.5) * 100) : 0,
+              'remaining':
+                  (monthlyIncome * 0.5) - _safeDouble(spending['needs']),
+              'percentage_used': monthlyIncome > 0
+                  ? (_safeDouble(spending['needs']) /
+                      (monthlyIncome * 0.5) *
+                      100)
+                  : 0,
             },
             'wants': {
               'budget': monthlyIncome * 0.3,
               'spent': _safeDouble(spending['wants']),
-              'remaining': (monthlyIncome * 0.3) - _safeDouble(spending['wants']),
-              'percentage_used': monthlyIncome > 0 ? (_safeDouble(spending['wants']) / (monthlyIncome * 0.3) * 100) : 0,
+              'remaining':
+                  (monthlyIncome * 0.3) - _safeDouble(spending['wants']),
+              'percentage_used': monthlyIncome > 0
+                  ? (_safeDouble(spending['wants']) /
+                      (monthlyIncome * 0.3) *
+                      100)
+                  : 0,
             },
             'savings': {
               'budget': monthlyIncome * 0.2,
               'spent': _safeDouble(spending['savings']),
-              'remaining': (monthlyIncome * 0.2) - _safeDouble(spending['savings']),
-              'percentage_used': monthlyIncome > 0 ? (_safeDouble(spending['savings']) / (monthlyIncome * 0.2) * 100) : 0,
+              'remaining':
+                  (monthlyIncome * 0.2) - _safeDouble(spending['savings']),
+              'percentage_used': monthlyIncome > 0
+                  ? (_safeDouble(spending['savings']) /
+                      (monthlyIncome * 0.2) *
+                      100)
+                  : 0,
             },
           },
         };
@@ -701,16 +727,17 @@ class FinanceService {
   Map<String, dynamic> _handleResponse(http.Response response) {
     try {
       final Map<String, dynamic> data = jsonDecode(response.body);
-      
+
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return data;
       } else {
         String errorMessage = data['message'] ?? 'Terjadi kesalahan';
-        
+
         if (response.statusCode == 400) {
           errorMessage = data['message'] ?? 'Data yang dikirim tidak valid';
           if (errorMessage.contains('setup')) {
-            errorMessage = 'Setup keuangan belum dilakukan. Silakan setup terlebih dahulu.';
+            errorMessage =
+                'Setup keuangan belum dilakukan. Silakan setup terlebih dahulu.';
           }
         } else if (response.statusCode == 401) {
           errorMessage = 'Tidak memiliki akses. Silakan login kembali';
@@ -719,20 +746,25 @@ class FinanceService {
         } else if (response.statusCode >= 500) {
           errorMessage = 'Terjadi kesalahan pada server';
         }
-        
+
         // Add more context for finance-specific errors
         if (errorMessage.contains('export')) {
-          errorMessage = 'Gagal export data. Pastikan Anda memiliki data transaksi.';
+          errorMessage =
+              'Gagal export data. Pastikan Anda memiliki data transaksi.';
         } else if (errorMessage.contains('report')) {
-          errorMessage = 'Gagal generate laporan. Coba lagi dalam beberapa saat.';
+          errorMessage =
+              'Gagal generate laporan. Coba lagi dalam beberapa saat.';
         } else if (errorMessage.contains('dashboard')) {
-          errorMessage = 'Gagal memuat dashboard. Periksa koneksi internet Anda.';
+          errorMessage =
+              'Gagal memuat dashboard. Periksa koneksi internet Anda.';
         } else if (errorMessage.contains('transaction')) {
-          errorMessage = 'Gagal memproses transaksi. Periksa data yang dimasukkan.';
+          errorMessage =
+              'Gagal memproses transaksi. Periksa data yang dimasukkan.';
         } else if (errorMessage.contains('goal')) {
-          errorMessage = 'Gagal memproses target tabungan. Periksa data yang dimasukkan.';
+          errorMessage =
+              'Gagal memproses target tabungan. Periksa data yang dimasukkan.';
         }
-        
+
         return {
           'success': false,
           'message': errorMessage,
@@ -742,13 +774,13 @@ class FinanceService {
     } catch (e) {
       // Handle specific parsing errors
       String errorMessage = 'Gagal memproses response dari server';
-      
+
       if (e.toString().contains('FormatException')) {
         errorMessage = 'Server mengembalikan data yang tidak valid';
       } else if (e.toString().contains('type')) {
         errorMessage = 'Format data dari server tidak sesuai';
       }
-      
+
       return {
         'success': false,
         'message': errorMessage,
@@ -764,13 +796,15 @@ class FinanceService {
   /// Test API connectivity
   Future<Map<String, dynamic>> testConnection() async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/finance/stats'),
-        headers: await _authHeaders,
-      ).timeout(const Duration(seconds: 10));
-      
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/finance/stats'),
+            headers: await _authHeaders,
+          )
+          .timeout(const Duration(seconds: 10));
+
       final result = _handleResponse(response);
-      
+
       if (result['success'] == true) {
         return {
           'success': true,
@@ -846,14 +880,16 @@ class FinanceService {
     ];
 
     final results = <String, dynamic>{};
-    
+
     for (final endpoint in endpoints) {
       try {
-        final response = await http.get(
-          Uri.parse(endpoint['url']!),
-          headers: await _authHeaders,
-        ).timeout(const Duration(seconds: 5));
-        
+        final response = await http
+            .get(
+              Uri.parse(endpoint['url']!),
+              headers: await _authHeaders,
+            )
+            .timeout(const Duration(seconds: 5));
+
         results[endpoint['name']!] = {
           'status': response.statusCode < 500 ? 'healthy' : 'unhealthy',
           'status_code': response.statusCode,
@@ -868,7 +904,10 @@ class FinanceService {
     }
 
     return {
-      'overall_health': results.values.every((result) => result['status'] == 'healthy') ? 'healthy' : 'degraded',
+      'overall_health':
+          results.values.every((result) => result['status'] == 'healthy')
+              ? 'healthy'
+              : 'degraded',
       'endpoints': results,
       'checked_at': DateTime.now().toIso8601String(),
     };

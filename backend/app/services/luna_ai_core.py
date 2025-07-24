@@ -1,4 +1,4 @@
-# app/services/luna_ai_core.py - FIXED VERSION (Issues 1 & 2 Resolved)
+# app/services/luna_ai_core.py - FIXED VERSION (Priority Routing Issue Resolved)
 import re
 import random
 import logging
@@ -19,15 +19,17 @@ logger = logging.getLogger(__name__)
 
 class EnhancedLunaAICore(LunaAIBase):
     """
-    FIXED: Luna AI Core - Issues 1 & 2 Resolved
+    FIXED: Luna AI Core - Priority Routing Issue Resolved
     
-    FIXES:
-    1. ✅ Removed enhanced natural language boost message from output
-    2. ✅ Restored financial query capabilities with proper service integration
+    CRITICAL FIXES:
+    1. ✅ Command detection gets HIGHEST priority (before financial detection)
+    2. ✅ Stricter financial detection thresholds to prevent false positives
+    3. ✅ Better context awareness for edit/delete commands
+    4. ✅ Improved routing logic with proper fall-through
     """
     
     def __init__(self):
-        logger.info("🚀 Initializing FIXED LunaAICore...")
+        logger.info("🚀 Initializing FIXED LunaAICore with proper priority routing...")
         
         # CRITICAL: Force enhanced IndoRoBERTa parser loading
         self._force_enhanced_indoroberta_parser()
@@ -48,8 +50,8 @@ class EnhancedLunaAICore(LunaAIBase):
             self.queries = None
             self.calculator = None
         
-        # Initialize enhanced natural language features
-        self._init_enhanced_nl_features()
+        # Initialize enhanced command detection patterns
+        self._init_enhanced_command_patterns()
         
         # Log final parser status
         self._log_enhanced_parser_status()
@@ -163,22 +165,51 @@ class EnhancedLunaAICore(LunaAIBase):
             logger.error(f"❌ Enhanced parser functionality test failed: {e}")
             return False
     
-    def _init_enhanced_nl_features(self):
-        """Initialize enhanced natural language features"""
+    def _init_enhanced_command_patterns(self):
+        """Initialize enhanced command detection patterns - CRITICAL FIX"""
         
-        # Enhanced detection patterns with lower thresholds
-        self.enhanced_financial_patterns = [
-            # Ultra-natural Indonesian patterns
-            r'\b(?:dapet|dapat|terima|nerima)\s+\d+',  # Getting money (natural)
-            r'\b(?:abis|habis|keluar)\s+\d+',  # Spending money (natural)  
-            r'\b(?:pengen|mau|ingin)\s+(?:beli|punya)',  # Want to buy (natural)
-            r'\b(?:nabung|menabung)\s+(?:buat|untuk)',  # Saving for (natural)
-            r'\b(?:bokap|nyokap|ortu|papa|mama)\s+(?:kasih|kirim|transfer)',  # Family money
-            r'\b(?:gofood|grabfood|gopay|ovo|dana)\b',  # Modern payments
-            r'\d+\s*(?:rb|ribu|rebu|jt|juta|k|m)\b',  # Natural amounts
-        ]
+        # CRITICAL: Enhanced command patterns with higher specificity
+        self.command_patterns = {
+            # UPDATE COMMANDS - Highest Priority
+            "update_target": [
+                r'\b(?:ubah|ganti|edit|update)\s+(?:target|goal)\s+(.+?)\s+(?:jadi|menjadi|ke)\s+(?:rp\.?\s*)?(\d+(?:[.,]\d+)?)\s*(?:juta|ribu|rb|jt|k|m)',
+                r'\b(?:ubah|ganti|edit)\s+(?:target|goal)\s+(.+?)\s+(?:tanggal|waktu|deadline)\s+(.+)',
+                r'\b(?:ganti|ubah)\s+nama\s+(.+?)\s+jadi\s+(.+)',
+                r'\b(?:target|goal)\s+(.+?)\s+(?:ubah|ganti)\s+(?:jadi|menjadi|ke)\s+(.+)'
+            ],
+            
+            # DELETE COMMANDS - High Priority  
+            "delete_target": [
+                r'\b(?:hapus|delete|remove|buang)\s+(?:target|goal)\s+(.+)',
+                r'\b(?:batalkan|cancel)\s+(?:target|goal)\s+(.+)',
+                r'\b(?:ga|gak|tidak)\s+(?:jadi|mau)\s+(?:target|goal)\s+(.+)'
+            ],
+            
+            # LIST COMMANDS - High Priority
+            "list_targets": [
+                r'\b(?:daftar|list|lihat|tampilkan)\s+(?:target|goal|semua\s+target)',
+                r'\b(?:target|goal)\s+(?:saya|aku|gue)\s*(?:apa\s+saja|semua)?',
+                r'\bsemua\s+target\s+(?:saya|aku|gue)',
+                r'\b(?:progress|kemajuan)\s+(?:semua\s+)?(?:target|goal)'
+            ],
+            
+            # FINANCIAL QUERIES - Medium Priority  
+            "financial_query": [
+                r'\b(?:total|berapa)\s+(?:tabungan|saving|uang|duit)\s+(?:saya|aku|gue)',
+                r'\b(?:kesehatan|health)\s+(?:keuangan|finansial)',
+                r'\b(?:budget|anggaran)\s+(?:performance|performa)',
+                r'\b(?:pengeluaran|expense)\s+(?:terbesar|terbanyak)',
+                r'\b(?:analisis|analysis)\s+(?:keuangan|finansial|pengeluaran)'
+            ],
+            
+            # CONFIRMATION PATTERNS - High Priority for context
+            "confirmation": [
+                r'^\s*(?:ya|yes|iya|ok|okay|oke|benar|betul|setuju|lanjut)\s*$',
+                r'^\s*(?:tidak|no|nope|ga|gak|batal|cancel|salah)\s*$'
+            ]
+        }
         
-        logger.info("🎨 Enhanced natural language features initialized")
+        logger.info("🔧 Enhanced command patterns initialized with strict detection")
     
     def _log_enhanced_parser_status(self):
         """Log comprehensive enhanced parser status"""
@@ -193,21 +224,90 @@ class EnhancedLunaAICore(LunaAIBase):
         logger.info("=" * 70)
     
     # ==========================================
-    # ENHANCED MAIN RESPONSE GENERATION - FIXED
+    # FIXED MAIN RESPONSE GENERATION - PRIORITY ROUTING
     # ==========================================
     
     async def generate_response(self, user_message: str, user_id: str, conversation_id: str, message_id: str) -> str:
         """
-        FIXED: Response generation with proper financial query routing and NO boost message
+        FIXED: Response generation with PROPER PRIORITY ROUTING
+        
+        CRITICAL FIX: Command detection now has HIGHEST priority before financial detection
         """
         message_lower = user_message.lower().strip()
         
-        logger.info(f"🚀 Processing message: '{user_message}'")
+        logger.info(f"🚀 FIXED Processing message: '{user_message}'")
         logger.info(f"📊 Available components: handlers={self.handlers is not None}, queries={self.queries is not None}, calculator={self.calculator is not None}")
         
-        # STEP 1: ENHANCED FINANCIAL DATA DETECTION (Highest Priority)
+        # ==========================================
+        # STEP 1: COMMAND DETECTION - HIGHEST PRIORITY (CRITICAL FIX)
+        # ==========================================
+        
+        logger.info("🔍 STEP 1: Command Detection (Highest Priority)")
+        
+        # CONFIRMATION HANDLING - Must be first to maintain context
+        confirmation = await self._detect_enhanced_confirmation(user_message)
+        if confirmation is not None and self.handlers:
+            logger.info(f"✅ CONFIRMATION detected: {confirmation}")
+            try:
+                return await self.handlers.handle_confirmation(user_id, conversation_id, confirmation)
+            except Exception as e:
+                logger.error(f"❌ Error handling confirmation: {e}")
+        
+        # UPDATE/DELETE COMMANDS - Critical priority before financial detection
+        update_delete_command = await self._detect_enhanced_update_delete_command(user_message)
+        if update_delete_command and self.handlers:
+            logger.info(f"✅ UPDATE/DELETE COMMAND detected: {update_delete_command['action']}")
+            try:
+                return await self.handlers.handle_update_delete_command(user_id, conversation_id, message_id, update_delete_command)
+            except Exception as e:
+                logger.error(f"❌ Error handling update/delete command: {e}")
+        
+        # LIST COMMANDS - High priority
+        if self._is_list_command(user_message):
+            logger.info("✅ LIST COMMAND detected")
+            if self.handlers:
+                try:
+                    return await self.handlers.handle_list_savings_goals(user_id)
+                except Exception as e:
+                    logger.error(f"❌ Error handling list command: {e}")
+        
+        # ==========================================
+        # STEP 2: FINANCIAL QUERIES - MEDIUM PRIORITY (FIXED)
+        # ==========================================
+        
+        logger.info("🔍 STEP 2: Financial Queries (Medium Priority)")
+        
+        query_type = await self._detect_enhanced_financial_query(user_message)
+        if query_type and self.queries:
+            logger.info(f"✅ FINANCIAL QUERY detected: {query_type}")
+            try:
+                return await self.queries.handle_financial_query(user_id, query_type)
+            except Exception as e:
+                logger.error(f"❌ Error handling financial query: {e}")
+                # Continue to other checks instead of failing completely
+        
+        # ==========================================
+        # STEP 3: PURCHASE INTENT - MEDIUM PRIORITY (FIXED)
+        # ==========================================
+        
+        logger.info("🔍 STEP 3: Purchase Intent Detection")
+        
+        purchase_intent = await self._detect_enhanced_purchase_intent(user_message)
+        if purchase_intent and self.queries:
+            logger.info(f"✅ PURCHASE INTENT detected: {purchase_intent['item_name']} - {purchase_intent.get('price', 'N/A')}")
+            try:
+                return await self.queries.handle_purchase_intent(user_id, purchase_intent)
+            except Exception as e:
+                logger.error(f"❌ Error handling purchase intent: {e}")
+        
+        # ==========================================
+        # STEP 4: FINANCIAL DATA DETECTION - LOWER PRIORITY (CRITICAL FIX)
+        # ==========================================
+        
+        logger.info("🔍 STEP 4: Financial Data Detection (Lower Priority - FIXED)")
+        
         if self.parser:
-            logger.info(f"💰 PRIORITY CHECK: Testing financial parsing...")
+            logger.info(f"💰 Testing financial parsing with STRICTER thresholds...")
             
             try:
                 # Use enhanced parser with natural language optimization
@@ -216,13 +316,21 @@ class EnhancedLunaAICore(LunaAIBase):
                 is_financial = parse_result.get("is_financial_data", False)
                 confidence = parse_result.get("confidence", 0)
                 
-                # ENHANCED: Much lower threshold for natural language
-                effective_threshold = 0.25  # Lowered threshold for better detection
+                # CRITICAL FIX: STRICTER threshold to prevent false positives on commands
+                effective_threshold = 0.6  # RAISED from 0.25 to prevent command misdetection
                 
-                logger.info(f"📊 Parse result: financial={is_financial}, confidence={confidence:.3f}, threshold={effective_threshold:.3f}")
+                # ADDITIONAL CHECK: If message contains command words, require MUCH higher confidence
+                command_indicators = ['ubah', 'ganti', 'hapus', 'delete', 'daftar', 'list', 'semua', 'progress']
+                has_command_words = any(word in message_lower for word in command_indicators)
+                
+                if has_command_words:
+                    effective_threshold = 0.85  # Very high threshold for potential commands
+                    logger.info(f"⚠️ Command words detected, using STRICT threshold: {effective_threshold}")
+                
+                logger.info(f"📊 Parse result: financial={is_financial}, confidence={confidence:.3f}, threshold={effective_threshold:.3f}, has_commands={has_command_words}")
                 
                 if is_financial and confidence >= effective_threshold:
-                    logger.info(f"✅ Financial data detected! Processing...")
+                    logger.info(f"✅ Financial data detected with HIGH confidence! Processing...")
                     
                     transaction_type = parse_result.get("data_type")
                     parsed_data = parse_result.get("parsed_data", {})
@@ -237,19 +345,11 @@ class EnhancedLunaAICore(LunaAIBase):
                             transaction_type, amount, user_message
                         )
                         
-                        # ISSUE 1 FIX: NO natural language acknowledgment added
                         return response
                     else:
                         logger.warning(f"⚠️ Enhanced parser detected financial data but missing key fields or handlers unavailable")
-                
-                # STEP 1.5: FALLBACK PATTERN DETECTION for missed cases
-                elif self._has_strong_financial_indicators(user_message):
-                    logger.info(f"🔍 Strong financial indicators detected, trying fallback processing...")
-                    fallback_result = await self._try_fallback_financial_processing(
-                        user_message, user_id, conversation_id, message_id
-                    )
-                    if fallback_result:
-                        return fallback_result
+                else:
+                    logger.info(f"📋 Financial data not detected or confidence too low (command protection)")
                 
             except Exception as e:
                 logger.error(f"❌ Error in enhanced financial parsing: {e}")
@@ -257,44 +357,10 @@ class EnhancedLunaAICore(LunaAIBase):
         else:
             logger.warning("⚠️ No enhanced parser available!")
         
-        # STEP 2: FINANCIAL QUERIES (FIXED - Secondary Priority)
-        query_type = await self._detect_enhanced_financial_query(user_message)
-        if query_type and self.queries:
-            logger.info(f"📊 FIXED: Financial query detected: {query_type}")
-            try:
-                return await self.queries.handle_financial_query(user_id, query_type)
-            except Exception as e:
-                logger.error(f"❌ Error handling financial query: {e}")
-                # Continue to fallback handling
+        # ==========================================
+        # STEP 5: REGULAR MESSAGE HANDLING (FIXED)
+        # ==========================================
         
-        # STEP 3: PURCHASE INTENT (FIXED)
-        purchase_intent = await self._detect_enhanced_purchase_intent(user_message)
-        if purchase_intent and self.queries:
-            logger.info(f"🛒 Purchase intent: {purchase_intent['item_name']} - {purchase_intent.get('price', 'N/A')}")
-            try:
-                return await self.queries.handle_purchase_intent(user_id, purchase_intent)
-            except Exception as e:
-                logger.error(f"❌ Error handling purchase intent: {e}")
-        
-        # STEP 4: UPDATE/DELETE COMMANDS (FIXED)
-        update_delete_command = await self._detect_enhanced_update_delete_command(user_message)
-        if update_delete_command and self.handlers:
-            logger.info(f"🔧 Update/delete command: {update_delete_command['action']}")
-            try:
-                return await self.handlers.handle_update_delete_command(user_id, conversation_id, message_id, update_delete_command)
-            except Exception as e:
-                logger.error(f"❌ Error handling update/delete command: {e}")
-        
-        # STEP 5: CONFIRMATION HANDLING (FIXED)
-        confirmation = await self._detect_enhanced_confirmation(user_message)
-        if confirmation is not None and self.handlers:
-            logger.info(f"📝 Confirmation: {confirmation}")
-            try:
-                return await self.handlers.handle_confirmation(user_id, conversation_id, confirmation)
-            except Exception as e:
-                logger.error(f"❌ Error handling confirmation: {e}")
-        
-        # STEP 6: REGULAR MESSAGE HANDLING (FIXED)
         logger.info(f"💬 No specific actions detected, handling as regular message")
         return await self._handle_enhanced_regular_message(user_message, user_id)
     
@@ -302,108 +368,104 @@ class EnhancedLunaAICore(LunaAIBase):
     # ENHANCED DETECTION METHODS - FIXED
     # ==========================================
     
-    def _has_strong_financial_indicators(self, message: str) -> bool:
-        """Check for strong financial indicators that might be missed"""
-        message_lower = message.lower()
+    def _is_list_command(self, message: str) -> bool:
+        """Check if message is a list command"""
+        message_lower = message.lower().strip()
         
-        # Strong financial keywords
-        strong_indicators = [
-            r'\d+\s*(?:rb|ribu|rebu|jt|juta|k|m)\b',  # Amount patterns
-            r'\b(?:bayar|beli|dapat|dapet|transfer|habis|abis)\b',  # Financial verbs
-            r'\b(?:uang|duit|money|cash|rupiah|rp)\b',  # Money terms
-            r'\b(?:gofood|grabfood|gopay|ovo|dana|spaylater)\b',  # Modern payments
-            r'\b(?:kos|kuliah|makan|transport|jajan)\b',  # Student expenses
-            r'\b(?:nabung|menabung|target|saving)\b',  # Savings terms
+        list_patterns = [
+            r'\b(?:daftar|list|lihat|tampilkan)\s+(?:target|goal)',
+            r'\b(?:semua|all)\s+(?:target|goal)',
+            r'\b(?:target|goal)\s+(?:saya|aku|gue|apa\s+saja)',
+            r'\bprogress\s+(?:semua\s+)?(?:target|goal|tabungan)'
         ]
         
-        # Count matching indicators
-        matches = sum(1 for pattern in strong_indicators if re.search(pattern, message_lower))
-        
-        # Also check for family + amount combination
-        has_family = any(term in message_lower for term in ['bokap', 'nyokap', 'ortu', 'papa', 'mama'])
-        has_amount = bool(re.search(r'\d+', message_lower))
-        
-        # Strong indicator: multiple matches OR family + amount
-        return matches >= 2 or (has_family and has_amount)
+        return any(re.search(pattern, message_lower) for pattern in list_patterns)
     
-    async def _try_fallback_financial_processing(self, message: str, user_id: str, conversation_id: str, message_id: str) -> Optional[str]:
-        """Try fallback financial processing for missed cases"""
-        try:
-            if not self.handlers:
-                return None
-                
-            logger.info(f"🔄 Trying fallback processing for: '{message}'")
+    async def _detect_enhanced_update_delete_command(self, message: str) -> Optional[Dict[str, Any]]:
+        """
+        ENHANCED: Update/delete command detection with better specificity
+        CRITICAL FIX: More precise patterns to avoid confusion with financial data
+        """
+        message_lower = message.lower().strip()
+        
+        # CRITICAL: Check for UPDATE patterns first (more complex)
+        update_patterns = [
+            # Target amount update - very specific pattern
+            r'\b(?:ubah|ganti|edit|update)\s+(?:target|goal)\s+(.+?)\s+(?:jadi|menjadi|ke)\s+(?:rp\.?\s*)?(\d+(?:[.,]\d+)?)\s*(?:juta|ribu|rb|jt|k|m)',
             
-            # Extract amount using pattern matching
-            amount = self._extract_amount_fallback(message)
-            if not amount:
-                return None
+            # Target date update - specific pattern
+            r'\b(?:ubah|ganti|edit|update)\s+(?:target|goal)\s+(.+?)\s+(?:tanggal|waktu|deadline|pada)\s+(.+)',
             
-            # Determine transaction type using simple patterns
-            transaction_type = self._determine_type_fallback(message)
-            if not transaction_type:
-                return None
+            # Name change - specific pattern
+            r'\b(?:ganti|ubah)\s+nama\s+(.+?)\s+jadi\s+(.+)',
             
-            logger.info(f"🎯 Fallback detected: {transaction_type} - {amount}")
-            
-            # Use handlers with fallback flag
-            return await self.handlers.handle_financial_data(
-                user_id, conversation_id, message_id,
-                transaction_type, amount, message
-            )
-            
-        except Exception as e:
-            logger.error(f"❌ Fallback processing failed: {e}")
-            return None
-    
-    def _extract_amount_fallback(self, text: str) -> Optional[float]:
-        """Fallback amount extraction using simple patterns"""
-        # Simple but effective patterns
-        patterns = [
-            r'(\d+(?:[.,]\d+)?)\s*(?:juta|jt|m)',
-            r'(\d+(?:[.,]\d+)?)\s*(?:ribu|rb|rebu|k)',
-            r'(\d+(?:[.,]\d+)?)\s*(?:rp|rupiah)',
-            r'(\d{4,})',  # Large numbers
+            # Alternative update patterns
+            r'\b(?:target|goal)\s+(.+?)\s+(?:ubah|ganti|edit)\s+(?:jadi|menjadi|ke)\s+(.+)'
         ]
         
-        for pattern in patterns:
-            match = re.search(pattern, text.lower())
+        for pattern in update_patterns:
+            match = re.search(pattern, message_lower)
             if match:
-                try:
-                    amount = float(match.group(1).replace(',', '.'))
+                groups = match.groups()
+                logger.info(f"✅ UPDATE command matched: pattern='{pattern}', groups={groups}")
+                
+                # Extract relevant info based on pattern
+                if len(groups) >= 2:
+                    target_item = groups[0].strip()
+                    new_value = groups[1].strip()
                     
-                    # Apply multipliers
-                    if 'juta' in text.lower() or 'jt' in text.lower():
-                        amount *= 1000000
-                    elif 'ribu' in text.lower() or 'rb' in text.lower() or 'rebu' in text.lower():
-                        amount *= 1000
+                    # Determine update type
+                    if any(keyword in message_lower for keyword in ['tanggal', 'waktu', 'deadline', 'pada']):
+                        update_type = "date"
+                        update_fields = {"target_date": new_value}  # Will be parsed later
+                    elif re.search(r'\d+(?:[.,]\d+)?', new_value):
+                        update_type = "price"
+                        # Extract amount
+                        amount_match = re.search(r'(\d+(?:[.,]\d+)?)', new_value)
+                        if amount_match:
+                            amount = float(amount_match.group(1).replace(',', '.'))
+                            # Apply multiplier
+                            if any(unit in new_value for unit in ['juta', 'jt', 'm']):
+                                amount *= 1000000
+                            elif any(unit in new_value for unit in ['ribu', 'rb', 'rebu', 'k']):
+                                amount *= 1000
+                            update_fields = {"target_amount": amount}
+                        else:
+                            continue
+                    else:
+                        update_type = "name"
+                        update_fields = {"item_name": new_value}
                     
-                    # Validate reasonable range
-                    if 100 <= amount <= 1000000000:
-                        return amount
-                except:
-                    continue
+                    return {
+                        "action": "update",
+                        "update_type": update_type,
+                        "item_name": target_item,
+                        "update_fields": update_fields,
+                        "original_message": message,
+                        "detection_method": "enhanced_pattern_fixed"
+                    }
+        
+        # CRITICAL: Check for DELETE patterns
+        delete_patterns = [
+            r'\b(?:hapus|delete|remove|buang)\s+(?:target|goal)\s+(.+)',
+            r'\b(?:batalkan|cancel)\s+(?:target|goal)\s+(.+)',
+            r'\b(?:ga|gak|tidak)\s+(?:jadi|mau)\s+(?:target|goal)\s+(.+)'
+        ]
+        
+        for pattern in delete_patterns:
+            match = re.search(pattern, message_lower)
+            if match:
+                target_item = match.group(1).strip()
+                logger.info(f"✅ DELETE command matched: target='{target_item}'")
+                
+                return {
+                    "action": "delete",
+                    "item_name": target_item,
+                    "original_message": message,
+                    "detection_method": "enhanced_pattern_fixed"
+                }
         
         return None
-    
-    def _determine_type_fallback(self, text: str) -> Optional[str]:
-        """Fallback transaction type determination"""
-        text_lower = text.lower()
-        
-        # Income keywords
-        if any(word in text_lower for word in ['dapat', 'dapet', 'terima', 'masuk', 'gaji', 'beasiswa', 'honor', 'fee']):
-            return 'income'
-        
-        # Savings goal keywords
-        elif any(word in text_lower for word in ['nabung', 'target', 'ingin beli', 'mau beli', 'pengen beli']):
-            return 'savings_goal'
-        
-        # Expense keywords (default for most cases)
-        elif any(word in text_lower for word in ['bayar', 'beli', 'habis', 'abis', 'keluar', 'spend']):
-            return 'expense'
-        
-        # Default to expense if amount is present
-        return 'expense'
     
     async def _detect_enhanced_financial_query(self, message: str) -> Optional[str]:
         """FIXED: Enhanced financial query detection with more patterns"""
@@ -494,42 +556,31 @@ class EnhancedLunaAICore(LunaAIBase):
     def _parse_price_from_string(self, text: str) -> Optional[float]:
         """Parse price from string using simple patterns"""
         try:
-            # Use the same logic as _extract_amount_fallback
-            return self._extract_amount_fallback(text)
+            # Simple amount extraction
+            patterns = [
+                r'(\d+(?:[.,]\d+)?)\s*(?:juta|jt|m)',
+                r'(\d+(?:[.,]\d+)?)\s*(?:ribu|rb|rebu|k)',
+                r'(\d{4,})',  # Large numbers
+            ]
+            
+            for pattern in patterns:
+                match = re.search(pattern, text.lower())
+                if match:
+                    amount = float(match.group(1).replace(',', '.'))
+                    
+                    # Apply multipliers
+                    if 'juta' in text.lower() or 'jt' in text.lower():
+                        amount *= 1000000
+                    elif 'ribu' in text.lower() or 'rb' in text.lower() or 'rebu' in text.lower():
+                        amount *= 1000
+                    
+                    # Validate reasonable range
+                    if 100 <= amount <= 1000000000:
+                        return amount
+            
+            return None
         except:
             return None
-    
-    async def _detect_enhanced_update_delete_command(self, message: str) -> Optional[Dict[str, Any]]:
-        """Enhanced update/delete command detection"""
-        message_lower = message.lower()
-        
-        # Enhanced command patterns
-        enhanced_patterns = {
-            "update": [
-                r'(?:ubah|edit|update|ganti|change|revisi|perbaiki)\s*(?:target|goal|transaksi|data)',
-                r'(?:salah|wrong|keliru)\s*(?:input|masuk|catat)',
-                r'(?:koreksi|correct|betulkan)',
-                r'(?:target|goal)\s*.+?\s*(?:jadi|menjadi|ke)\s*\d+'
-            ],
-            "delete": [
-                r'(?:hapus|delete|remove|buang|batalkan)\s*(?:target|goal|transaksi|data)',
-                r'(?:cancel|batal)\s*(?:target|goal|transaksi)',
-                r'(?:salah|mistake)\s*(?:transaksi|data)',
-                r'(?:ga|gak|tidak)\s*(?:jadi|mau)\s*(?:target|goal)'
-            ]
-        }
-        
-        for action, patterns in enhanced_patterns.items():
-            for pattern in patterns:
-                if re.search(pattern, message_lower):
-                    return {
-                        "action": action,
-                        "target": "auto_detected",
-                        "original_message": message,
-                        "detection_method": "enhanced_pattern"
-                    }
-        
-        return None
     
     async def _detect_enhanced_confirmation(self, message: str) -> Optional[bool]:
         """Enhanced confirmation detection with more variations"""
@@ -565,23 +616,6 @@ class EnhancedLunaAICore(LunaAIBase):
         """FIXED: Enhanced regular message handling with financial context"""
         message_lower = message.lower().strip()
         
-        # Check for potential financial context that was missed
-        potential_financial = self._has_strong_financial_indicators(message)
-        
-        if potential_financial:
-            return f"""🤔 **Sepertinya ada konteks keuangan yang tidak terdeteksi sempurna**
-
-**Pesan Anda**: "{message}"
-
-💡 **Coba format yang lebih eksplisit:**
-• **Pemasukan**: *"Dapat 100rb dari freelance"* atau *"Bokap kasih jajan 200 ribu"*
-• **Pengeluaran**: *"Bayar kos 800rb"* atau *"Abis 50rb buat makan"*
-• **Target tabungan**: *"Mau nabung buat laptop 10 juta"*
-
-🚀 **Tips**: Sebutkan jelas **jumlah** dan **aktivitas** untuk deteksi yang akurat!
-
-💬 **Atau tanya**: *"Gimana cara input transaksi?"* untuk panduan lengkap."""
-        
         # Enhanced greeting responses
         if any(word in message_lower for word in ['halo', 'hai', 'hi', 'hello', 'selamat']):
             greetings = [
@@ -607,7 +641,7 @@ class EnhancedLunaAICore(LunaAIBase):
             ]
             return random.choice(greetings)
         
-        # Enhanced help responses
+        # Enhanced help responses for natural language
         elif any(word in message_lower for word in ['bantuan', 'help', 'tolong', 'gimana', 'bagaimana', 'cara']):
             return f"""🔰 **Luna AI - Asisten Keuangan Natural Language**
 
@@ -618,12 +652,15 @@ class EnhancedLunaAICore(LunaAIBase):
 • *"Abis 25 rebu makan warteg"* → Auto detect expense ✅
 • *"Pengen nabung buat laptop gaming"* → Auto detect target ✅
 
-🎯 **Fitur AI:**
-• **Slang Detection**: dapet, abis, pengen, dll ✅
-• **Family Terms**: bokap, nyokap, ortu ✅
-• **Emotional Context**: alhamdulillah, capek deh ✅
-• **Modern Payments**: gofood, gopay, ovo ✅
-• **Student Context**: kos, kuliah, UKT ✅
+🎯 **Pake Bahasa Sehari-hari:**
+• *"Bokap kasih jajan 100rb"* → Uang dari ortu
+• *"Nyokap transfer 200 ribu"* → Transfer dari mama
+• *"Capek deh bayar kos 800rb"* → Expense dengan emotion
+
+💳 **Modern Payment:**
+• *"Gofood ayam geprek 35rb"* → Digital payment
+• *"Bayar via GoPay 28 ribu"* → E-wallet
+• *"Spaylater 150rb beli sepatu"* → BNPL
 
 📊 **FIXED: Query Financial (Sekarang Bisa!):**
 • *"Total tabungan saya berapa?"*
@@ -632,7 +669,12 @@ class EnhancedLunaAICore(LunaAIBase):
 • *"Progress tabungan saya gimana?"*
 • *"Kesehatan keuangan saya bagaimana?"*
 
-🔥 **Fixed**: Financial queries dan purchase analysis sudah berfungsi normal!"""
+🔧 **FIXED: Commands (Sekarang Prioritas Tinggi!):**
+• *"Ubah target laptop jadi 12 juta"* → Edit target
+• *"Hapus target motor"* → Delete target
+• *"Daftar target saya"* → List all goals
+
+🔥 **Fixed**: Routing prioritas sudah diperbaiki - commands tidak lagi terdeteksi sebagai input keuangan!"""
         
         # Enhanced financial context responses
         elif any(keyword in message_lower for keyword in ['budget', 'anggaran', 'uang', 'keuangan', 'tabungan', 'hemat']):
@@ -653,9 +695,14 @@ class EnhancedLunaAICore(LunaAIBase):
 • *"Budget performance gimana?"*
 • *"Analisis keuangan saya dong"*
 
+🔧 **FIXED: Commands Available:**
+• *"Ubah target [nama] jadi [harga]"*
+• *"Hapus target [nama]"*
+• *"Daftar semua target saya"*
+
 Yuk mulai input transaksi dengan bahasa natural! 🚀"""
         
-        # Default with enhanced encouragement
+        # Default with natural language encouragement
         else:
             defaults = [
                 f"""🤖 **Luna AI** siap membantu! Coba dengan bahasa natural Indonesia ya.
@@ -667,7 +714,11 @@ Yuk mulai input transaksi dengan bahasa natural! 🚀"""
 
 📊 **FIXED: Atau tanya financial queries:**
 • *"Total tabungan saya berapa?"*
-• *"Budget performance bulan ini gimana?"*""",
+• *"Budget performance bulan ini gimana?"*
+
+🔧 **FIXED: Commands juga sudah bekerja:**
+• *"Ubah target [nama] jadi [harga]"*
+• *"Daftar target saya"*""",
                 
                 f"""😅 **AI** masih belajar konteks ini. Yuk coba bahasa yang lebih natural!
 
@@ -678,7 +729,11 @@ Yuk mulai input transaksi dengan bahasa natural! 🚀"""
 
 💰 **FIXED: Financial Analysis Ready:**
 • *"Kesehatan keuangan saya gimana?"*
-• *"Analisis pengeluaran saya dong"*"""
+• *"Analisis pengeluaran saya dong"*
+
+🔧 **FIXED: Commands Now Working:**
+• *"Ubah target laptop jadi 15 juta"*
+• *"Hapus target motor"*"""
             ]
             return random.choice(defaults)
     
@@ -695,23 +750,24 @@ Yuk mulai input transaksi dengan bahasa natural! 🚀"""
             "queries_available": self.queries is not None,
             "calculator_available": self.calculator is not None,
             "fixed_issues": [
-                "✅ Issue 1: Removed natural language boost message from output",
-                "✅ Issue 2: Restored financial query capabilities",
-                "✅ Enhanced service integration",
-                "✅ Proper error handling for missing components"
+                "✅ CRITICAL: Command detection now has HIGHEST priority",
+                "✅ CRITICAL: Financial detection thresholds made stricter", 
+                "✅ CRITICAL: Update/delete commands no longer misdetected as financial input",
+                "✅ Enhanced routing logic with proper fall-through",
+                "✅ Better context awareness for edit/delete operations"
             ],
             "enhanced_features": [
                 "Natural Language Preprocessing",
-                "Adaptive Confidence Thresholds",
-                "Multi-level Fallback Detection", 
-                "Enhanced Pattern Matching",
+                "Adaptive Confidence Thresholds", 
+                "Multi-level Fallback Detection",
+                "Enhanced Command Pattern Matching",
                 "Indonesian Slang Support",
                 "Family Terms Recognition",
-                "Emotional Context Detection",
+                "Emotional Context Detection", 
                 "Modern Payment Recognition",
                 "Student Context Awareness",
-                "FIXED: Financial Query Processing",
-                "FIXED: Purchase Intent Analysis"
+                "FIXED: Priority-based Routing System",
+                "FIXED: Command vs Financial Data Disambiguation"
             ]
         }
         
@@ -736,18 +792,13 @@ Yuk mulai input transaksi dengan bahasa natural! 🚀"""
             logger.info(f"🧪 Testing parser with: '{test_message}'")
             result = self.parser.parse_financial_data(test_message)
             
-            # ISSUE 1 FIX: Don't include natural_language_boost in result for output
             result["enhanced_info"] = {
                 "parser_type": getattr(self, 'parser_type', 'Unknown'),
                 "parser_class": type(self.parser).__name__,
                 "test_message": test_message,
                 "parsing_method": result.get("parsing_method", "unknown"),
-                "fixed_issues": "Natural language boost message removed from output"
+                "fixed_issues": "Priority routing system implemented, commands prioritized over financial detection"
             }
-            
-            # Remove boost info from user-facing results
-            if "natural_language_boost" in result:
-                del result["natural_language_boost"]
             
             return result
             

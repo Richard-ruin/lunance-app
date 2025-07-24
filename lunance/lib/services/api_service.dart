@@ -5,7 +5,8 @@ import '../models/user_model.dart';
 import '../config/app_config.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.101.8:8000/api/v1'; // Ganti dengan IP backend Anda
+  static const String baseUrl =
+      'http://192.168.148.195:8000/api/v1'; // Ganti dengan IP backend Anda
   static const _storage = FlutterSecureStorage();
 
   // Storage keys
@@ -14,8 +15,8 @@ class ApiService {
 
   // Headers
   Map<String, String> get _headers => {
-    'Content-Type': 'application/json',
-  };
+        'Content-Type': 'application/json',
+      };
 
   Future<Map<String, String>> get _authHeaders async {
     final token = await _storage.read(key: _accessTokenKey);
@@ -83,7 +84,7 @@ class ApiService {
       );
 
       final result = _handleResponse(response);
-      
+
       // Save tokens if login successful
       if (result['success'] == true && result['data']?['tokens'] != null) {
         final tokens = result['data']['tokens'];
@@ -119,9 +120,9 @@ class ApiService {
   Future<Map<String, dynamic>> setupProfile({
     required String fullName,
     String? phoneNumber,
-    required String university,  // Required field for university
-    required String city,        // Required field for city/district
-    String? occupation,          // Optional side job
+    required String university, // Required field for university
+    required String city, // Required field for city/district
+    String? occupation, // Optional side job
     bool notificationsEnabled = true,
     bool voiceEnabled = true,
     bool darkMode = false,
@@ -343,10 +344,12 @@ class ApiService {
       if (university != null) body['university'] = university;
       if (city != null) body['city'] = city;
       if (occupation != null) body['occupation'] = occupation;
-      if (notificationsEnabled != null) body['notifications_enabled'] = notificationsEnabled;
+      if (notificationsEnabled != null)
+        body['notifications_enabled'] = notificationsEnabled;
       if (voiceEnabled != null) body['voice_enabled'] = voiceEnabled;
       if (darkMode != null) body['dark_mode'] = darkMode;
-      if (autoCategorization != null) body['auto_categorization'] = autoCategorization;
+      if (autoCategorization != null)
+        body['auto_categorization'] = autoCategorization;
 
       final response = await http.put(
         Uri.parse('$baseUrl/auth/update-profile'),
@@ -427,10 +430,12 @@ class ApiService {
       );
 
       final result = _handleResponse(response);
-      
+
       // Save new access token
-      if (result['success'] == true && result['data']?['access_token'] != null) {
-        await _storage.write(key: _accessTokenKey, value: result['data']['access_token']);
+      if (result['success'] == true &&
+          result['data']?['access_token'] != null) {
+        await _storage.write(
+            key: _accessTokenKey, value: result['data']['access_token']);
       }
 
       return result;
@@ -462,13 +467,13 @@ class ApiService {
   Map<String, dynamic> _handleResponse(http.Response response) {
     try {
       final Map<String, dynamic> data = jsonDecode(response.body);
-      
+
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return data;
       } else {
         // Handle different error status codes
         String errorMessage = data['message'] ?? 'Terjadi kesalahan';
-        
+
         if (response.statusCode == 400) {
           errorMessage = data['message'] ?? 'Data yang dikirim tidak valid';
         } else if (response.statusCode == 401) {
@@ -486,7 +491,7 @@ class ApiService {
         } else if (response.statusCode >= 500) {
           errorMessage = 'Terjadi kesalahan pada server';
         }
-        
+
         return {
           'success': false,
           'message': errorMessage,

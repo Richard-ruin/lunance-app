@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../utils/app_colors.dart';
 import '../../providers/chat_provider.dart';
+import '../../models/chat_model.dart'; // Added missing import for Conversation
 import 'left_sidebar.dart';
 import 'right_sidebar.dart';
 import 'chat_view.dart';
@@ -17,7 +18,8 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> with TickerProviderStateMixin {
-  int _selectedIndex = 0; // 0: Chat, 1: Explore Finance, 2: Chat History
+  int _selectedIndex = 0; // 0: Chat, 1: Explore Finance, 2: Chat History, 3: Predictions
+  String? _selectedConversationId; // Added to track selected conversation
   
   // Sidebar states
   bool _isLeftSidebarOpen = false;
@@ -150,38 +152,76 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   void _onNavigationItemSelected(int index) {
     setState(() {
       _selectedIndex = index;
+      // Clear conversation selection when changing views
+      if (index != 0) {
+        _selectedConversationId = null;
+      }
     });
     // Close sidebars when navigating
     _closeSidebars();
   }
 
-  void _onConversationSelected(String conversationId) {
-    // Handle conversation selection from sidebar
-    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-    final conversation = chatProvider.conversations.firstWhere(
-      (conv) => conv.id == conversationId,
-      orElse: () => chatProvider.conversations.first,
-    );
-    chatProvider.setActiveConversation(conversation);
-    
-    // Navigate to chat view
-    setState(() {
-      _selectedIndex = 0;
-    });
+  void _onConversationSelected(String conversationId) async {
+    // Handle conversation selection from sidebar or history
+    try {
+      final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+      
+      // Find the conversation in the existing list
+      Conversation? conversation;
+      try {
+        conversation = chatProvider.conversations.firstWhere(
+          (conv) => conv.id == conversationId,
+        );
+      } catch (e) {
+        conversation = null;
+      }
+
+      if (conversation != null) {
+        // Set the conversation as active
+        await chatProvider.setActiveConversation(conversation);
+      } else {
+        // If conversation not found in list, try to load it by ID
+        await chatProvider.loadConversationById(conversationId);
+      }
+      
+      // Navigate to chat view and set conversation ID
+      setState(() {
+        _selectedIndex = 0;
+        _selectedConversationId = conversationId;
+      });
+      
+      // Close sidebars
+      _closeSidebars();
+      
+    } catch (e) {
+      // Handle error
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal membuka percakapan: ${e.toString()}'),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 
   Widget _getMainContentView() {
     switch (_selectedIndex) {
       case 0:
-        return const ChatView();
+        return ChatView(conversationId: _selectedConversationId); // Pass conversation ID
       case 1:
         return const ExploreFinanceView();
-      case 3:
-      return const PredictionsView();
       case 2:
-        return const ChatHistoryView();
+        return ChatHistoryView(
+          onNavigationItemSelected: _onNavigationItemSelected,
+          onConversationSelected: _onConversationSelected,
+        );
+      case 3:
+        return const PredictionsView();
       default:
-        return const ChatView();
+        return ChatView(conversationId: _selectedConversationId);
     }
   }
 

@@ -133,6 +133,8 @@ class ChatProvider with ChangeNotifier {
     }
   }
 
+  
+
   // Load conversations dengan auto-cleanup
   Future<void> loadConversations({int limit = 20, bool autoCleanup = true}) async {
     // Don't reload if already loading or sending
@@ -605,4 +607,48 @@ class ChatProvider with ChangeNotifier {
     disconnectWebSocket();
     super.dispose();
   }
+
+
+  Future<bool> loadConversationById(String conversationId) async {
+  try {
+    // First check if the conversation is already in our conversations list
+    final existingConversation = _conversations.firstWhere(
+      (conv) => conv.id == conversationId,
+      orElse: () => null as Conversation,
+    );
+
+    if (existingConversation != null) {
+      // If conversation exists locally, set it as active
+      await setActiveConversation(existingConversation);
+      return true;
+    }
+
+    // If not found locally, fetch from backend
+    final response = await _chatService.getConversationById(conversationId);
+    
+    if (response['success'] == true) {
+      final conversation = Conversation.fromJson(response['data']['conversation']);
+      
+      // Add to conversations list if not already present
+      if (!_conversations.any((conv) => conv.id == conversationId)) {
+        _conversations.insert(0, conversation);
+      }
+      
+      // Set as active conversation
+      await setActiveConversation(conversation);
+      
+      debugPrint('📱 Loaded conversation by ID: ${conversation.displayTitle}');
+      debugPrint('📱 Created: ${conversation.createdTimeFormatted} WIB');
+      
+      notifyListeners();
+      return true;
+    } else {
+      throw Exception(response['message'] ?? 'Failed to load conversation');
+    }
+  } catch (e) {
+    debugPrint('Error loading conversation by ID: $e');
+    _setError('Gagal memuat percakapan: ${e.toString()}');
+    return false;
+  }
+}
 }

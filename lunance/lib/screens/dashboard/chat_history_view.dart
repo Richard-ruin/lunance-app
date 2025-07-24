@@ -3,12 +3,20 @@ import 'package:provider/provider.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/app_text_styles.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/chat_provider.dart';  // Added ChatProvider import
 import '../../models/chat_model.dart';
 import '../../services/chat_service.dart';
 import '../../../widgets/common_widgets.dart';
 
 class ChatHistoryView extends StatefulWidget {
-  const ChatHistoryView({Key? key}) : super(key: key);
+  final Function(int)? onNavigationItemSelected;  // Added navigation callback
+  final Function(String)? onConversationSelected;  // Added conversation callback
+  
+  const ChatHistoryView({
+    Key? key,
+    this.onNavigationItemSelected,
+    this.onConversationSelected,
+  }) : super(key: key);
 
   @override
   State<ChatHistoryView> createState() => _ChatHistoryViewState();
@@ -79,6 +87,46 @@ class _ChatHistoryViewState extends State<ChatHistoryView> {
         }).toList();
       }
     });
+  }
+
+  // Added conversation tap handler similar to LeftSidebar
+  void _onConversationTap(Conversation conversation) async {
+    try {
+      // Set active conversation in chat provider
+      final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+      await chatProvider.setActiveConversation(conversation);
+      
+      // Navigate to chat view (index 0) if callback provided
+      if (widget.onNavigationItemSelected != null) {
+        widget.onNavigationItemSelected!(0);
+      }
+      
+      // Notify parent if callback provided
+      if (widget.onConversationSelected != null) {
+        widget.onConversationSelected!(conversation.id);
+      }
+
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Membuka percakapan "${conversation.displayTitle}"'),
+            backgroundColor: AppColors.success,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal membuka percakapan: ${e.toString()}'),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _deleteConversation(String conversationId) async {
@@ -315,16 +363,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView> {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () {
-          // Navigate to chat with this conversation
-          // This would require updating the ChatView to accept conversationId
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Fitur buka percakapan akan segera tersedia'),
-              backgroundColor: AppColors.info,
-            ),
-          );
-        },
+        onTap: () => _onConversationTap(conversation), // Updated to use new handler
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(

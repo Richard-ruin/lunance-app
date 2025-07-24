@@ -17,7 +17,6 @@ class FinancialSettingsScreen extends StatefulWidget {
 
 class _FinancialSettingsScreenState extends State<FinancialSettingsScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _currentSavingsController = TextEditingController();
   final _monthlyIncomeController = TextEditingController();
   final _primaryBankController = TextEditingController();
 
@@ -34,7 +33,6 @@ class _FinancialSettingsScreenState extends State<FinancialSettingsScreen> {
     final user = context.read<AuthProvider>().user;
     if (user?.financialSettings != null) {
       final settings = user!.financialSettings!;
-      _currentSavingsController.text = settings.currentSavings?.toString() ?? '';
       _monthlyIncomeController.text = settings.monthlyIncome?.toString() ?? '';
       _primaryBankController.text = settings.primaryBank ?? '';
       
@@ -46,7 +44,6 @@ class _FinancialSettingsScreenState extends State<FinancialSettingsScreen> {
 
   @override
   void dispose() {
-    _currentSavingsController.dispose();
     _monthlyIncomeController.dispose();
     _primaryBankController.dispose();
     super.dispose();
@@ -164,26 +161,6 @@ class _FinancialSettingsScreenState extends State<FinancialSettingsScreen> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 16),
-        
-        // Current Savings
-        CustomTextField(
-          label: 'Tabungan Awal Saat Ini',
-          controller: _currentSavingsController,
-          prefixIcon: Icons.savings_outlined,
-          keyboardType: TextInputType.number,
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Tabungan awal wajib diisi';
-            }
-            final amount = double.tryParse(value.replaceAll(',', ''));
-            if (amount == null || amount < 0) {
-              return 'Masukkan jumlah yang valid';
-            }
-            return null;
-          },
-        ),
-        
         const SizedBox(height: 16),
         
         // Monthly Income
@@ -485,12 +462,10 @@ class _FinancialSettingsScreenState extends State<FinancialSettingsScreen> {
     try {
       final authProvider = context.read<AuthProvider>();
       
-      final currentSavings = double.tryParse(_currentSavingsController.text.replaceAll(',', ''));
       final monthlyIncome = double.tryParse(_monthlyIncomeController.text.replaceAll(',', ''));
       final primaryBank = _primaryBankController.text.trim();
 
       final success = await authProvider.updateFinancialSettings(
-        currentSavings: currentSavings,
         monthlyIncome: monthlyIncome,
         primaryBank: primaryBank,
       );

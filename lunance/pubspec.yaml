@@ -25,6 +25,8 @@ dependencies:
   pull_to_refresh: ^2.0.0
   shimmer: ^3.0.0
 
+  collection: ^1.18.0
+
   # WebSocket
   web_socket_channel: ^2.4.0
 
@@ -42,10 +44,10 @@ dependencies:
   # 🆕 UPDATED: File handling and permissions for download functionality
   path_provider: ^2.1.1
   permission_handler: ^11.1.0
-  
+
   # 🆕 NEW: Excel/XLSX generation
   excel: ^4.0.2
-  
+
   # 🆕 NEW: File picker and sharing (optional, for better UX)
   file_picker: ^6.1.1
   share_plus: ^7.2.1

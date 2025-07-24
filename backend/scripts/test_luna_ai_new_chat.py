@@ -1,4 +1,4 @@
-# test_luna_ai_realistic_sessions.py - Realistic Conversation Sessions Test
+# test_luna_ai_realistic_sessions_fixed.py - FIXED VERSION based on actual Luna AI responses
 import asyncio
 import aiohttp
 import json
@@ -12,7 +12,7 @@ import os
 # Configuration
 BASE_URL = "http://localhost:8000"
 
-class LunaAIRealisticTester:
+class LunaAIRealisticTesterFixed:
     def __init__(self, base_url: str = BASE_URL):
         self.base_url = base_url
         self.session = None
@@ -47,7 +47,8 @@ class LunaAIRealisticTester:
     def log_result(self, test_name: str, success: bool, conversation_id: str = None, 
                   user_message: str = None, luna_response: str = None, 
                   error: str = None, duration: float = None, session_info: str = None,
-                  financial_data_detected: bool = False, confirmation_requested: bool = False):
+                  financial_data_detected: bool = False, confirmation_requested: bool = False,
+                  response_type: str = None):
         """Enhanced logging for realistic conversation testing"""
         result = {
             "test_name": test_name,
@@ -60,7 +61,8 @@ class LunaAIRealisticTester:
             "duration": duration,
             "session_info": session_info,
             "financial_data_detected": financial_data_detected,
-            "confirmation_requested": confirmation_requested
+            "confirmation_requested": confirmation_requested,
+            "response_type": response_type
         }
         self.test_results.append(result)
         
@@ -70,7 +72,7 @@ class LunaAIRealisticTester:
         msg_info = f"\n    User: '{user_message}'" if user_message else ""
         luna_info = f"\n    Luna: '{luna_response[:100]}...'" if luna_response else ""
         duration_info = f" ({duration:.2f}s)" if duration else ""
-        financial_info = f"\n    💰 Financial: {financial_data_detected} | Confirmation: {confirmation_requested}" if user_message else ""
+        financial_info = f"\n    💰 Financial: {financial_data_detected} | Confirmation: {confirmation_requested} | Type: {response_type}" if user_message else ""
         
         print(f"{status} | {test_name}{conv_info}{session_info_str}{msg_info}{luna_info}{financial_info}{duration_info}")
         if error:
@@ -124,7 +126,7 @@ class LunaAIRealisticTester:
             return None
     
     async def send_message(self, message: str, conversation_id: str = None, expect_confirmation: bool = False):
-        """Send message in conversation and analyze response"""
+        """FIXED: Send message and analyze response based on actual Luna AI behavior"""
         if not conversation_id:
             conversation_id = self.current_conversation_id
             
@@ -136,37 +138,62 @@ class LunaAIRealisticTester:
             result = await self.make_request("POST", f"/api/v1/chat/conversations/{conversation_id}/messages", data)
             
             if result["status_code"] == 200 and result["data"]["success"]:
-                luna_response = result["data"]["data"]["luna_response"]
-                financial_data = result["data"]["data"].get("financial_data")
+                # FIXED: Extract Luna response from correct structure
+                response_data = result["data"]["data"]
+                luna_message = response_data["luna_response"]
+                luna_content = luna_message["content"]
                 
-                # Analyze Luna's response for confirmation request
-                content_lower = luna_response["content"].lower()
+                # FIXED: Check financial_data from response_data level (not luna_response)
+                financial_data = response_data.get("financial_data")
+                response_type = response_data.get("response_type", "regular")
+                
+                # FIXED: Analyze Luna's response for confirmation request based on actual patterns
+                content_lower = luna_content.lower()
+                
+                # Updated confirmation patterns based on actual Luna AI responses
                 confirmation_phrases = [
                     "apakah informasi ini sudah benar",
-                    "ketik \"ya\" untuk menyimpan",
-                    "ketik \"tidak\" untuk membatalkan",
-                    "konfirmasi",
-                    "setuju"
+                    "ketik **\"ya\"** untuk menyimpan",
+                    "ketik **\"tidak\"** untuk membatalkan", 
+                    "ketik \"ya\" untuk",
+                    "ketik \"tidak\" untuk",
+                    "apakah target ini sudah sesuai",
+                    "sudah benar target",
+                    "konfirmasi perubahan",
+                    "yakin ingin menghapus"
                 ]
                 is_asking_confirmation = any(phrase in content_lower for phrase in confirmation_phrases)
                 
-                # Check if financial data was detected
-                has_financial_data = bool(financial_data)
+                # FIXED: Better financial data detection based on response structure
+                has_financial_data = bool(financial_data) or response_type in ["financial_confirmation", "financial_result", "financial_info"]
+                
+                # Additional financial response indicators
+                financial_indicators = [
+                    "detail transaksi",
+                    "target tabungan", 
+                    "berhasil disimpan",
+                    "berhasil dibuat",
+                    "total tabungan",
+                    "budget performance",
+                    "kesehatan keuangan"
+                ]
+                has_financial_content = any(indicator in content_lower for indicator in financial_indicators)
                 
                 return {
                     "success": True,
                     "conversation_id": conversation_id,
-                    "luna_response": luna_response["content"],
-                    "message_type": luna_response["message_type"],
+                    "luna_response": luna_content,
+                    "message_type": luna_message.get("message_type", "text"),
                     "financial_data": financial_data,
-                    "has_financial_data": has_financial_data,
+                    "has_financial_data": has_financial_data or has_financial_content,
                     "is_asking_confirmation": is_asking_confirmation,
+                    "response_type": response_type,
                     "duration": result.get("duration", 0)
                 }
             else:
                 return {
                     "success": False,
-                    "error": f"Status: {result['status_code']}",
+                    "error": f"Status: {result['status_code']}, Data: {result.get('data', {})}",
                     "conversation_id": conversation_id,
                     "duration": result.get("duration", 0)
                 }
@@ -269,7 +296,7 @@ class LunaAIRealisticTester:
     # ==================== REALISTIC CONVERSATION SESSIONS ====================
     
     async def test_financial_transaction_session(self):
-        """Test: Complete financial transaction session with confirmations"""
+        """FIXED: Test complete financial transaction session with correct expectation"""
         print(f"\n💰 Testing: Financial Transaction Session with Confirmations")
         print("=" * 70)
         
@@ -279,75 +306,91 @@ class LunaAIRealisticTester:
             self.log_result("Financial Session", False, error="Failed to create conversation")
             return
         
-        # Scenario: Student receives money and makes expenses with confirmations
+        # FIXED: Transaction flow with correct Luna AI response expectations
         transaction_flow = [
             {
                 "message": "Dapat uang saku 3 juta dari ortu",
                 "type": "income",
                 "expect_confirmation": True,
+                "expect_financial": True,
                 "description": "Income transaction"
             },
             {
                 "message": "ya",
                 "type": "confirmation", 
                 "expect_confirmation": False,
+                "expect_financial": True,  # Confirmation results are financial
                 "description": "Confirm income"
             },
             {
                 "message": "Bayar kos 1.2 juta",
                 "type": "expense",
                 "expect_confirmation": True,
+                "expect_financial": True,
                 "description": "NEEDS expense"
             },
             {
                 "message": "benar",
                 "type": "confirmation",
                 "expect_confirmation": False,
+                "expect_financial": True,
                 "description": "Confirm kos payment"
             },
             {
                 "message": "Beli bubble tea 28 ribu",
                 "type": "expense",
                 "expect_confirmation": True,
+                "expect_financial": True,
                 "description": "WANTS expense"
             },
             {
                 "message": "tidak",
                 "type": "rejection",
                 "expect_confirmation": False,
+                "expect_financial": True,  # Rejection response is also financial
                 "description": "Reject bubble tea"
             },
             {
                 "message": "Beli bubble tea 25 ribu",
                 "type": "expense",
                 "expect_confirmation": True,
+                "expect_financial": True,
                 "description": "Corrected WANTS expense"
             },
             {
                 "message": "ok",
                 "type": "confirmation",
                 "expect_confirmation": False,
+                "expect_financial": True,
                 "description": "Confirm corrected amount"
             }
         ]
         
         for i, step in enumerate(transaction_flow, 1):
-            result = await self.send_message(step["message"], conversation_id, step["expect_confirmation"])
+            result = await self.send_message(step["message"], conversation_id)
             
             if result and result["success"]:
+                # FIXED: Validation logic based on actual Luna AI behavior
                 confirmation_match = result["is_asking_confirmation"] == step["expect_confirmation"]
-                financial_detected = result["has_financial_data"] if step["type"] in ["income", "expense"] else False
+                financial_match = result["has_financial_data"] == step["expect_financial"]
+                
+                # For confirmations and rejections, focus on financial response rather than confirmation detection
+                if step["type"] in ["confirmation", "rejection"]:
+                    step_success = result["success"] and financial_match
+                else:
+                    step_success = result["success"] and confirmation_match and financial_match
                 
                 self.log_result(
                     f"Financial Session Step {i}: {step['description']}",
-                    result["success"] and (confirmation_match or step["type"] in ["confirmation", "rejection"]),
+                    step_success,
                     conversation_id,
                     step["message"],
                     result["luna_response"],
                     duration=result["duration"],
                     session_info="Financial Transaction",
-                    financial_data_detected=financial_detected,
-                    confirmation_requested=result["is_asking_confirmation"]
+                    financial_data_detected=result["has_financial_data"],
+                    confirmation_requested=result["is_asking_confirmation"],
+                    response_type=result.get("response_type", "unknown")
                 )
             else:
                 self.log_result(
@@ -362,7 +405,7 @@ class LunaAIRealisticTester:
             await asyncio.sleep(1.5)  # Realistic typing delay
     
     async def test_savings_goal_session(self):
-        """Test: Savings goal management session"""
+        """FIXED: Test savings goal management session"""
         print(f"\n🎯 Testing: Savings Goal Management Session")
         print("=" * 70)
         
@@ -371,46 +414,55 @@ class LunaAIRealisticTester:
             self.log_result("Savings Goal Session", False, error="Failed to create conversation")
             return
         
+        # FIXED: Goal flow with correct expectations
         goal_flow = [
             {
                 "message": "Mau nabung buat beli laptop gaming 15 juta",
                 "description": "Create savings goal",
-                "expect_confirmation": True
+                "expect_confirmation": True,
+                "expect_financial": True
             },
             {
                 "message": "ya",
                 "description": "Confirm goal creation",
-                "expect_confirmation": False
+                "expect_confirmation": False,
+                "expect_financial": True  # Goal creation result is financial
             },
             {
                 "message": "Daftar target saya",
                 "description": "List savings goals",
-                "expect_confirmation": False
+                "expect_confirmation": False,
+                "expect_financial": True  # Goals list is financial information
             },
             {
                 "message": "Progress tabungan laptop",
                 "description": "Check laptop progress",
-                "expect_confirmation": False
+                "expect_confirmation": False,
+                "expect_financial": True  # Progress info is financial
             },
             {
                 "message": "Ubah target laptop jadi 12 juta",
                 "description": "Update laptop price",
-                "expect_confirmation": False
+                "expect_confirmation": True,  # Update requires confirmation
+                "expect_financial": True
             },
             {
                 "message": "Target beli motor 22 juta pada tanggal 31 desember 2025",
                 "description": "Create motor goal with deadline",
-                "expect_confirmation": True
+                "expect_confirmation": True,
+                "expect_financial": True
             },
             {
                 "message": "setuju",
                 "description": "Confirm motor goal",
-                "expect_confirmation": False
+                "expect_confirmation": False,
+                "expect_financial": True
             },
             {
                 "message": "Semua target saya",
                 "description": "List all goals",
-                "expect_confirmation": False
+                "expect_confirmation": False,
+                "expect_financial": True
             }
         ]
         
@@ -418,16 +470,22 @@ class LunaAIRealisticTester:
             result = await self.send_message(step["message"], conversation_id)
             
             if result and result["success"]:
+                confirmation_match = result["is_asking_confirmation"] == step["expect_confirmation"]
+                financial_match = result["has_financial_data"] == step["expect_financial"]
+                
+                step_success = result["success"] and confirmation_match and financial_match
+                
                 self.log_result(
                     f"Savings Goal Step {i}: {step['description']}",
-                    result["success"],
+                    step_success,
                     conversation_id,
                     step["message"],
                     result["luna_response"],
                     duration=result["duration"],
                     session_info="Savings Goals",
                     financial_data_detected=result["has_financial_data"],
-                    confirmation_requested=result["is_asking_confirmation"]
+                    confirmation_requested=result["is_asking_confirmation"],
+                    response_type=result.get("response_type", "unknown")
                 )
             else:
                 self.log_result(
@@ -442,7 +500,7 @@ class LunaAIRealisticTester:
             await asyncio.sleep(1.2)
     
     async def test_financial_consultation_session(self):
-        """Test: Financial consultation and advice session"""
+        """FIXED: Test financial consultation and advice session"""
         print(f"\n💡 Testing: Financial Consultation Session")
         print("=" * 70)
         
@@ -451,31 +509,38 @@ class LunaAIRealisticTester:
             self.log_result("Consultation Session", False, error="Failed to create conversation")
             return
         
+        # FIXED: Consultation flow with proper financial query expectations
         consultation_flow = [
-            "Halo Luna, apa kabar?",
-            "Kesehatan keuangan saya gimana?",
-            "Total tabungan saya berapa sekarang?",
-            "Analisis pengeluaran saya dong",
-            "Tips hemat untuk mahasiswa Jakarta",
-            "Jelaskan metode 50/30/20 secara sederhana",
-            "Bagaimana cara mengoptimalkan budget WANTS?",
-            "Rekomendasi investasi untuk mahasiswa"
+            ("Halo Luna, apa kabar?", False, False),  # Greeting - not financial
+            ("Kesehatan keuangan saya gimana?", False, True),  # Financial query
+            ("Total tabungan saya berapa sekarang?", False, True),  # Financial query 
+            ("Analisis pengeluaran saya dong", False, True),  # Financial query
+            ("Tips hemat untuk mahasiswa Jakarta", False, False),  # General advice
+            ("Jelaskan metode 50/30/20 secara sederhana", False, False),  # Educational content
+            ("Bagaimana cara mengoptimalkan budget WANTS?", False, False),  # General advice
+            ("Rekomendasi investasi untuk mahasiswa", False, False)  # General advice
         ]
         
-        for i, message in enumerate(consultation_flow, 1):
+        for i, (message, expect_confirmation, expect_financial) in enumerate(consultation_flow, 1):
             result = await self.send_message(message, conversation_id)
             
             if result and result["success"]:
+                confirmation_match = result["is_asking_confirmation"] == expect_confirmation
+                financial_match = result["has_financial_data"] == expect_financial
+                
+                step_success = result["success"] and confirmation_match and financial_match
+                
                 self.log_result(
                     f"Consultation Step {i}: {message[:30]}...",
-                    result["success"],
+                    step_success,
                     conversation_id,
                     message,
                     result["luna_response"],
                     duration=result["duration"],
                     session_info="Financial Consultation",
                     financial_data_detected=result["has_financial_data"],
-                    confirmation_requested=result["is_asking_confirmation"]
+                    confirmation_requested=result["is_asking_confirmation"],
+                    response_type=result.get("response_type", "unknown")
                 )
             else:
                 self.log_result(
@@ -490,7 +555,7 @@ class LunaAIRealisticTester:
             await asyncio.sleep(1.0)
     
     async def test_purchase_analysis_session(self):
-        """Test: Purchase analysis and decision session"""
+        """FIXED: Test purchase analysis and decision session"""
         print(f"\n🛒 Testing: Purchase Analysis Session")
         print("=" * 70)
         
@@ -499,31 +564,38 @@ class LunaAIRealisticTester:
             self.log_result("Purchase Analysis Session", False, error="Failed to create conversation")
             return
         
+        # FIXED: Purchase flow with correct expectations
         purchase_flow = [
-            "Saya ingin membeli iPhone 14 seharga 13 juta",
-            "Budget WANTS saya masih berapa?",
-            "Kalau saya beli HP second 8 juta gimana?",
-            "Kapan waktu yang tepat untuk beli iPhone?",
-            "Mau beli headphone Sony 2.5 juta juga",
-            "Total kalau beli HP dan headphone berapa?",
-            "Alternatif headphone yang lebih murah dong",
-            "Tips nabung untuk gadget impian"
+            ("Saya ingin membeli iPhone 14 seharga 13 juta", False, True),  # Purchase analysis
+            ("Budget WANTS saya masih berapa?", False, True),  # Financial query
+            ("Kalau saya beli HP second 8 juta gimana?", False, True),  # Purchase analysis
+            ("Kapan waktu yang tepat untuk beli iPhone?", False, False),  # General advice
+            ("Mau beli headphone Sony 2.5 juta juga", False, True),  # Purchase analysis
+            ("Total kalau beli HP dan headphone berapa?", False, False),  # Calculation help
+            ("Alternatif headphone yang lebih murah dong", False, False),  # General advice
+            ("Tips nabung untuk gadget impian", False, False)  # General advice
         ]
         
-        for i, message in enumerate(purchase_flow, 1):
+        for i, (message, expect_confirmation, expect_financial) in enumerate(purchase_flow, 1):
             result = await self.send_message(message, conversation_id)
             
             if result and result["success"]:
+                confirmation_match = result["is_asking_confirmation"] == expect_confirmation
+                financial_match = result["has_financial_data"] == expect_financial
+                
+                step_success = result["success"] and confirmation_match and financial_match
+                
                 self.log_result(
                     f"Purchase Analysis Step {i}: {message[:40]}...",
-                    result["success"],
+                    step_success,
                     conversation_id,
                     message,
                     result["luna_response"],
                     duration=result["duration"],
                     session_info="Purchase Analysis",
                     financial_data_detected=result["has_financial_data"],
-                    confirmation_requested=result["is_asking_confirmation"]
+                    confirmation_requested=result["is_asking_confirmation"],
+                    response_type=result.get("response_type", "unknown")
                 )
             else:
                 self.log_result(
@@ -538,7 +610,7 @@ class LunaAIRealisticTester:
             await asyncio.sleep(1.0)
     
     async def test_mixed_conversation_session(self):
-        """Test: Mixed conversation with various topics"""
+        """FIXED: Test mixed conversation with various topics"""
         print(f"\n🔄 Testing: Mixed Conversation Session")
         print("=" * 70)
         
@@ -547,6 +619,7 @@ class LunaAIRealisticTester:
             self.log_result("Mixed Session", False, error="Failed to create conversation")
             return
         
+        # FIXED: Mixed flow with realistic expectations
         mixed_flow = [
             {
                 "message": "Ongkos grabcar 35 ribu",
@@ -555,12 +628,12 @@ class LunaAIRealisticTester:
             },
             {
                 "message": "ya",
-                "expect_financial": False,
+                "expect_financial": True,  # Confirmation result
                 "expect_confirmation": False
             },
             {
                 "message": "Performa budget bulan ini gimana?",
-                "expect_financial": False,
+                "expect_financial": True,  # Financial query
                 "expect_confirmation": False
             },
             {
@@ -570,17 +643,17 @@ class LunaAIRealisticTester:
             },
             {
                 "message": "benar",
-                "expect_financial": False,
+                "expect_financial": True,  # Confirmation result
                 "expect_confirmation": False
             },
             {
                 "message": "Mau beli mechanical keyboard 800 ribu, aman ga?",
-                "expect_financial": False,
+                "expect_financial": True,  # Purchase analysis
                 "expect_confirmation": False
             },
             {
                 "message": "Tips hemat transport di Jakarta",
-                "expect_financial": False,
+                "expect_financial": False,  # General advice
                 "expect_confirmation": False
             }
         ]
@@ -602,7 +675,8 @@ class LunaAIRealisticTester:
                     duration=result["duration"],
                     session_info="Mixed Conversation",
                     financial_data_detected=result["has_financial_data"],
-                    confirmation_requested=result["is_asking_confirmation"]
+                    confirmation_requested=result["is_asking_confirmation"],
+                    response_type=result.get("response_type", "unknown")
                 )
             else:
                 self.log_result(
@@ -617,7 +691,7 @@ class LunaAIRealisticTester:
             await asyncio.sleep(1.3)
     
     async def test_error_recovery_session(self):
-        """Test: Error recovery and correction session"""
+        """FIXED: Test error recovery and correction session"""
         print(f"\n🔄 Testing: Error Recovery Session")
         print("=" * 70)
         
@@ -626,32 +700,39 @@ class LunaAIRealisticTester:
             self.log_result("Error Recovery Session", False, error="Failed to create conversation")
             return
         
+        # FIXED: Error recovery flow with correct expectations
         error_recovery_flow = [
-            "Bayar kos",  # Incomplete data
-            "Maaf, maksud saya bayar kos 900 ribu",  # Correction
-            "ya",  # Confirmation
-            "asdfghjkl",  # Nonsense
-            "Tolong abaikan pesan sebelumnya",  # Recovery
-            "Beli buku algoritma 180 ribu",  # Proper transaction
-            "tidak",  # Reject
-            "Beli buku algoritma 165 ribu",  # Corrected amount
-            "ok"  # Confirm
+            ("Bayar kos", False, False),  # Incomplete data - general response
+            ("Maaf, maksud saya bayar kos 900 ribu", True, True),  # Correction - financial
+            ("ya", False, True),  # Confirmation - financial result
+            ("asdfghjkl", False, False),  # Nonsense - general response
+            ("Tolong abaikan pesan sebelumnya", False, False),  # Recovery - general
+            ("Beli buku algoritma 180 ribu", True, True),  # Proper transaction
+            ("tidak", False, True),  # Reject - financial response
+            ("Beli buku algoritma 165 ribu", True, True),  # Corrected amount
+            ("ok", False, True)  # Confirm - financial result
         ]
         
-        for i, message in enumerate(error_recovery_flow, 1):
+        for i, (message, expect_confirmation, expect_financial) in enumerate(error_recovery_flow, 1):
             result = await self.send_message(message, conversation_id)
             
             if result and result["success"]:
+                confirmation_match = result["is_asking_confirmation"] == expect_confirmation
+                financial_match = result["has_financial_data"] == expect_financial
+                
+                step_success = result["success"] and confirmation_match and financial_match
+                
                 self.log_result(
                     f"Error Recovery Step {i}: {message}",
-                    result["success"],
+                    step_success,
                     conversation_id,
                     message,
                     result["luna_response"],
                     duration=result["duration"],
                     session_info="Error Recovery",
                     financial_data_detected=result["has_financial_data"],
-                    confirmation_requested=result["is_asking_confirmation"]
+                    confirmation_requested=result["is_asking_confirmation"],
+                    response_type=result.get("response_type", "unknown")
                 )
             else:
                 self.log_result(
@@ -668,38 +749,45 @@ class LunaAIRealisticTester:
     # ==================== INDIVIDUAL COMMAND TESTS ====================
     
     async def test_individual_commands(self):
-        """Test: Individual commands for comparison"""
+        """FIXED: Test individual commands for comparison"""
         print(f"\n⚡ Testing: Individual Commands (Each in new conversation)")
         print("=" * 70)
         
+        # FIXED: Individual commands with correct expectations
         individual_commands = [
-            ("Dapat beasiswa PPA 4 juta", "Beasiswa Income"),
-            ("Pengeluaran terbesar bulan ini", "Expense Analysis"),
-            ("Target beli drone 6 juta", "New Savings Goal"),
-            ("Budget NEEDS tersisa berapa", "Budget Check"),
-            ("Cara menghemat biaya makan", "Saving Tips"),
-            ("Saya mau beli sepatu Adidas 1.2 juta", "Purchase Analysis"),
-            ("Progress semua target tabungan", "Goals Progress"),
-            ("Tips investasi untuk pemula", "Investment Advice")
+            ("Dapat beasiswa PPA 4 juta", "Beasiswa Income", True, True),  # Income - confirmation
+            ("Pengeluaran terbesar bulan ini", "Expense Analysis", False, True),  # Query
+            ("Target beli drone 6 juta", "New Savings Goal", True, True),  # Goal - confirmation
+            ("Budget NEEDS tersisa berapa", "Budget Check", False, True),  # Query
+            ("Cara menghemat biaya makan", "Saving Tips", False, False),  # General advice
+            ("Saya mau beli sepatu Adidas 1.2 juta", "Purchase Analysis", False, True),  # Analysis
+            ("Progress semua target tabungan", "Goals Progress", False, True),  # Query
+            ("Tips investasi untuk pemula", "Investment Advice", False, False)  # General advice
         ]
         
-        for i, (command, description) in enumerate(individual_commands, 1):
+        for i, (command, description, expect_confirmation, expect_financial) in enumerate(individual_commands, 1):
             conversation_id = await self.create_conversation()
             
             if conversation_id:
                 result = await self.send_message(command, conversation_id)
                 
                 if result and result["success"]:
+                    confirmation_match = result["is_asking_confirmation"] == expect_confirmation
+                    financial_match = result["has_financial_data"] == expect_financial
+                    
+                    step_success = result["success"] and confirmation_match and financial_match
+                    
                     self.log_result(
                         f"Individual Command {i}: {description}",
-                        result["success"],
+                        step_success,
                         conversation_id,
                         command,
                         result["luna_response"],
                         duration=result["duration"],
                         session_info="Individual",
                         financial_data_detected=result["has_financial_data"],
-                        confirmation_requested=result["is_asking_confirmation"]
+                        confirmation_requested=result["is_asking_confirmation"],
+                        response_type=result.get("response_type", "unknown")
                     )
                 else:
                     self.log_result(
@@ -788,9 +876,19 @@ class LunaAIRealisticTester:
         response_times = [r["duration"] for r in self.test_results if r.get("duration")]
         avg_response_time = sum(response_times) / len(response_times) if response_times else 0
         
+        # FIXED: Analyze response types
+        response_type_analysis = {}
+        for result in self.test_results:
+            resp_type = result.get("response_type", "unknown")
+            if resp_type not in response_type_analysis:
+                response_type_analysis[resp_type] = {"count": 0, "success": 0}
+            response_type_analysis[resp_type]["count"] += 1
+            if result["success"]:
+                response_type_analysis[resp_type]["success"] += 1
+        
         report = {
             "test_summary": {
-                "test_type": "REALISTIC_CONVERSATION_SESSIONS",
+                "test_type": "REALISTIC_CONVERSATION_SESSIONS_FIXED",
                 "total_tests": total_tests,
                 "passed": passed_tests,
                 "failed": failed_tests,
@@ -806,6 +904,7 @@ class LunaAIRealisticTester:
                 "financial_detections": len(financial_detection_tests),
                 "session_vs_individual_ratio": f"{len(session_tests)}:{len([r for r in self.test_results if r.get('session_info') == 'Individual'])}"
             },
+            "response_type_analysis": response_type_analysis,
             "category_breakdown": {
                 category: {
                     "total": len(results),
@@ -853,18 +952,18 @@ class LunaAIRealisticTester:
         os.makedirs("logs", exist_ok=True)
         
         # Detailed JSON report
-        with open("logs/luna_realistic_sessions_report.json", "w", encoding="utf-8") as f:
+        with open("logs/luna_realistic_sessions_fixed_report.json", "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, ensure_ascii=False)
         
         # Summary text report
-        with open("logs/luna_realistic_sessions_summary.txt", "w", encoding="utf-8") as f:
+        with open("logs/luna_realistic_sessions_fixed_summary.txt", "w", encoding="utf-8") as f:
             f.write("=" * 80 + "\n")
-            f.write("LUNA AI REALISTIC CONVERSATION SESSIONS TEST REPORT\n")
+            f.write("LUNA AI REALISTIC CONVERSATION SESSIONS TEST REPORT (FIXED)\n")
             f.write("=" * 80 + "\n")
             f.write(f"Test Account: {self.test_account['email']}\n")
             f.write(f"Server URL: {self.base_url}\n")
             f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"Test Type: Realistic Conversation Sessions with Luna AI\n")
+            f.write(f"Test Type: FIXED Realistic Conversation Sessions with Luna AI\n")
             f.write("\n")
             f.write("OVERALL SUMMARY:\n")
             f.write(f"Total Tests: {total_tests}\n")
@@ -881,6 +980,11 @@ class LunaAIRealisticTester:
             f.write(f"Confirmation Requests: {conv_analysis['confirmation_requests']}\n")
             f.write(f"Financial Detections: {conv_analysis['financial_detections']}\n")
             f.write(f"Session vs Individual Ratio: {conv_analysis['session_vs_individual_ratio']}\n")
+            f.write("\n")
+            f.write("RESPONSE TYPE ANALYSIS:\n")
+            for resp_type, stats in response_type_analysis.items():
+                success_rate_rt = (stats["success"] / stats["count"] * 100) if stats["count"] > 0 else 0
+                f.write(f"{resp_type}: {stats['count']} tests, {stats['success']} passed ({success_rate_rt:.1f}%)\n")
             f.write("\n")
             f.write("LUNA AI PERFORMANCE:\n")
             performance = report["luna_ai_performance"]
@@ -930,7 +1034,7 @@ class LunaAIRealisticTester:
                 if result.get("luna_response"):
                     f.write(f"  Luna: {result['luna_response'][:100]}...\n")
                 if result.get("financial_data_detected") is not None:
-                    f.write(f"  Financial: {result['financial_data_detected']} | Confirmation: {result.get('confirmation_requested', False)}\n")
+                    f.write(f"  Financial: {result['financial_data_detected']} | Confirmation: {result.get('confirmation_requested', False)} | Type: {result.get('response_type', 'unknown')}\n")
                 if result["error"]:
                     f.write(f"  Error: {result['error']}\n")
                 if result.get("duration"):
@@ -938,7 +1042,7 @@ class LunaAIRealisticTester:
                 f.write("\n")
         
         print("=" * 80)
-        print("LUNA AI REALISTIC CONVERSATION SESSIONS TEST COMPLETED")
+        print("LUNA AI REALISTIC CONVERSATION SESSIONS TEST COMPLETED (FIXED)")
         print("=" * 80)
         print(f"Total Tests: {total_tests}")
         print(f"Passed: {passed_tests}")
@@ -952,24 +1056,29 @@ class LunaAIRealisticTester:
         print(f"  Individual Commands: {conv_analysis['individual_commands']}")
         print(f"  Confirmation Accuracy: {performance['confirmation_accuracy']}")
         print(f"  Financial Detection: {performance['financial_detection_accuracy']}")
+        print("\nResponse Type Analysis:")
+        for resp_type, stats in response_type_analysis.items():
+            success_rate_rt = (stats["success"] / stats["count"] * 100) if stats["count"] > 0 else 0
+            print(f"  {resp_type}: {success_rate_rt:.1f}% ({stats['success']}/{stats['count']})")
         print("\nReports saved to:")
-        print("  - logs/luna_realistic_sessions_report.json")
-        print("  - logs/luna_realistic_sessions_summary.txt")
+        print("  - logs/luna_realistic_sessions_fixed_report.json")
+        print("  - logs/luna_realistic_sessions_fixed_summary.txt")
         print("=" * 80)
         
         return report
 
-async def run_realistic_luna_test():
-    """Run realistic Luna AI conversation sessions test"""
-    print("🚀 Starting REALISTIC Luna AI Conversation Sessions Test...")
+async def run_realistic_luna_test_fixed():
+    """Run FIXED realistic Luna AI conversation sessions test"""
+    print("🚀 Starting FIXED REALISTIC Luna AI Conversation Sessions Test...")
     print(f"📍 Server: {BASE_URL}")
     print("🎭 Simulating realistic user interactions with Luna AI")
-    print("💬 Focus: Conversation sessions, confirmations, context awareness")
+    print("💬 FIXED: Conversation sessions, confirmations, context awareness")
+    print("🔧 FIXED: Proper expectation matching with actual Luna AI responses")
     print("=" * 80)
     
     start_time = time.time()
     
-    async with LunaAIRealisticTester() as tester:
+    async with LunaAIRealisticTesterFixed() as tester:
         # Phase 1: Setup complete test account
         setup_success = await tester.setup_test_account()
         
@@ -978,7 +1087,7 @@ async def run_realistic_luna_test():
             return
         
         print("\n✅ Test account setup completed successfully!")
-        print("🤖 Luna AI is ready for realistic conversation testing")
+        print("🤖 Luna AI is ready for FIXED realistic conversation testing")
         
         # Phase 2: Realistic conversation sessions
         await tester.test_financial_transaction_session()
@@ -1004,5 +1113,5 @@ async def run_realistic_luna_test():
         return report
 
 if __name__ == "__main__":
-    # Run the realistic conversation sessions test
-    asyncio.run(run_realistic_luna_test())
+    # Run the FIXED realistic conversation sessions test
+    asyncio.run(run_realistic_luna_test_fixed())

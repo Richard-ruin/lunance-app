@@ -444,6 +444,36 @@ class ChatService {
     }
   }
 
+  Future<Map<String, dynamic>> getConversationById(String conversationId) async {
+  try {
+    final url = AppConfig.getChatUrl('/conversations/$conversationId');
+    final response = await http.get(
+      Uri.parse(url),
+      headers: await _authHeaders,
+    ).timeout(AppConfig.connectionTimeout);
+
+    final result = _handleResponse(response);
+    
+    // Log timezone info jika berhasil
+    if (result['success'] == true && result['data'] != null) {
+      final conversationData = result['data']['conversation'];
+      if (conversationData['updated_at'] != null) {
+        final updatedTime = DateTime.parse(conversationData['updated_at']);
+        final wibTime = IndonesiaTimeHelper.fromUtc(updatedTime);
+        print('📱 Conversation loaded: ${conversationData['title'] ?? 'Untitled'}');
+        print('📱 Last updated: ${IndonesiaTimeHelper.format(wibTime)} WIB');
+      }
+    }
+    
+    return result;
+  } catch (e) {
+    return {
+      'success': false,
+      'message': 'Gagal memuat percakapan: ${e.toString()}',
+    };
+  }
+}
+
   // Network connectivity check
   Future<bool> checkConnectivity() async {
     try {

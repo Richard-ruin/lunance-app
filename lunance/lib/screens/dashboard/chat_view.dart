@@ -10,7 +10,12 @@ import '../../widgets/common_widgets.dart';
 import 'chat_input.dart';
 
 class ChatView extends StatefulWidget {
-  const ChatView({Key? key}) : super(key: key);
+  final String? conversationId;  // Added conversation ID parameter
+  
+  const ChatView({
+    Key? key,
+    this.conversationId,
+  }) : super(key: key);
 
   @override
   State<ChatView> createState() => _ChatViewState();
@@ -21,14 +26,28 @@ class _ChatViewState extends State<ChatView> with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
   bool _hasInitialized = false;
   bool _isKeyboardVisible = false;
+  String? _currentConversationId;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _currentConversationId = widget.conversationId;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeChat();
     });
+  }
+
+  @override
+  void didUpdateWidget(ChatView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Handle conversation changes
+    if (widget.conversationId != oldWidget.conversationId) {
+      _currentConversationId = widget.conversationId;
+      if (widget.conversationId != null) {
+        _loadSpecificConversation(widget.conversationId!);
+      }
+    }
   }
 
   @override
@@ -72,8 +91,13 @@ class _ChatViewState extends State<ChatView> with WidgetsBindingObserver {
         // Connect to WebSocket
         await chatProvider.connectWebSocket(authProvider.user!.id);
         
-        // Initialize for new user - no validation required
-        await chatProvider.initializeForNewUser();
+        // If specific conversation ID provided, load it
+        if (_currentConversationId != null) {
+          await _loadSpecificConversation(_currentConversationId!);
+        } else {
+          // Initialize for new user - no validation required
+          await chatProvider.initializeForNewUser();
+        }
         
         _hasInitialized = true;
         print('✅ Chat initialized successfully for user: ${authProvider.user!.id}');
@@ -85,6 +109,30 @@ class _ChatViewState extends State<ChatView> with WidgetsBindingObserver {
       } catch (e) {
         print('⚠️ Failed to initialize chat: $e');
         // Don't show error to user, it will be handled by provider
+      }
+    }
+  }
+
+  Future<void> _loadSpecificConversation(String conversationId) async {
+    try {
+      final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+      
+      // Check if the conversation is already active
+      if (chatProvider.activeConversation?.id != conversationId) {
+        // Load the conversation if it's not already active
+        await chatProvider.loadConversationById(conversationId);
+      }
+    } catch (e) {
+      // Handle error loading conversation
+      debugPrint('Error loading conversation: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memuat percakapan: ${e.toString()}'),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 3),
+          ),
+        );
       }
     }
   }
