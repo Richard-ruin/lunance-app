@@ -20,7 +20,7 @@ from bson import ObjectId
 class QuickUserFix:
     def __init__(self):
         self.db = get_database()
-        self.user_id = "687f322a110c53c25df89f0e"
+        self.user_id = "6881f4f8917573fd61a3e102"
         
     async def add_transactions_to_existing_user(self):
         """Add realistic transactions to existing user"""

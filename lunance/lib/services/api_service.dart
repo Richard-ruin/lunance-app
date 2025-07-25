@@ -6,7 +6,7 @@ import '../config/app_config.dart';
 
 class ApiService {
   static const String baseUrl =
-      'http://192.168.148.195:8000/api/v1'; // Ganti dengan IP backend Anda
+      'http://192.168.236.195:8000/api/v1'; // Ganti dengan IP backend Anda
   static const _storage = FlutterSecureStorage();
 
   // Storage keys
