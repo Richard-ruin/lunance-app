@@ -1,4 +1,4 @@
-# app/services/indoroberta_financial_parser.py - ENHANCED NATURAL LANGUAGE VERSION
+# app/services/indoroberta_financial_parser.py - FIXED VERSION
 import re
 import json
 import logging
@@ -13,19 +13,18 @@ logger = logging.getLogger(__name__)
 
 class EnhancedIndoRoBERTaFinancialParser:
     """
-    ENHANCED VERSION: Natural Language Optimized IndoRoBERTa Parser
+    FIXED VERSION: Natural Language Optimized IndoRoBERTa Parser
     
-    Improvements:
-    1. Lower confidence thresholds for natural language
-    2. Natural language indicators preprocessing  
-    3. Enhanced fallback parsing
-    4. Adaptive confidence scoring
+    CRITICAL FIXES:
+    1. ✅ Balanced natural language boost (tidak over-boost)
+    2. ✅ Proper threshold adjustment untuk balance detection
+    3. ✅ Improved command vs financial data disambiguation
+    4. ✅ Better confidence calculation
     """
     
     def __init__(self, model_path: str = None):
-        """
-        Initialize parser with enhanced natural language support
-        """
+        """Initialize parser with FIXED natural language support"""
+        
         # CRITICAL: Automatic model path detection
         if model_path is None:
             model_path = self._find_trained_models()
@@ -33,8 +32,8 @@ class EnhancedIndoRoBERTaFinancialParser:
         self.model_path = model_path
         self.models_loaded = False
         
-        # Initialize natural language indicators
-        self._init_natural_language_indicators()
+        # Initialize natural language indicators dengan FIXED weights
+        self._init_fixed_natural_language_indicators()
         
         # CRITICAL: Load ML models if available
         if model_path and os.path.exists(model_path):
@@ -53,13 +52,13 @@ class EnhancedIndoRoBERTaFinancialParser:
         # Initialize enhanced patterns
         self._init_enhanced_patterns()
         
-        # Set adaptive thresholds based on model availability
-        self._set_adaptive_thresholds()
+        # FIXED: Set balanced thresholds
+        self._set_balanced_thresholds()
     
-    def _init_natural_language_indicators(self):
-        """Initialize comprehensive natural language indicators"""
+    def _init_fixed_natural_language_indicators(self):
+        """FIXED: Initialize natural language indicators with BALANCED weights"""
         
-        # SLANG INDICATORS (boost confidence +0.2)
+        # FIXED: Reduced boost values untuk avoid over-detection
         self.slang_indicators = {
             'dapet': ['dapet', 'dpt'],
             'habis': ['abis', 'abs', 'habis'],
@@ -73,7 +72,7 @@ class EnhancedIndoRoBERTaFinancialParser:
             'juta': ['jt', 'juta', 'm'],
         }
         
-        # FAMILY TERMS (boost confidence +0.15)
+        # FIXED: Reduced boost values
         self.family_terms = [
             'bokap', 'nyokap', 'ortu', 'orang tua',
             'papa', 'mama', 'ayah', 'ibu', 'bapak',
@@ -81,7 +80,6 @@ class EnhancedIndoRoBERTaFinancialParser:
             'kakak', 'adek', 'om', 'tante', 'bude', 'pakde'
         ]
         
-        # EMOTIONAL CONTEXT (boost confidence +0.1)
         self.emotional_indicators = [
             'alhamdulillah', 'syukur', 'senang', 'seneng',
             'sedih', 'capek', 'gregetan', 'boros',
@@ -89,7 +87,6 @@ class EnhancedIndoRoBERTaFinancialParser:
             'asli', 'parah', 'mantap', 'keren'
         ]
         
-        # MODERN PAYMENT CONTEXT (boost confidence +0.15)
         self.modern_payment_terms = [
             'gofood', 'grabfood', 'shopeefood',
             'gopay', 'ovo', 'dana', 'linkaja',
@@ -97,14 +94,19 @@ class EnhancedIndoRoBERTaFinancialParser:
             'qris', 'cod', 'transfer bank'
         ]
         
-        # STUDENT CONTEXT (boost confidence +0.1)
         self.student_context = [
             'ukt', 'spp', 'kos', 'kost', 'kampus',
             'kuliah', 'semester', 'wisuda', 'skripsi',
             'praktek', 'lab', 'organisasi', 'ukm'
         ]
         
-        # NATURAL AMOUNT FORMATS (boost confidence +0.1)
+        # CRITICAL: Add COMMAND EXCLUSION indicators
+        self.command_indicators = [
+            'total', 'berapa', 'lihat', 'daftar', 'semua', 'progress',
+            'ubah', 'ganti', 'hapus', 'delete', 'list', 'tampilkan',
+            'kesehatan', 'analisis', 'performance', 'gimana', 'bagaimana'
+        ]
+        
         self.natural_amount_patterns = [
             r'\d+\s*(?:rb|ribu|rebu)',
             r'\d+(?:[.,]\d+)?\s*(?:jt|juta)',
@@ -113,81 +115,94 @@ class EnhancedIndoRoBERTaFinancialParser:
             r'\d{1,3}(?:\.\d{3})+'  # Indonesian format
         ]
     
-    def _set_adaptive_thresholds(self):
-        """Set adaptive confidence thresholds"""
+    def _set_balanced_thresholds(self):
+        """FIXED: Set BALANCED confidence thresholds"""
         if self.models_loaded:
-            # Lower thresholds for ML models with natural language boost
-            self.base_confidence_threshold = 0.3  # Lowered from 0.5
-            self.enhanced_confidence_threshold = 0.2  # For natural language
-            self.fallback_confidence_threshold = 0.1  # Emergency fallback
+            # FIXED: Raised thresholds for better precision
+            self.base_confidence_threshold = 0.55  # RAISED from 0.3
+            self.enhanced_confidence_threshold = 0.45  # RAISED from 0.2
+            self.fallback_confidence_threshold = 0.35  # RAISED from 0.1
         else:
-            # Rule-based thresholds
-            self.base_confidence_threshold = 0.6
-            self.enhanced_confidence_threshold = 0.4
-            self.fallback_confidence_threshold = 0.3
+            # Rule-based thresholds - slightly higher
+            self.base_confidence_threshold = 0.7  # RAISED from 0.6
+            self.enhanced_confidence_threshold = 0.55  # RAISED from 0.4
+            self.fallback_confidence_threshold = 0.4  # RAISED from 0.3
         
-        logger.info(f"📊 Adaptive thresholds set: base={self.base_confidence_threshold}, enhanced={self.enhanced_confidence_threshold}, fallback={self.fallback_confidence_threshold}")
+        logger.info(f"🎯 FIXED Balanced thresholds: base={self.base_confidence_threshold}, enhanced={self.enhanced_confidence_threshold}, fallback={self.fallback_confidence_threshold}")
     
     def calculate_natural_language_boost(self, text: str) -> float:
-        """Calculate confidence boost based on natural language indicators"""
+        """FIXED: Calculate BALANCED confidence boost"""
         text_lower = text.lower()
         boost = 0.0
         indicators_found = []
         
-        # Check slang indicators
+        # CRITICAL: Check for COMMAND indicators first (NEGATIVE boost)
+        command_count = sum(1 for indicator in self.command_indicators if indicator in text_lower)
+        if command_count > 0:
+            command_penalty = min(command_count * 0.1, 0.3)  # Max 30% penalty
+            boost -= command_penalty
+            indicators_found.append(f"command_penalty:-{command_penalty:.2f}")
+            logger.info(f"⚠️ Command indicators detected: {command_count}, penalty: -{command_penalty:.2f}")
+        
+        # Check slang indicators - REDUCED boost
+        slang_boost = 0
         for word, variants in self.slang_indicators.items():
             if any(variant in text_lower for variant in variants):
-                boost += 0.15  # Reduced from 0.2 untuk avoid over-boosting
+                slang_boost += 0.08  # REDUCED from 0.15
                 indicators_found.append(f"slang:{word}")
+        boost += min(slang_boost, 0.15)  # Cap slang boost
         
-        # Check family terms
+        # Check family terms - REDUCED boost
         for term in self.family_terms:
             if term in text_lower:
-                boost += 0.1
+                boost += 0.06  # REDUCED from 0.1
                 indicators_found.append(f"family:{term}")
                 break  # Only count once
         
-        # Check emotional context
+        # Check emotional context - REDUCED boost
         for term in self.emotional_indicators:
             if term in text_lower:
-                boost += 0.08
+                boost += 0.05  # REDUCED from 0.08
                 indicators_found.append(f"emotion:{term}")
                 break  # Only count once
         
-        # Check modern payment terms
+        # Check modern payment terms - REDUCED boost
         for term in self.modern_payment_terms:
             if term in text_lower:
-                boost += 0.12
+                boost += 0.08  # REDUCED from 0.12
                 indicators_found.append(f"payment:{term}")
                 break  # Only count once
         
-        # Check student context
+        # Check student context - REDUCED boost
         for term in self.student_context:
             if term in text_lower:
-                boost += 0.08
+                boost += 0.05  # REDUCED from 0.08
                 indicators_found.append(f"student:{term}")
                 break  # Only count once
         
         # Check natural amount formats
         for pattern in self.natural_amount_patterns:
             if re.search(pattern, text_lower):
-                boost += 0.05
+                boost += 0.04  # REDUCED from 0.05
                 indicators_found.append("natural_amount")
                 break  # Only count once
         
-        # Cap maximum boost
-        boost = min(boost, 0.4)  # Maximum 40% boost
+        # FIXED: Cap maximum boost to prevent over-detection
+        boost = max(min(boost, 0.25), -0.3)  # Range: -30% to +25%
         
-        if boost > 0:
-            logger.info(f"🚀 Natural language boost: +{boost:.2f} from {indicators_found}")
+        if boost != 0:
+            logger.info(f"🎯 FIXED Natural language boost: {boost:+.2f} from {indicators_found}")
         
         return boost
     
     def preprocess_natural_language(self, text: str) -> str:
-        """Preprocess text to normalize natural language variations"""
+        """ENHANCED: Preprocess with command detection"""
         processed_text = text.lower().strip()
         
-        # Normalize slang to standard form
+        # CRITICAL: Flag if this looks like a command/query
+        self.looks_like_command = any(indicator in processed_text for indicator in self.command_indicators)
+        
+        # Normalize slang to standard form (but preserve original context)
         slang_normalization = {
             'dapet': 'dapat', 'dpt': 'dapat',
             'abis': 'habis', 'abs': 'habis',
@@ -219,7 +234,6 @@ class EnhancedIndoRoBERTaFinancialParser:
         
         # Possible model locations (prioritize enhanced version)
         possible_paths = [
-            # Enhanced version first
             current_dir.parent.parent / "models" / "indoroberta-balanced",
             current_dir.parent.parent / "backend" / "models" / "indoroberta-balanced", 
             Path("models") / "indoroberta-balanced",
@@ -334,6 +348,14 @@ class EnhancedIndoRoBERTaFinancialParser:
             r'\b(?:rencana|planning)\s+(?:beli|ambil)',
         ]
         
+        # CRITICAL: Command exclusion patterns
+        self.command_exclusion_patterns = [
+            r'\b(?:total|berapa|semua|daftar|list|lihat|tampilkan)\s+(?:tabungan|target|goal)',
+            r'\b(?:kesehatan|analisis|performance)\s+(?:keuangan|budget)',
+            r'\b(?:progress|kemajuan)\s+(?:tabungan|target)',
+            r'\b(?:ubah|ganti|hapus|delete)\s+(?:target|goal)',
+        ]
+        
         # DATE PATTERNS for target dates
         self.date_patterns = [
             r'(?:pada\s+)?(?:tanggal\s+)?(\d{1,2})\s+(\w+)\s+(\d{4})',
@@ -354,24 +376,36 @@ class EnhancedIndoRoBERTaFinancialParser:
         }
     
     # ==========================================
-    # ENHANCED MAIN PARSING METHODS
+    # FIXED MAIN PARSING METHODS
     # ==========================================
     
     def parse_financial_data(self, text: str, monthly_income: float = None) -> Dict[str, Any]:
         """
-        ENHANCED: Main parsing method with natural language optimization
+        FIXED: Main parsing method with BALANCED natural language optimization
         """
         try:
             original_text = text
-            logger.info(f"🔍 Enhanced parsing: '{text}'")
+            logger.info(f"🔍 FIXED Enhanced parsing: '{text}'")
             
-            # Step 1: Calculate natural language boost
+            # Step 1: Calculate BALANCED natural language boost
             nl_boost = self.calculate_natural_language_boost(text)
             
-            # Step 2: Preprocess natural language
+            # Step 2: Preprocess natural language with command detection
             processed_text = self.preprocess_natural_language(text)
             if processed_text != text.lower():
                 logger.info(f"📝 Preprocessed: '{processed_text}'")
+            
+            # CRITICAL: Early command exclusion check
+            if self._is_likely_command(original_text, nl_boost):
+                logger.info(f"🚫 EARLY EXCLUSION: Detected as command/query, skipping financial parsing")
+                return {
+                    "is_financial_data": False,
+                    "confidence": 0.0,
+                    "message": "Terdeteksi sebagai command/query, bukan data keuangan",
+                    "parsing_method": "Command_Exclusion",
+                    "natural_language_boost": nl_boost,
+                    "exclusion_reason": "Command indicators detected"
+                }
             
             # Step 3: Try ML parsing if available
             if self.models_loaded:
@@ -380,40 +414,71 @@ class EnhancedIndoRoBERTaFinancialParser:
                     logger.info(f"✅ ML parsing successful with confidence: {ml_result['confidence']:.3f}")
                     return ml_result
                 else:
-                    logger.info(f"📋 ML parsing failed, trying enhanced fallback...")
+                    logger.info(f"📋 ML parsing failed, trying FIXED fallback...")
             
-            # Step 4: Enhanced fallback parsing
-            fallback_result = self._parse_with_enhanced_fallback(original_text, processed_text, nl_boost)
+            # Step 4: FIXED Enhanced fallback parsing
+            fallback_result = self._parse_with_fixed_fallback(original_text, processed_text, nl_boost)
             if fallback_result["is_financial_data"]:
-                logger.info(f"✅ Enhanced fallback successful")
+                logger.info(f"✅ FIXED Enhanced fallback successful")
                 return fallback_result
             
-            # Step 5: Last resort - aggressive pattern matching
-            aggressive_result = self._parse_with_aggressive_patterns(original_text, nl_boost)
-            if aggressive_result["is_financial_data"]:
-                logger.info(f"✅ Aggressive pattern matching successful")
-                return aggressive_result
+            # Step 5: Last resort - conservative pattern matching
+            conservative_result = self._parse_with_conservative_patterns(original_text, nl_boost)
+            if conservative_result["is_financial_data"]:
+                logger.info(f"✅ Conservative pattern matching successful")
+                return conservative_result
             
             # No financial data detected
             return {
                 "is_financial_data": False,
                 "confidence": 0.0,
                 "message": "Tidak terdeteksi sebagai data keuangan",
-                "parsing_method": "Enhanced_IndoRoBERTa",
+                "parsing_method": "FIXED_Enhanced_IndoRoBERTa",
                 "natural_language_boost": nl_boost
             }
             
         except Exception as e:
-            logger.error(f"❌ Error in enhanced parsing: {e}")
+            logger.error(f"❌ Error in FIXED enhanced parsing: {e}")
             return {
                 "is_financial_data": False,
                 "confidence": 0.0,
                 "error": str(e),
-                "parsing_method": "Enhanced_IndoRoBERTa_Error"
+                "parsing_method": "FIXED_Enhanced_IndoRoBERTa_Error"
             }
     
+    def _is_likely_command(self, text: str, nl_boost: float) -> bool:
+        """CRITICAL: Early detection of commands/queries to prevent misclassification"""
+        text_lower = text.lower()
+        
+        # Check for command exclusion patterns
+        for pattern in self.command_exclusion_patterns:
+            if re.search(pattern, text_lower):
+                logger.info(f"🚫 Command exclusion pattern matched: {pattern}")
+                return True
+        
+        # Check if negative boost (due to command indicators) is significant
+        if nl_boost < -0.15:
+            logger.info(f"🚫 High command penalty detected: {nl_boost:.2f}")
+            return True
+        
+        # Check for query structure patterns
+        query_structures = [
+            r'\b(?:berapa|seberapa)\s+(?:total|jumlah|saldo)',
+            r'\b(?:gimana|bagaimana)\s+(?:budget|keuangan|kondisi)',
+            r'\b(?:apa\s+saja|daftar|semua)\s',
+            r'\b(?:analisis|analysis)\s',
+            r'\b(?:progress|kemajuan)\s',
+        ]
+        
+        for pattern in query_structures:
+            if re.search(pattern, text_lower):
+                logger.info(f"🚫 Query structure detected: {pattern}")
+                return True
+        
+        return False
+    
     def _parse_with_ml_enhanced(self, text: str, nl_boost: float) -> Dict[str, Any]:
-        """Enhanced ML parsing with natural language boost"""
+        """FIXED: Enhanced ML parsing with BALANCED natural language boost"""
         try:
             # Get ML predictions
             intent_result = self.intent_pipeline(text)
@@ -431,13 +496,18 @@ class EnhancedIndoRoBERTaFinancialParser:
                             best_prediction = pred
                 
                 if best_prediction:
-                    # Apply natural language boost
-                    boosted_confidence = min(1.0, best_score + nl_boost)
+                    # Apply BALANCED natural language boost
+                    boosted_confidence = min(1.0, max(0.0, best_score + nl_boost))
                     
-                    # Use adaptive threshold
-                    threshold = self.enhanced_confidence_threshold if nl_boost > 0.1 else self.base_confidence_threshold
+                    # Use BALANCED adaptive threshold
+                    threshold = self.enhanced_confidence_threshold if nl_boost > 0.05 else self.base_confidence_threshold
                     
-                    logger.info(f"🎯 ML prediction: {best_prediction['label']} (original: {best_score:.3f}, boosted: {boosted_confidence:.3f}, threshold: {threshold:.3f})")
+                    # CRITICAL: Extra check for commands
+                    if hasattr(self, 'looks_like_command') and self.looks_like_command:
+                        threshold = max(threshold, 0.75)  # Much higher threshold for potential commands
+                        logger.info(f"⚠️ Command detected in preprocessing, using strict threshold: {threshold:.3f}")
+                    
+                    logger.info(f"🎯 FIXED ML prediction: {best_prediction['label']} (original: {best_score:.3f}, boosted: {boosted_confidence:.3f}, threshold: {threshold:.3f})")
                     
                     if boosted_confidence >= threshold:
                         transaction_type = best_prediction['label'].lower()
@@ -448,12 +518,17 @@ class EnhancedIndoRoBERTaFinancialParser:
             return {"is_financial_data": False, "confidence": 0.0}
             
         except Exception as e:
-            logger.error(f"❌ ML parsing error: {e}")
+            logger.error(f"❌ FIXED ML parsing error: {e}")
             return {"is_financial_data": False, "confidence": 0.0}
     
-    def _parse_with_enhanced_fallback(self, original_text: str, processed_text: str, nl_boost: float) -> Dict[str, Any]:
-        """Enhanced rule-based fallback parsing"""
+    def _parse_with_fixed_fallback(self, original_text: str, processed_text: str, nl_boost: float) -> Dict[str, Any]:
+        """FIXED: Enhanced rule-based fallback parsing with command exclusion"""
         try:
+            # CRITICAL: Skip parsing if looks like command
+            if nl_boost < -0.1:  # Significant command penalty
+                logger.info(f"🚫 Skipping fallback due to command penalty: {nl_boost:.2f}")
+                return {"is_financial_data": False, "confidence": 0.0}
+            
             # Detect transaction type using enhanced patterns
             transaction_type = self._detect_type_with_patterns(processed_text)
             
@@ -465,40 +540,50 @@ class EnhancedIndoRoBERTaFinancialParser:
             if not amount:
                 return {"is_financial_data": False, "confidence": 0.0}
             
-            # Calculate confidence based on pattern strength and natural language
-            base_confidence = 0.7  # High for pattern-based
-            final_confidence = min(1.0, base_confidence + nl_boost)
+            # FIXED: Calculate BALANCED confidence
+            base_confidence = 0.65  # Slightly reduced for balance
+            final_confidence = min(1.0, max(0.0, base_confidence + nl_boost))
             
-            logger.info(f"📋 Fallback detection: {transaction_type} with confidence {final_confidence:.3f}")
+            # CRITICAL: Apply minimum threshold
+            if final_confidence < self.fallback_confidence_threshold:
+                logger.info(f"📋 Fallback confidence too low: {final_confidence:.3f} < {self.fallback_confidence_threshold:.3f}")
+                return {"is_financial_data": False, "confidence": 0.0}
+            
+            logger.info(f"📋 FIXED Fallback detection: {transaction_type} with confidence {final_confidence:.3f}")
             
             return self._build_fallback_result(original_text, transaction_type, amount, final_confidence, nl_boost)
             
         except Exception as e:
-            logger.error(f"❌ Enhanced fallback error: {e}")
+            logger.error(f"❌ FIXED enhanced fallback error: {e}")
             return {"is_financial_data": False, "confidence": 0.0}
     
-    def _parse_with_aggressive_patterns(self, text: str, nl_boost: float) -> Dict[str, Any]:
-        """Aggressive pattern matching for edge cases"""
+    def _parse_with_conservative_patterns(self, text: str, nl_boost: float) -> Dict[str, Any]:
+        """FIXED: Conservative pattern matching with strict criteria"""
         try:
             text_lower = text.lower()
             
-            # Aggressive financial indicators
-            aggressive_indicators = [
-                r'\d+(?:[.,]\d+)?\s*(?:juta|ribu|rb|jt|k|m)',  # Any amount format
-                r'rp\.?\s*\d+',  # Rp followed by numbers
-                r'\b(?:bayar|beli|dapat|transfer|nabung)\b',  # Financial verbs
-                r'\b(?:uang|duit|money|cash)\b',  # Money terms
+            # CRITICAL: Skip if command penalty is high
+            if nl_boost < -0.05:
+                logger.info(f"🚫 Skipping conservative parsing due to command indicators")
+                return {"is_financial_data": False, "confidence": 0.0}
+            
+            # More strict financial indicators
+            strict_financial_indicators = [
+                r'\b(?:dapat|dapet|terima)\s+\d+',  # Got [amount]
+                r'\b(?:bayar|beli|habis|abis)\s+\d+',  # Paid/spent [amount]
+                r'\b(?:nabung|saving)\s+(?:buat|untuk)\s+\w+',  # Saving for [item]
+                r'\d+\s*(?:rb|ribu|jt|juta)\s+(?:dari|untuk|buat)',  # [amount] from/for
             ]
             
-            # Check if any aggressive indicator matches
-            has_financial_indicator = any(re.search(pattern, text_lower) for pattern in aggressive_indicators)
+            # Check if any strict indicator matches
+            has_strict_indicator = any(re.search(pattern, text_lower) for pattern in strict_financial_indicators)
             
-            if has_financial_indicator and nl_boost > 0.1:  # Only if natural language is present
+            if has_strict_indicator and nl_boost > 0.05:  # Require positive natural language boost
                 # Try to extract amount
                 amount = self.parse_amount(text)
                 
                 if amount:
-                    # Simple type detection
+                    # Conservative type detection
                     if any(word in text_lower for word in ['dapat', 'dapet', 'terima', 'masuk', 'gaji', 'honor']):
                         transaction_type = 'income'
                     elif any(word in text_lower for word in ['nabung', 'target', 'ingin beli', 'mau beli']):
@@ -506,21 +591,27 @@ class EnhancedIndoRoBERTaFinancialParser:
                     else:
                         transaction_type = 'expense'
                     
-                    # Lower confidence for aggressive matching
-                    confidence = min(0.6, 0.4 + nl_boost)
+                    # Conservative confidence calculation
+                    confidence = min(0.5, 0.3 + nl_boost)  # Lower maximum confidence
                     
-                    logger.info(f"⚡ Aggressive pattern match: {transaction_type} with confidence {confidence:.3f}")
+                    logger.info(f"⚡ FIXED Conservative pattern match: {transaction_type} with confidence {confidence:.3f}")
                     
-                    return self._build_aggressive_result(text, transaction_type, amount, confidence, nl_boost)
+                    return self._build_conservative_result(text, transaction_type, amount, confidence, nl_boost)
             
             return {"is_financial_data": False, "confidence": 0.0}
             
         except Exception as e:
-            logger.error(f"❌ Aggressive pattern error: {e}")
+            logger.error(f"❌ FIXED conservative pattern error: {e}")
             return {"is_financial_data": False, "confidence": 0.0}
     
     def _detect_type_with_patterns(self, text: str) -> Optional[str]:
-        """Detect transaction type using enhanced patterns"""
+        """Detect transaction type using enhanced patterns with command exclusion"""
+        
+        # CRITICAL: Check command exclusion first
+        for pattern in self.command_exclusion_patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                logger.info(f"🚫 Command exclusion in type detection: {pattern}")
+                return None
         
         # Check income patterns
         for pattern in self.income_patterns:
@@ -538,6 +629,10 @@ class EnhancedIndoRoBERTaFinancialParser:
                 return 'expense'
         
         return None
+        
+    # ==========================================
+    # KEEP OTHER METHODS FROM ORIGINAL CODE
+    # ==========================================
     
     def _build_ml_result(self, text: str, transaction_type: str, confidence: float, nl_boost: float) -> Dict[str, Any]:
         """Build result from ML prediction"""
@@ -575,7 +670,7 @@ class EnhancedIndoRoBERTaFinancialParser:
             "confidence": confidence,
             "data_type": transaction_type,
             "parsed_data": parsed_data,
-            "parsing_method": "Enhanced_ML",
+            "parsing_method": "FIXED_Enhanced_ML",
             "natural_language_boost": nl_boost
         }
     
@@ -611,15 +706,15 @@ class EnhancedIndoRoBERTaFinancialParser:
             "confidence": confidence,
             "data_type": transaction_type,
             "parsed_data": parsed_data,
-            "parsing_method": "Enhanced_Fallback",
+            "parsing_method": "FIXED_Enhanced_Fallback",
             "natural_language_boost": nl_boost
         }
     
-    def _build_aggressive_result(self, text: str, transaction_type: str, amount: float, confidence: float, nl_boost: float) -> Dict[str, Any]:
-        """Build result from aggressive pattern matching"""
+    def _build_conservative_result(self, text: str, transaction_type: str, amount: float, confidence: float, nl_boost: float) -> Dict[str, Any]:
+        """Build result from conservative pattern matching"""
         
         if transaction_type in ['income', 'expense']:
-            # Simple category detection for aggressive mode
+            # Simple category detection for conservative mode
             if transaction_type == 'income':
                 category = "Lainnya"
                 budget_type = "income"
@@ -653,12 +748,12 @@ class EnhancedIndoRoBERTaFinancialParser:
             "confidence": confidence,
             "data_type": transaction_type,
             "parsed_data": parsed_data,
-            "parsing_method": "Enhanced_Aggressive",
+            "parsing_method": "FIXED_Enhanced_Conservative",
             "natural_language_boost": nl_boost
         }
     
     # ==========================================
-    # ENHANCED HELPER METHODS
+    # KEEP ALL OTHER HELPER METHODS FROM ORIGINAL
     # ==========================================
     
     def parse_amount(self, text: str) -> Optional[float]:
@@ -904,33 +999,35 @@ class EnhancedIndoRoBERTaFinancialParser:
         return {
             "models_loaded": self.models_loaded,
             "model_path": self.model_path,
-            "parsing_method": "Enhanced_IndoRoBERTa_NL_Optimized",
+            "parsing_method": "FIXED_Enhanced_IndoRoBERTa_NL_Optimized",
             "natural_language_features": {
                 "slang_indicators": len(self.slang_indicators),
                 "family_terms": len(self.family_terms),
                 "emotional_indicators": len(self.emotional_indicators),
                 "modern_payment_terms": len(self.modern_payment_terms),
-                "student_context": len(self.student_context)
+                "student_context": len(self.student_context),
+                "command_indicators": len(self.command_indicators)
             },
-            "adaptive_thresholds": {
+            "balanced_thresholds": {
                 "base": self.base_confidence_threshold,
                 "enhanced": self.enhanced_confidence_threshold,
                 "fallback": self.fallback_confidence_threshold
             },
-            "enhanced_features": [
-                "Natural Language Preprocessing",
-                "Adaptive Confidence Thresholds", 
-                "Multi-level Fallback Parsing",
-                "Aggressive Pattern Matching",
-                "Indonesian Slang Support",
-                "Family Terms Recognition",
-                "Modern Payment Context",
-                "Student Context Awareness"
+            "fixed_features": [
+                "✅ Balanced Natural Language Boost (tidak over-boost)",
+                "✅ Command/Query Early Exclusion System", 
+                "✅ Proper Confidence Threshold Balance",
+                "✅ Improved Command vs Financial Disambiguation",
+                "✅ Conservative Pattern Matching Fallback",
+                "✅ Indonesian Slang Support dengan balance",
+                "✅ Family Terms Recognition dengan limit",
+                "✅ Modern Payment Context dengan cap",
+                "✅ Student Context Awareness dengan balance"
             ]
         }
     
     def test_natural_language_detection(self, test_messages: List[str]) -> Dict[str, Any]:
-        """Test natural language detection capabilities"""
+        """Test FIXED natural language detection capabilities"""
         results = []
         
         for message in test_messages:
@@ -941,7 +1038,8 @@ class EnhancedIndoRoBERTaFinancialParser:
                     "detected": result["is_financial_data"],
                     "confidence": result.get("confidence", 0),
                     "method": result.get("parsing_method", "unknown"),
-                    "nl_boost": result.get("natural_language_boost", 0)
+                    "nl_boost": result.get("natural_language_boost", 0),
+                    "exclusion_reason": result.get("exclusion_reason", None)
                 })
             except Exception as e:
                 results.append({
@@ -953,6 +1051,7 @@ class EnhancedIndoRoBERTaFinancialParser:
         # Calculate summary stats
         total_tests = len(results)
         detected_count = sum(1 for r in results if r.get("detected", False))
+        excluded_count = sum(1 for r in results if r.get("exclusion_reason"))
         avg_confidence = sum(r.get("confidence", 0) for r in results) / total_tests if total_tests > 0 else 0
         
         return {
@@ -960,9 +1059,12 @@ class EnhancedIndoRoBERTaFinancialParser:
             "summary": {
                 "total_tests": total_tests,
                 "detected_count": detected_count,
+                "excluded_count": excluded_count,
                 "detection_rate": detected_count / total_tests if total_tests > 0 else 0,
+                "exclusion_rate": excluded_count / total_tests if total_tests > 0 else 0,
                 "average_confidence": avg_confidence
-            }
+            },
+            "fixed_version": "v2.0 - Balanced NL Boost & Command Exclusion"
         }
 
 # Alias for backward compatibility

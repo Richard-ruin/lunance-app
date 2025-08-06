@@ -428,7 +428,7 @@ class User(BaseModel):
             "budget_allocation": self.get_current_budget_allocation(),
             "financial_health_level": self._calculate_financial_health_level(),
             "student_tips": self.get_student_financial_tips(),
-            "budget_method": "50/30/20 Elizabeth Warren"
+            "budget_method": "5``0/30/20 Elizabeth Warren"
         }
         
         return response_data
