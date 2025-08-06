@@ -1,4 +1,4 @@
-// lib/providers/finance_provider.dart - UPDATED with Service Exposure
+// lib/providers/finance_provider.dart - FIXED VERSION
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -81,9 +81,10 @@ class FinanceProvider with ChangeNotifier {
     }
   }
 
-  // 2. Load Analytics - TYPE SAFE
+  // 2. Load Analytics - TYPE SAFE with chartType parameter
   Future<void> loadAnalytics({
     String period = 'monthly',
+    String? chartType, // ADDED: chartType parameter
     DateTime? startDate,
     DateTime? endDate,
   }) async {
@@ -100,6 +101,7 @@ class FinanceProvider with ChangeNotifier {
       debugPrint('🔍 FinanceProvider: Loading analytics for period $period...');
       final response = await _financeService.getAnalytics(
         period: period,
+        chartType: chartType ?? 'expense', // FIXED: Pass chartType parameter
         startDate: startDate,
         endDate: endDate,
       );
@@ -213,11 +215,11 @@ class FinanceProvider with ChangeNotifier {
     }
   }
 
-  /// Test API Connection
+  /// Test API Connection - FIXED: Added testConnection method
   Future<bool> testConnection() async {
     try {
       debugPrint('🔍 FinanceProvider: Testing connection...');
-      final response = await _financeService.testConnection();
+      final response = await _financeService.getStats(); // Use existing endpoint for connection test
       final isConnected = response['success'] == true;
       debugPrint('🌐 Connection test result: $isConnected');
       return isConnected;
@@ -225,6 +227,31 @@ class FinanceProvider with ChangeNotifier {
       debugPrint('❌ FinanceProvider: Connection test error: $e');
       return false;
     }
+  }
+
+  // ===== SERVICE STATUS METHOD - FIXED =====
+
+  /// Get service status for debugging - FIXED: Added getServiceStatus method
+  Map<String, dynamic> getServiceStatus() {
+    return {
+      'provider': 'FinanceProvider',
+      'service_connected': _financeService != null,
+      'data_loaded': {
+        'dashboard': _dashboardData != null,
+        'analytics': _analyticsData != null,
+        'history': _historyData != null,
+      },
+      'loading_states': {
+        'dashboard': _isLoadingDashboard,
+        'analytics': _isLoadingAnalytics,
+        'history': _isLoadingHistory,
+      },
+      'errors': {
+        'dashboard': _dashboardError,
+        'analytics': _analyticsError,
+        'history': _historyError,
+      },
+    };
   }
 
   // ===== TYPE SAFETY HELPER METHODS =====
@@ -405,7 +432,7 @@ class FinanceProvider with ChangeNotifier {
   }
 
   Future<void> loadCategoryChartData({String type = 'expense', String period = 'monthly'}) async {
-    await loadAnalytics(period: period);
+    await loadAnalytics(period: period, chartType: type);
   }
 
   // ===== SAFE DATA ACCESS METHODS =====
@@ -533,30 +560,5 @@ class FinanceProvider with ChangeNotifier {
       }
     }
     return defaultValue;
-  }
-
-  // ===== SERVICE INFORMATION =====
-
-  /// Get service status for debugging
-  Map<String, dynamic> getServiceStatus() {
-    return {
-      'provider': 'FinanceProvider',
-      'service_status': _financeService.getServiceStatus(),
-      'data_loaded': {
-        'dashboard': _dashboardData != null,
-        'analytics': _analyticsData != null,
-        'history': _historyData != null,
-      },
-      'loading_states': {
-        'dashboard': _isLoadingDashboard,
-        'analytics': _isLoadingAnalytics,
-        'history': _isLoadingHistory,
-      },
-      'errors': {
-        'dashboard': _dashboardError,
-        'analytics': _analyticsError,
-        'history': _historyError,
-      },
-    };
   }
 }

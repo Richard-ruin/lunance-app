@@ -1,4 +1,5 @@
-# app/services/finance_service.py - COMPLETE FIXED VERSION with Chatbot Integration
+# app/services/finance_service.py - COMPLETE Backend Finance Service (No Chatbot Dependencies)
+
 import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
@@ -12,117 +13,18 @@ from ..models.user import User
 from ..utils.timezone_utils import IndonesiaDatetime, now_for_db
 from .financial_categories import IndonesianStudentCategories
 
-# CRITICAL: Import IndoRoBERTa parser directly for chatbot integration
-try:
-    from .indoroberta_financial_parser import IndoRoBERTaFinancialParser
-    INDOROBERTA_AVAILABLE = True
-    logger = logging.getLogger(__name__)
-    logger.info("✅ IndoRoBERTa parser imported in FinanceService")
-except ImportError as e:
-    logger = logging.getLogger(__name__)
-    logger.error(f"❌ IndoRoBERTa parser import failed in FinanceService: {e}")
-    INDOROBERTA_AVAILABLE = False
+logger = logging.getLogger(__name__)
 
 class FinanceService:
-    """COMPLETE FIXED Finance Service with Chatbot Integration"""
+    """Complete Finance Service for Finance Routes - NO Chatbot Dependencies"""
     
     def __init__(self):
         self.db = get_database()
-        
-        # CRITICAL: Initialize IndoRoBERTa parser for chatbot integration
-        if INDOROBERTA_AVAILABLE:
-            try:
-                logger.info("🔧 Initializing IndoRoBERTa parser in FinanceService...")
-                self.financial_parser = IndoRoBERTaFinancialParser()
-                
-                # Check parser status
-                if hasattr(self.financial_parser, 'models_loaded'):
-                    if self.financial_parser.models_loaded:
-                        self.parser_type = "IndoRoBERTa_ML"
-                        logger.info("🎯 FinanceService using IndoRoBERTa ML models")
-                    else:
-                        self.parser_type = "IndoRoBERTa_Rules"
-                        logger.info("📋 FinanceService using IndoRoBERTa rule-based")
-                else:
-                    self.parser_type = "IndoRoBERTa_Unknown"
-                
-                logger.info(f"✅ FinanceService parser initialized: {self.parser_type}")
-                
-            except Exception as e:
-                logger.error(f"❌ Failed to initialize IndoRoBERTa in FinanceService: {e}")
-                self._load_fallback_parser()
-        else:
-            logger.warning("⚠️ IndoRoBERTa not available, loading fallback parser")
-            self._load_fallback_parser()
-    
-    def _load_fallback_parser(self):
-        """Load fallback parser"""
-        try:
-            from .enhanced_financial_parser import EnhancedFinancialParser
-            self.financial_parser = EnhancedFinancialParser()
-            self.parser_type = "Enhanced_Fallback"
-            logger.warning("📋 FinanceService using Enhanced fallback parser")
-        except ImportError:
-            logger.error("❌ Even fallback parser failed in FinanceService")
-            self.financial_parser = None
-            self.parser_type = "None"
+        logger.info("✅ FinanceService initialized (Finance Routes Only)")
     
     def format_currency(self, amount: float) -> str:
         """Format currency to Rupiah"""
         return f"Rp {amount:,.0f}".replace(',', '.')
-    
-    # ==========================================
-    # CHATBOT INTEGRATION METHODS
-    # ==========================================
-    
-    def parse_financial_message(self, message: str) -> Dict[str, Any]:
-        """Parse financial message dengan IndoRoBERTa dan proper reporting"""
-        if not self.financial_parser:
-            return {
-                "is_financial_data": False,
-                "error": "No parser available",
-                "parsing_method": self.parser_type
-            }
-        
-        try:
-            logger.info(f"💰 FinanceService parsing with {self.parser_type}: '{message}'")
-            
-            # Use IndoRoBERTa parser
-            result = self.financial_parser.parse_financial_data(message)
-            
-            # CRITICAL: Add consistent parser info
-            result["parsing_method"] = self.parser_type
-            result["parsed_by"] = "FinanceService"
-            result["parser_class"] = type(self.financial_parser).__name__
-            
-            # Log parsing result
-            if result.get("is_financial_data"):
-                logger.info(f"✅ FinanceService detected financial data with {self.parser_type}")
-                logger.info(f"🔍 Data type: {result.get('data_type')}, Amount: {result.get('parsed_data', {}).get('amount', 'N/A')}")
-            else:
-                logger.info(f"📋 FinanceService: No financial data detected with {self.parser_type}")
-            
-            return result
-            
-        except Exception as e:
-            logger.error(f"❌ FinanceService parsing error with {self.parser_type}: {e}")
-            return {
-                "is_financial_data": False,
-                "error": str(e),
-                "parsing_method": self.parser_type,
-                "parsed_by": "FinanceService"
-            }
-    
-    def get_parser_info(self) -> Dict[str, Any]:
-        """Get detailed parser information for chatbot"""
-        return {
-            "parser_type": self.parser_type,
-            "parser_available": self.financial_parser is not None,
-            "parser_class": type(self.financial_parser).__name__ if self.financial_parser else None,
-            "indoroberta_available": INDOROBERTA_AVAILABLE,
-            "models_loaded": getattr(self.financial_parser, 'models_loaded', False) if self.financial_parser else False,
-            "service": "FinanceService"
-        }
     
     # ==========================================
     # TRANSACTION METHODS
@@ -145,8 +47,6 @@ class FinanceService:
                 "source": transaction_data.get("source", "manual"),
                 "tags": transaction_data.get("tags", []),
                 "notes": transaction_data.get("notes"),
-                "chat_message_id": transaction_data.get("chat_message_id"),
-                "conversation_id": transaction_data.get("conversation_id"),
                 "created_at": now,
                 "updated_at": now,
                 "confirmed_at": now
@@ -168,14 +68,12 @@ class FinanceService:
                 source=transaction_data.get("source", "manual"),
                 tags=transaction_data.get("tags", []),
                 notes=transaction_data.get("notes"),
-                chat_message_id=transaction_data.get("chat_message_id"),
-                conversation_id=transaction_data.get("conversation_id"),
                 created_at=now,
                 updated_at=now,
                 confirmed_at=now
             )
             
-            logger.info(f"✅ Transaction created: {transaction_id} with {self.parser_type}")
+            logger.info(f"✅ Transaction created: {transaction_id}")
             return transaction
             
         except Exception as e:
@@ -209,7 +107,7 @@ class FinanceService:
                 transaction = Transaction.from_mongo(doc)
                 transactions.append(transaction)
             
-            logger.info(f"📋 Retrieved {len(transactions)} transactions with {self.parser_type}")
+            logger.info(f"📋 Retrieved {len(transactions)} transactions")
             return transactions
             
         except Exception as e:
@@ -291,8 +189,6 @@ class FinanceService:
                 "source": goal_data.get("source", "manual"),
                 "tags": goal_data.get("tags", []),
                 "notes": goal_data.get("notes"),
-                "chat_message_id": goal_data.get("chat_message_id"),
-                "conversation_id": goal_data.get("conversation_id"),
                 "created_at": now,
                 "updated_at": now
             }
@@ -314,13 +210,11 @@ class FinanceService:
                 source=goal_data.get("source", "manual"),
                 tags=goal_data.get("tags", []),
                 notes=goal_data.get("notes"),
-                chat_message_id=goal_data.get("chat_message_id"),
-                conversation_id=goal_data.get("conversation_id"),
                 created_at=now,
                 updated_at=now
             )
             
-            logger.info(f"✅ Savings goal created: {goal_id} with {self.parser_type}")
+            logger.info(f"✅ Savings goal created: {goal_id}")
             return goal
             
         except Exception as e:
@@ -344,7 +238,7 @@ class FinanceService:
                 goal = SavingsGoal.from_mongo(doc)
                 goals.append(goal)
             
-            logger.info(f"🎯 Retrieved {len(goals)} savings goals with {self.parser_type}")
+            logger.info(f"🎯 Retrieved {len(goals)} savings goals")
             return goals
             
         except Exception as e:
@@ -519,7 +413,7 @@ class FinanceService:
                     self.generated_at = now_for_db()
             
             summary = FinancialSummary()
-            logger.info(f"📈 Financial summary generated with {self.parser_type} for period: {period}")
+            logger.info(f"📈 Financial summary generated for period: {period}")
             return summary
             
         except Exception as e:
@@ -543,8 +437,8 @@ class FinanceService:
             wants_budget = monthly_income * 0.3
             savings_budget = monthly_income * 0.2
             
-            # Get current month spending by budget type (FIXED VERSION)
-            spending = await self.get_current_month_spending_by_budget_type_fixed(user_id)
+            # Get current month spending by budget type
+            spending = await self.get_current_month_spending_by_budget_type(user_id)
             
             needs_spent = spending.get("needs", 0)
             wants_spent = spending.get("wants", 0)
@@ -621,27 +515,21 @@ class FinanceService:
                     "formatted_total_spent": self.format_currency(total_spent),
                     "formatted_total_budget": self.format_currency(total_budget)
                 },
-                "recommendations": recommendations,
-                "parser_info": self.get_parser_info()
+                "recommendations": recommendations
             }
             
-            logger.info(f"📊 Budget performance calculated with {self.parser_type}")
+            logger.info(f"📊 Budget performance calculated")
             return budget_data
             
         except Exception as e:
             logger.error(f"❌ Error calculating budget performance: {e}")
             return {
                 "has_budget": False,
-                "error": str(e),
-                "parser_info": self.get_parser_info()
+                "error": str(e)
             }
     
-    # CRITICAL FIX: This method ensures consistency with History tab
-    async def get_current_month_spending_by_budget_type_fixed(self, user_id: str) -> Dict[str, float]:
-        """
-        FIXED: Get current month spending categorized by budget type (needs/wants/savings)
-        Uses the SAME logic as history tab for consistency
-        """
+    async def get_current_month_spending_by_budget_type(self, user_id: str) -> Dict[str, float]:
+        """Get current month spending categorized by budget type (needs/wants/savings)"""
         try:
             # Get current month date range
             now = datetime.now()
@@ -665,38 +553,34 @@ class FinanceService:
                 "savings": 0.0
             }
             
-            # CRITICAL FIX: Use IndonesianStudentCategories like history does
+            # Categorize transactions by budget type
             for trans in transactions:
                 category = trans["category"]
                 amount = trans["amount"]
                 
-                # FIXED: Use the SAME logic as history tab
-                budget_type = self._get_budget_type_from_category_fixed(category)
+                # Get budget type for this category
+                budget_type = self._get_budget_type_from_category(category)
                 spending[budget_type] += amount
             
-            logger.info(f"💳 Current month spending calculated (FIXED): {spending}")
+            logger.info(f"💳 Current month spending calculated: {spending}")
             return spending
             
         except Exception as e:
             logger.error(f"❌ Error calculating current month spending: {e}")
             return {"needs": 0.0, "wants": 0.0, "savings": 0.0}
     
-    def _get_budget_type_from_category_fixed(self, category: str) -> str:
-        """
-        FIXED: Get budget type using the SAME logic as IndonesianStudentCategories
-        This method ensures CONSISTENCY between dashboard and history
-        """
+    def _get_budget_type_from_category(self, category: str) -> str:
+        """Get budget type using IndonesianStudentCategories"""
         try:
-            # Use the official method from the categories class
             return IndonesianStudentCategories.get_budget_type(category)
             
         except Exception as e:
             logger.error(f"❌ Error getting budget type for category '{category}': {e}")
             
-            # FALLBACK: Use keyword-based categorization (same as the class uses)
+            # Fallback categorization
             category_lower = category.lower()
             
-            # NEEDS keywords (same as IndonesianStudentCategories)
+            # NEEDS keywords
             needs_keywords = [
                 'kos', 'kost', 'sewa', 'listrik', 'air', 'tempat tinggal',
                 'makan', 'makanan', 'nasi', 'lauk', 'groceries', 'masak',
@@ -706,7 +590,7 @@ class FinanceService:
                 'obat', 'dokter', 'shampo', 'sabun', 'pasta gigi', 'kesehatan'
             ]
             
-            # SAVINGS keywords (same as IndonesianStudentCategories)
+            # SAVINGS keywords
             savings_keywords = [
                 'tabungan', 'saving', 'simpan', 'deposito', 'menabung',
                 'dana darurat', 'emergency', 'darurat', 'cadangan',
@@ -714,7 +598,7 @@ class FinanceService:
                 'modal usaha', 'masa depan', 'pensiun'
             ]
             
-            # Check NEEDS first (highest priority)
+            # Check NEEDS first
             for keyword in needs_keywords:
                 if keyword in category_lower:
                     return "needs"
@@ -724,15 +608,8 @@ class FinanceService:
                 if keyword in category_lower:
                     return "savings"
             
-            # Default to WANTS (everything else goes here)
+            # Default to WANTS
             return "wants"
-    
-    # Wrapper method for backward compatibility
-    async def get_current_month_spending_by_budget_type(self, user_id: str) -> Dict[str, float]:
-        """
-        Wrapper method that calls the fixed version for backward compatibility
-        """
-        return await self.get_current_month_spending_by_budget_type_fixed(user_id)
     
     async def _calculate_real_total_savings(self, user_id: str) -> float:
         """Calculate real total savings (income - expenses + initial savings)"""
@@ -764,7 +641,7 @@ class FinanceService:
             # Calculate real savings
             real_savings = initial_savings + total_income - total_expense
             
-            logger.info(f"💰 Real total savings calculated with {self.parser_type}: {self.format_currency(real_savings)}")
+            logger.info(f"💰 Real total savings calculated: {self.format_currency(real_savings)}")
             return real_savings
             
         except Exception as e:
@@ -842,18 +719,16 @@ class FinanceService:
                 "sync_status": {
                     "needs_sync": False,
                     "last_sync": now_for_db()
-                },
-                "parser_info": self.get_parser_info()
+                }
             }
             
-            logger.info(f"📊 Financial dashboard generated with {self.parser_type}")
+            logger.info(f"📊 Financial dashboard generated")
             return dashboard_data
             
         except Exception as e:
             logger.error(f"❌ Error generating financial dashboard: {e}")
             return {
-                "error": str(e),
-                "parser_info": self.get_parser_info()
+                "error": str(e)
             }
     
     async def get_financial_dashboard_50_30_20(self, user_id: str) -> Dict[str, Any]:
@@ -912,205 +787,8 @@ class FinanceService:
         except Exception as e:
             logger.error(f"❌ Error generating 50/30/20 dashboard: {e}")
             return {
-                "error": str(e),
-                "parser_info": self.get_parser_info()
+                "error": str(e)
             }
-    
-    # ==========================================
-    # PENDING DATA METHODS - FOR CHATBOT INTEGRATION
-    # ==========================================
-    
-    def confirm_pending_data(self, pending_id: str, user_id: str, confirmed: bool) -> Dict[str, Any]:
-        """FIXED: Confirm pending financial data - Synchronous approach to avoid event loop conflicts"""
-        try:
-            # Get pending data
-            pending_doc = self.db.pending_financial_data.find_one({
-                "_id": ObjectId(pending_id),
-                "user_id": user_id,
-                "is_confirmed": False
-            })
-            
-            if not pending_doc:
-                return {"success": False, "message": "Pending data not found"}
-            
-            if confirmed:
-                # Create actual transaction or savings goal
-                data_type = pending_doc["data_type"]
-                parsed_data = pending_doc["parsed_data"]
-                
-                if data_type in ["income", "expense", "transaction"]:
-                    # Create transaction - FIXED: Use sync approach
-                    transaction_data = {
-                        "type": parsed_data.get("type", data_type),
-                        "amount": parsed_data["amount"],
-                        "category": parsed_data["category"],
-                        "description": parsed_data.get("description", ""),
-                        "date": self._parse_datetime_from_string(parsed_data.get("date")),
-                        "source": "chat",
-                        "chat_message_id": pending_doc["chat_message_id"],
-                        "conversation_id": pending_doc["conversation_id"]
-                    }
-                    
-                    # CRITICAL FIX: Use sync method to create transaction
-                    transaction = self._create_transaction_sync(user_id, transaction_data)
-                    
-                    result_data = {
-                        "type": "transaction",
-                        "data": {
-                            "id": transaction["id"],
-                            "type": transaction["type"],
-                            "amount": transaction["amount"],
-                            "category": transaction["category"],
-                            "description": transaction["description"],
-                            "date": transaction["date"]
-                        }
-                    }
-                    
-                elif data_type == "savings_goal":
-                    # Create savings goal - FIXED: Use sync approach
-                    goal_data = {
-                        "item_name": parsed_data["item_name"],
-                        "target_amount": parsed_data["target_amount"],
-                        "description": parsed_data.get("description", ""),
-                        "target_date": self._parse_datetime_from_string(parsed_data.get("target_date")),
-                        "source": "chat",
-                        "chat_message_id": pending_doc["chat_message_id"],
-                        "conversation_id": pending_doc["conversation_id"]
-                    }
-                    
-                    # CRITICAL FIX: Use sync method to create savings goal
-                    goal = self._create_savings_goal_sync(user_id, goal_data)
-                    
-                    result_data = {
-                        "type": "savings_goal",
-                        "data": {
-                            "id": goal["id"],
-                            "item_name": goal["item_name"],
-                            "target_amount": goal["target_amount"],
-                            "description": goal["description"],
-                            "target_date": goal["target_date"]
-                        }
-                    }
-                
-                # Mark as confirmed
-                self.db.pending_financial_data.update_one(
-                    {"_id": ObjectId(pending_id)},
-                    {"$set": {"is_confirmed": True, "confirmed_at": now_for_db()}}
-                )
-                
-                logger.info(f"✅ Pending data confirmed with {self.parser_type}: {pending_id}")
-                
-                return {
-                    "success": True,
-                    "message": "Data berhasil disimpan",
-                    **result_data,
-                    "parser_info": self.get_parser_info()
-                }
-                
-            else:
-                # Mark as cancelled
-                self.db.pending_financial_data.update_one(
-                    {"_id": ObjectId(pending_id)},
-                    {"$set": {"is_confirmed": True, "cancelled_at": now_for_db()}}
-                )
-                
-                logger.info(f"❌ Pending data cancelled: {pending_id}")
-                
-                return {
-                    "success": True,
-                    "message": "Data dibatalkan",
-                    "parser_info": self.get_parser_info()
-                }
-            
-        except Exception as e:
-            logger.error(f"❌ Error confirming pending data: {e}")
-            return {
-                "success": False,
-                "message": str(e),
-                "parser_info": self.get_parser_info()
-            }
-    
-    def _create_transaction_sync(self, user_id: str, transaction_data: Dict[str, Any]) -> Dict[str, Any]:
-        """FIXED: Synchronous transaction creation to avoid event loop conflicts"""
-        try:
-            now = now_for_db()
-            
-            # Create transaction document
-            transaction_doc = {
-                "user_id": user_id,
-                "type": transaction_data["type"],
-                "amount": transaction_data["amount"],
-                "category": transaction_data["category"],
-                "description": transaction_data.get("description", ""),
-                "date": transaction_data.get("date", now),
-                "status": TransactionStatus.CONFIRMED.value,
-                "source": transaction_data.get("source", "manual"),
-                "tags": transaction_data.get("tags", []),
-                "notes": transaction_data.get("notes"),
-                "chat_message_id": transaction_data.get("chat_message_id"),
-                "conversation_id": transaction_data.get("conversation_id"),
-                "created_at": now,
-                "updated_at": now,
-                "confirmed_at": now
-            }
-            
-            result = self.db.transactions.insert_one(transaction_doc)
-            transaction_id = str(result.inserted_id)
-            
-            logger.info(f"✅ Transaction created (sync): {transaction_id}")
-            
-            return {
-                "id": transaction_id,
-                "type": transaction_data["type"],
-                "amount": transaction_data["amount"],
-                "category": transaction_data["category"],
-                "description": transaction_data.get("description", ""),
-                "date": transaction_data.get("date", now)
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ Error creating transaction (sync): {e}")
-            raise
-    
-    def _create_savings_goal_sync(self, user_id: str, goal_data: Dict[str, Any]) -> Dict[str, Any]:
-        """FIXED: Synchronous savings goal creation to avoid event loop conflicts"""
-        try:
-            now = now_for_db()
-            
-            goal_doc = {
-                "user_id": user_id,
-                "item_name": goal_data["item_name"],
-                "target_amount": goal_data["target_amount"],
-                "current_amount": goal_data.get("current_amount", 0.0),
-                "description": goal_data.get("description"),
-                "target_date": goal_data.get("target_date"),
-                "status": SavingsGoalStatus.ACTIVE.value,
-                "monthly_target": goal_data.get("monthly_target"),
-                "source": goal_data.get("source", "manual"),
-                "tags": goal_data.get("tags", []),
-                "notes": goal_data.get("notes"),
-                "chat_message_id": goal_data.get("chat_message_id"),
-                "conversation_id": goal_data.get("conversation_id"),
-                "created_at": now,
-                "updated_at": now
-            }
-            
-            result = self.db.savings_goals.insert_one(goal_doc)
-            goal_id = str(result.inserted_id)
-            
-            logger.info(f"✅ Savings goal created (sync): {goal_id}")
-            
-            return {
-                "id": goal_id,
-                "item_name": goal_data["item_name"],
-                "target_amount": goal_data["target_amount"],
-                "description": goal_data.get("description"),
-                "target_date": goal_data.get("target_date")
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ Error creating savings goal (sync): {e}")
-            raise
     
     # ==========================================
     # UTILITY METHODS

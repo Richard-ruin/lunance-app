@@ -1,12 +1,12 @@
-// lib/services/finance_service.dart - COMPLETE VERSION WITHOUT DEBUG PRINT
+// lib/services/finance_service.dart - COMPLETE FIXED VERSION
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../config/app_config.dart';
+import 'package:flutter/foundation.dart';
 
 class FinanceService {
-  static const String baseUrl = 'http://192.168.236.195:8000/api/v1';
+  static const String baseUrl = 'http://192.168.101.23:8000/api/v1';
   static const _storage = FlutterSecureStorage();
 
   Future<Map<String, String>> get _authHeaders async {
@@ -17,7 +17,7 @@ class FinanceService {
     };
   }
 
-  // ===== MAIN FINANCE ENDPOINTS =====
+  // ===== MAIN FINANCE ENDPOINTS FOR 4 TABS =====
 
   /// 1. Dashboard dengan 50/30/20 Method (Dashboard Tab)
   Future<Map<String, dynamic>> getStudentDashboard() async {
@@ -41,27 +41,33 @@ class FinanceService {
 
       return result;
     } catch (e) {
+      debugPrint('❌ FinanceService: Dashboard error - $e');
       return {
         'success': false,
-        'message': 'Gagal mengambil dashboard 50/30/20: ${e.toString()}',
+        'message': 'Gagal mengambil dashboard: ${e.toString()}',
       };
     }
   }
 
-  /// 2. Analytics dengan Budget Type Analysis (Analytics Tab)
+  /// 2. Analytics dengan Budget Type Analysis (Analytics Tab) - ENHANCED
   Future<Map<String, dynamic>> getAnalytics({
     String period = 'monthly',
+    String chartType = 'expense', // NEW: income, expense, comparison
     DateTime? startDate,
     DateTime? endDate,
   }) async {
     try {
       final queryParams = <String, String>{
         'period': period,
+        'chart_type': chartType, // NEW parameter
       };
 
-      if (startDate != null)
+      if (startDate != null) {
         queryParams['start_date'] = startDate.toIso8601String();
-      if (endDate != null) queryParams['end_date'] = endDate.toIso8601String();
+      }
+      if (endDate != null) {
+        queryParams['end_date'] = endDate.toIso8601String();
+      }
 
       final uri = Uri.parse('$baseUrl/finance/analytics')
           .replace(queryParameters: queryParams);
@@ -71,8 +77,23 @@ class FinanceService {
         headers: await _authHeaders,
       );
 
-      return _handleResponse(response);
+      final result = _handleResponse(response);
+      
+      // Enhanced logging for analytics
+      if (result['success'] == true) {
+        debugPrint('✅ FinanceService: Analytics loaded - Period: $period, Chart: $chartType');
+        final data = result['data'] as Map<String, dynamic>?;
+        if (data != null) {
+          final rawData = data['raw_data'] as List?;
+          debugPrint('📊 Analytics raw data points: ${rawData?.length ?? 0}');
+        }
+      } else {
+        debugPrint('❌ FinanceService: Analytics failed - ${result['message']}');
+      }
+
+      return result;
     } catch (e) {
+      debugPrint('❌ FinanceService: Analytics error - $e');
       return {
         'success': false,
         'message': 'Gagal mengambil analytics: ${e.toString()}',
@@ -104,9 +125,12 @@ class FinanceService {
       if (type != null) queryParams['type'] = type;
       if (budgetType != null) queryParams['budget_type'] = budgetType;
       if (category != null) queryParams['category'] = category;
-      if (startDate != null)
+      if (startDate != null) {
         queryParams['start_date'] = startDate.toIso8601String();
-      if (endDate != null) queryParams['end_date'] = endDate.toIso8601String();
+      }
+      if (endDate != null) {
+        queryParams['end_date'] = endDate.toIso8601String();
+      }
       if (search != null) queryParams['search'] = search;
 
       final uri = Uri.parse('$baseUrl/finance/history')
@@ -117,8 +141,15 @@ class FinanceService {
         headers: await _authHeaders,
       );
 
-      return _handleResponse(response);
+      final result = _handleResponse(response);
+      
+      if (result['success'] == true) {
+        debugPrint('✅ FinanceService: History loaded - Type: $type, Budget: $budgetType');
+      }
+
+      return result;
     } catch (e) {
+      debugPrint('❌ FinanceService: History error - $e');
       return {
         'success': false,
         'message': 'Gagal mengambil history: ${e.toString()}',
@@ -141,9 +172,12 @@ class FinanceService {
       };
 
       if (type != null) queryParams['type'] = type;
-      if (startDate != null)
+      if (startDate != null) {
         queryParams['start_date'] = startDate.toIso8601String();
-      if (endDate != null) queryParams['end_date'] = endDate.toIso8601String();
+      }
+      if (endDate != null) {
+        queryParams['end_date'] = endDate.toIso8601String();
+      }
 
       final uri = Uri.parse('$baseUrl/finance/export')
           .replace(queryParameters: queryParams);
@@ -153,8 +187,15 @@ class FinanceService {
         headers: await _authHeaders,
       );
 
-      return _handleResponse(response);
+      final result = _handleResponse(response);
+      
+      if (result['success'] == true) {
+        debugPrint('✅ FinanceService: Export prepared - Format: $format, Type: $type');
+      }
+
+      return result;
     } catch (e) {
+      debugPrint('❌ FinanceService: Export error - $e');
       return {
         'success': false,
         'message': 'Gagal export data: ${e.toString()}',
@@ -173,9 +214,12 @@ class FinanceService {
         'period': period,
       };
 
-      if (startDate != null)
+      if (startDate != null) {
         queryParams['start_date'] = startDate.toIso8601String();
-      if (endDate != null) queryParams['end_date'] = endDate.toIso8601String();
+      }
+      if (endDate != null) {
+        queryParams['end_date'] = endDate.toIso8601String();
+      }
 
       final uri = Uri.parse('$baseUrl/finance/reports/summary')
           .replace(queryParameters: queryParams);
@@ -185,8 +229,15 @@ class FinanceService {
         headers: await _authHeaders,
       );
 
-      return _handleResponse(response);
+      final result = _handleResponse(response);
+      
+      if (result['success'] == true) {
+        debugPrint('✅ FinanceService: Summary report generated - Period: $period');
+      }
+
+      return result;
     } catch (e) {
+      debugPrint('❌ FinanceService: Summary report error - $e');
       return {
         'success': false,
         'message': 'Gagal generate summary report: ${e.toString()}',
@@ -204,8 +255,15 @@ class FinanceService {
         headers: await _authHeaders,
       );
 
-      return _handleResponse(response);
+      final result = _handleResponse(response);
+      
+      if (result['success'] == true) {
+        debugPrint('✅ FinanceService: Categories loaded');
+      }
+
+      return result;
     } catch (e) {
+      debugPrint('❌ FinanceService: Categories error - $e');
       return {
         'success': false,
         'message': 'Gagal mengambil kategori: ${e.toString()}',
@@ -221,8 +279,15 @@ class FinanceService {
         headers: await _authHeaders,
       );
 
-      return _handleResponse(response);
+      final result = _handleResponse(response);
+      
+      if (result['success'] == true) {
+        debugPrint('✅ FinanceService: Stats loaded');
+      }
+
+      return result;
     } catch (e) {
+      debugPrint('❌ FinanceService: Stats error - $e');
       return {
         'success': false,
         'message': 'Gagal mengambil statistik: ${e.toString()}',
@@ -259,8 +324,15 @@ class FinanceService {
         body: jsonEncode(body),
       );
 
-      return _handleResponse(response);
+      final result = _handleResponse(response);
+      
+      if (result['success'] == true) {
+        debugPrint('✅ FinanceService: Transaction created - $type: ${_formatCurrency(amount)}');
+      }
+
+      return result;
     } catch (e) {
+      debugPrint('❌ FinanceService: Create transaction error - $e');
       return {
         'success': false,
         'message': 'Gagal membuat transaksi: ${e.toString()}',
@@ -296,8 +368,15 @@ class FinanceService {
         body: jsonEncode(body),
       );
 
-      return _handleResponse(response);
+      final result = _handleResponse(response);
+      
+      if (result['success'] == true) {
+        debugPrint('✅ FinanceService: Transaction updated - $transactionId');
+      }
+
+      return result;
     } catch (e) {
+      debugPrint('❌ FinanceService: Update transaction error - $e');
       return {
         'success': false,
         'message': 'Gagal update transaksi: ${e.toString()}',
@@ -313,8 +392,15 @@ class FinanceService {
         headers: await _authHeaders,
       );
 
-      return _handleResponse(response);
+      final result = _handleResponse(response);
+      
+      if (result['success'] == true) {
+        debugPrint('✅ FinanceService: Transaction deleted - $transactionId');
+      }
+
+      return result;
     } catch (e) {
+      debugPrint('❌ FinanceService: Delete transaction error - $e');
       return {
         'success': false,
         'message': 'Gagal hapus transaksi: ${e.toString()}',
@@ -347,8 +433,15 @@ class FinanceService {
         body: jsonEncode(body),
       );
 
-      return _handleResponse(response);
+      final result = _handleResponse(response);
+      
+      if (result['success'] == true) {
+        debugPrint('✅ FinanceService: Savings goal created - $itemName: ${_formatCurrency(targetAmount)}');
+      }
+
+      return result;
     } catch (e) {
+      debugPrint('❌ FinanceService: Create savings goal error - $e');
       return {
         'success': false,
         'message': 'Gagal membuat target tabungan: ${e.toString()}',
@@ -372,8 +465,7 @@ class FinanceService {
       if (itemName != null) body['item_name'] = itemName;
       if (targetAmount != null) body['target_amount'] = targetAmount;
       if (description != null) body['description'] = description;
-      if (targetDate != null)
-        body['target_date'] = targetDate.toIso8601String();
+      if (targetDate != null) body['target_date'] = targetDate.toIso8601String();
       if (monthlyTarget != null) body['monthly_target'] = monthlyTarget;
       if (status != null) body['status'] = status;
 
@@ -383,8 +475,15 @@ class FinanceService {
         body: jsonEncode(body),
       );
 
-      return _handleResponse(response);
+      final result = _handleResponse(response);
+      
+      if (result['success'] == true) {
+        debugPrint('✅ FinanceService: Savings goal updated - $goalId');
+      }
+
+      return result;
     } catch (e) {
+      debugPrint('❌ FinanceService: Update savings goal error - $e');
       return {
         'success': false,
         'message': 'Gagal update target tabungan: ${e.toString()}',
@@ -410,8 +509,15 @@ class FinanceService {
         body: jsonEncode(body),
       );
 
-      return _handleResponse(response);
+      final result = _handleResponse(response);
+      
+      if (result['success'] == true) {
+        debugPrint('✅ FinanceService: Savings added to goal - ${_formatCurrency(amount)} to $goalId');
+      }
+
+      return result;
     } catch (e) {
+      debugPrint('❌ FinanceService: Add savings error - $e');
       return {
         'success': false,
         'message': 'Gagal menambah tabungan: ${e.toString()}',
@@ -427,8 +533,15 @@ class FinanceService {
         headers: await _authHeaders,
       );
 
-      return _handleResponse(response);
+      final result = _handleResponse(response);
+      
+      if (result['success'] == true) {
+        debugPrint('✅ FinanceService: Savings goal deleted - $goalId');
+      }
+
+      return result;
     } catch (e) {
+      debugPrint('❌ FinanceService: Delete savings goal error - $e');
       return {
         'success': false,
         'message': 'Gagal hapus target tabungan: ${e.toString()}',
@@ -455,8 +568,15 @@ class FinanceService {
         body: jsonEncode(body),
       );
 
-      return _handleResponse(response);
+      final result = _handleResponse(response);
+      
+      if (result['success'] == true) {
+        debugPrint('✅ FinanceService: Budget reset successfully');
+      }
+
+      return result;
     } catch (e) {
+      debugPrint('❌ FinanceService: Budget reset error - $e');
       return {
         'success': false,
         'message': 'Gagal reset budget: ${e.toString()}',
@@ -472,8 +592,15 @@ class FinanceService {
         headers: await _authHeaders,
       );
 
-      return _handleResponse(response);
+      final result = _handleResponse(response);
+      
+      if (result['success'] == true) {
+        debugPrint('✅ FinanceService: Budget status loaded');
+      }
+
+      return result;
     } catch (e) {
+      debugPrint('❌ FinanceService: Budget status error - $e');
       return {
         'success': false,
         'message': 'Gagal mengambil status budget: ${e.toString()}',
@@ -502,6 +629,11 @@ class FinanceService {
   /// Validate transaction type
   bool isValidTransactionType(String type) {
     return ['income', 'expense'].contains(type.toLowerCase());
+  }
+
+  /// Validate chart type
+  bool isValidChartType(String chartType) {
+    return ['income', 'expense', 'comparison'].contains(chartType.toLowerCase());
   }
 
   /// Validate amount
@@ -583,10 +715,24 @@ class FinanceService {
     }
   }
 
+  /// Get chart type display name
+  String getChartTypeName(String chartType) {
+    switch (chartType.toLowerCase()) {
+      case 'income':
+        return 'Chart Pemasukan';
+      case 'expense':
+        return 'Chart Pengeluaran';
+      case 'comparison':
+        return 'Chart Perbandingan';
+      default:
+        return 'Chart Keuangan';
+    }
+  }
+
   // ===== UTILITY METHODS =====
 
   /// Format currency amount
-  String formatCurrency(double amount) {
+  String _formatCurrency(double amount) {
     return 'Rp ${amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')}';
   }
 
@@ -602,116 +748,111 @@ class FinanceService {
 
       return double.parse(cleanString);
     } catch (e) {
+      debugPrint('❌ FinanceService: Error parsing currency $currencyString: $e');
       return 0.0;
     }
   }
 
-  /// Calculate percentage
-  double calculatePercentage(double part, double whole) {
-    if (whole == 0) return 0.0;
-    return (part / whole) * 100;
-  }
-
-  /// Calculate 50/30/20 allocation
-  Map<String, double> calculate503020Allocation(double monthlyIncome) {
-    return {
-      'needs': monthlyIncome * 0.5,
-      'wants': monthlyIncome * 0.3,
-      'savings': monthlyIncome * 0.2,
-    };
-  }
-
-  // ===== HELPER METHODS =====
-
-  void _ensureRequiredFields(Map<String, dynamic> data) {
-    // Ensure quick_stats exists
-    if (data['quick_stats'] == null) {
-      data['quick_stats'] = {
-        'real_total_savings': 0.0,
-        'monthly_income': 0.0,
-        'current_month_spending': {
-          'needs': 0.0,
-          'wants': 0.0,
-          'savings': 0.0,
-        },
-        'formatted_real_total_savings': 'Rp 0',
-        'formatted_monthly_income': 'Rp 0',
-        'formatted_spending': {
-          'needs': 'Rp 0',
-          'wants': 'Rp 0',
-          'savings': 'Rp 0',
+  /// Get current user balance (mock implementation)
+  Future<double> getCurrentBalance() async {
+    try {
+      // This would typically call an endpoint to get current balance
+      // For now, return a calculated balance from recent transactions
+      final dashboardData = await getStudentDashboard();
+      if (dashboardData['success'] == true) {
+        final data = dashboardData['data'] as Map<String, dynamic>?;
+        if (data != null) {
+          final quickStats = data['quick_stats'] as Map<String, dynamic>?;
+          if (quickStats != null) {
+            return _safeDouble(quickStats['real_total_savings']);
+          }
         }
-      };
-    }
-
-    // Ensure financial_summary exists
-    if (data['financial_summary'] == null) {
-      final quickStats = data['quick_stats'];
-      if (quickStats != null) {
-        final monthlyIncome = _safeDouble(quickStats['monthly_income']);
-        final spending = quickStats['current_month_spending'] ?? {};
-        final totalExpense = _safeDouble(spending['needs']) +
-            _safeDouble(spending['wants']) +
-            _safeDouble(spending['savings']);
-        final netBalance = monthlyIncome - totalExpense;
-        final savingsRate =
-            monthlyIncome > 0 ? (netBalance / monthlyIncome * 100) : 0.0;
-
-        data['financial_summary'] = {
-          'monthly_income': monthlyIncome,
-          'monthly_expense': totalExpense,
-          'net_balance': netBalance,
-          'savings_rate': savingsRate,
-        };
       }
+      return 0.0;
+    } catch (e) {
+      debugPrint('❌ FinanceService: Error getting current balance: $e');
+      return 0.0;
     }
+  }
 
-    // Ensure budget_overview exists
-    if (data['budget_overview'] == null) {
-      final quickStats = data['quick_stats'];
-      if (quickStats != null) {
+  /// Calculate budget utilization percentage
+  double calculateBudgetUtilization(double monthlyIncome, Map<String, dynamic> spending) {
+    try {
+      final totalSpending = _safeDouble(spending['needs']) +
+          _safeDouble(spending['wants']) +
+          _safeDouble(spending['savings']);
+      
+      return monthlyIncome > 0 ? (totalSpending / monthlyIncome) * 100 : 0.0;
+    } catch (e) {
+      debugPrint('❌ FinanceService: Error calculating budget utilization: $e');
+      return 0.0;
+    }
+  }
+
+  /// FIXED: Add missing _ensureRequiredFields method
+  void _ensureRequiredFields(Map<String, dynamic> data) {
+    try {
+      // Ensure quick_stats exists
+      if (!data.containsKey('quick_stats')) {
+        data['quick_stats'] = <String, dynamic>{};
+      }
+
+      final quickStats = data['quick_stats'] as Map<String, dynamic>;
+      
+      // Ensure required quick_stats fields exist
+      quickStats['real_total_savings'] ??= 0.0;
+      quickStats['monthly_income'] ??= 0.0;
+      quickStats['current_month_spending'] ??= <String, dynamic>{
+        'needs': 0.0,
+        'wants': 0.0,
+        'savings': 0.0,
+      };
+
+      // Ensure financial_summary exists
+      if (!data.containsKey('financial_summary')) {
+        data['financial_summary'] = <String, dynamic>{};
+      }
+
+      // Ensure budget_overview exists
+      if (!data.containsKey('budget_overview')) {
         final monthlyIncome = _safeDouble(quickStats['monthly_income']);
-        final spending = quickStats['current_month_spending'] ?? {};
-
+        final spending = quickStats['current_month_spending'] as Map<String, dynamic>? ?? {};
+        
         data['budget_overview'] = {
           'monthly_income': monthlyIncome,
+          'formatted_monthly_income': _formatCurrency(monthlyIncome),
           'allocation': {
             'needs': {
               'budget': monthlyIncome * 0.5,
               'spent': _safeDouble(spending['needs']),
-              'remaining':
-                  (monthlyIncome * 0.5) - _safeDouble(spending['needs']),
+              'remaining': (monthlyIncome * 0.5) - _safeDouble(spending['needs']),
               'percentage_used': monthlyIncome > 0
-                  ? (_safeDouble(spending['needs']) /
-                      (monthlyIncome * 0.5) *
-                      100)
+                  ? (_safeDouble(spending['needs']) / (monthlyIncome * 0.5) * 100)
                   : 0,
             },
             'wants': {
               'budget': monthlyIncome * 0.3,
               'spent': _safeDouble(spending['wants']),
-              'remaining':
-                  (monthlyIncome * 0.3) - _safeDouble(spending['wants']),
+              'remaining': (monthlyIncome * 0.3) - _safeDouble(spending['wants']),
               'percentage_used': monthlyIncome > 0
-                  ? (_safeDouble(spending['wants']) /
-                      (monthlyIncome * 0.3) *
-                      100)
+                  ? (_safeDouble(spending['wants']) / (monthlyIncome * 0.3) * 100)
                   : 0,
             },
             'savings': {
               'budget': monthlyIncome * 0.2,
               'spent': _safeDouble(spending['savings']),
-              'remaining':
-                  (monthlyIncome * 0.2) - _safeDouble(spending['savings']),
+              'remaining': (monthlyIncome * 0.2) - _safeDouble(spending['savings']),
               'percentage_used': monthlyIncome > 0
-                  ? (_safeDouble(spending['savings']) /
-                      (monthlyIncome * 0.2) *
-                      100)
+                  ? (_safeDouble(spending['savings']) / (monthlyIncome * 0.2) * 100)
                   : 0,
             },
           },
         };
       }
+
+      debugPrint('✅ FinanceService: Required fields ensured in dashboard data');
+    } catch (e) {
+      debugPrint('❌ FinanceService: Error ensuring required fields: $e');
     }
   }
 
@@ -736,8 +877,7 @@ class FinanceService {
         if (response.statusCode == 400) {
           errorMessage = data['message'] ?? 'Data yang dikirim tidak valid';
           if (errorMessage.contains('setup')) {
-            errorMessage =
-                'Setup keuangan belum dilakukan. Silakan setup terlebih dahulu.';
+            errorMessage = 'Setup keuangan belum dilakukan. Silakan setup terlebih dahulu.';
           }
         } else if (response.statusCode == 401) {
           errorMessage = 'Tidak memiliki akses. Silakan login kembali';
@@ -749,21 +889,20 @@ class FinanceService {
 
         // Add more context for finance-specific errors
         if (errorMessage.contains('export')) {
-          errorMessage =
-              'Gagal export data. Pastikan Anda memiliki data transaksi.';
+          errorMessage = 'Gagal export data. Pastikan Anda memiliki data transaksi.';
         } else if (errorMessage.contains('report')) {
-          errorMessage =
-              'Gagal generate laporan. Coba lagi dalam beberapa saat.';
+          errorMessage = 'Gagal generate laporan. Coba lagi dalam beberapa saat.';
         } else if (errorMessage.contains('dashboard')) {
-          errorMessage =
-              'Gagal memuat dashboard. Periksa koneksi internet Anda.';
+          errorMessage = 'Gagal memuat dashboard. Periksa koneksi internet Anda.';
         } else if (errorMessage.contains('transaction')) {
-          errorMessage =
-              'Gagal memproses transaksi. Periksa data yang dimasukkan.';
+          errorMessage = 'Gagal memproses transaksi. Periksa data yang dimasukkan.';
         } else if (errorMessage.contains('goal')) {
-          errorMessage =
-              'Gagal memproses target tabungan. Periksa data yang dimasukkan.';
+          errorMessage = 'Gagal memproses target tabungan. Periksa data yang dimasukkan.';
+        } else if (errorMessage.contains('analytics')) {
+          errorMessage = 'Gagal memuat analytics. Coba ubah periode atau chart type.';
         }
+
+        debugPrint('❌ FinanceService HTTP Error: ${response.statusCode} - $errorMessage');
 
         return {
           'success': false,
@@ -772,144 +911,63 @@ class FinanceService {
         };
       }
     } catch (e) {
+      String errorMessage = 'Gagal memproses response: ${e.toString()}';
+      
       // Handle specific parsing errors
-      String errorMessage = 'Gagal memproses response dari server';
-
       if (e.toString().contains('FormatException')) {
-        errorMessage = 'Server mengembalikan data yang tidak valid';
-      } else if (e.toString().contains('type')) {
-        errorMessage = 'Format data dari server tidak sesuai';
+        errorMessage = 'Format response dari server tidak valid';
+      } else if (e.toString().contains('SocketException')) {
+        errorMessage = 'Tidak ada koneksi internet';
+      } else if (e.toString().contains('TimeoutException')) {
+        errorMessage = 'Koneksi timeout. Coba lagi nanti.';
       }
+
+      debugPrint('❌ FinanceService Response Error: $errorMessage');
 
       return {
         'success': false,
         'message': errorMessage,
-        'error': e.toString(),
-        'status_code': response.statusCode,
-        'raw_body': response.body,
+        'status_code': 0,
       };
     }
   }
 
-  // ===== TESTING & DEBUG METHODS =====
-
-  /// Test API connectivity
-  Future<Map<String, dynamic>> testConnection() async {
+  /// Get service connection status
+  Future<bool> isConnected() async {
     try {
-      final response = await http
-          .get(
-            Uri.parse('$baseUrl/finance/stats'),
-            headers: await _authHeaders,
-          )
-          .timeout(const Duration(seconds: 10));
-
-      final result = _handleResponse(response);
-
-      if (result['success'] == true) {
-        return {
-          'success': true,
-          'message': 'Koneksi API berhasil',
-          'response_time': DateTime.now().millisecondsSinceEpoch,
-        };
-      } else {
-        return result;
-      }
+      final response = await getStats().timeout(const Duration(seconds: 5));
+      return response['success'] == true;
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Tidak dapat terhubung ke server: ${e.toString()}',
-      };
+      debugPrint('❌ FinanceService: Connection test failed: $e');
+      return false;
     }
   }
 
-  /// Get service status
-  Map<String, dynamic> getServiceStatus() {
+  /// Get service health status  
+  Map<String, dynamic> getServiceHealth() {
     return {
-      'service': 'FinanceService',
-      'version': '1.0.0',
+      'service_name': 'FinanceService',
       'base_url': baseUrl,
-      'endpoints': {
-        'dashboard': '$baseUrl/finance/dashboard',
-        'analytics': '$baseUrl/finance/analytics',
-        'history': '$baseUrl/finance/history',
-        'export': '$baseUrl/finance/export',
-        'summary_report': '$baseUrl/finance/reports/summary',
-        'categories': '$baseUrl/finance/categories',
-        'stats': '$baseUrl/finance/stats',
-        'transactions': '$baseUrl/finance/transactions',
-        'savings_goals': '$baseUrl/finance/savings-goals',
-        'budget_reset': '$baseUrl/finance/budget/reset',
-        'budget_status': '$baseUrl/finance/budget/status',
-      },
+      'version': '1.0.0',
+      'endpoints_available': [
+        'dashboard',
+        'analytics', 
+        'history',
+        'export',
+        'categories',
+        'stats',
+        'transactions',
+        'savings-goals',
+        'budget'
+      ],
       'features': [
         '50/30/20 Budget Method',
-        'Real-time Dashboard',
-        'Budget Type Analytics',
-        'Transaction History',
-        'Financial Reports Export',
-        'Summary Report Generation',
-        'Category Management',
-        'Transaction Management',
-        'Savings Goals Management',
-        'Budget Management',
-      ],
-      'validation_helpers': [
-        'Export Format Validation',
-        'Export Type Validation',
-        'Report Period Validation',
-        'Transaction Type Validation',
-        'Amount Validation',
-      ],
-      'utility_methods': [
-        'Currency Formatting',
-        'Currency Parsing',
-        'Percentage Calculation',
-        '50/30/20 Budget Allocation',
-      ],
-    };
-  }
-
-  /// Get endpoint health status
-  Future<Map<String, dynamic>> getEndpointHealth() async {
-    final endpoints = [
-      {'name': 'dashboard', 'url': '$baseUrl/finance/dashboard'},
-      {'name': 'analytics', 'url': '$baseUrl/finance/analytics'},
-      {'name': 'history', 'url': '$baseUrl/finance/history'},
-      {'name': 'categories', 'url': '$baseUrl/finance/categories'},
-      {'name': 'stats', 'url': '$baseUrl/finance/stats'},
-    ];
-
-    final results = <String, dynamic>{};
-
-    for (final endpoint in endpoints) {
-      try {
-        final response = await http
-            .get(
-              Uri.parse(endpoint['url']!),
-              headers: await _authHeaders,
-            )
-            .timeout(const Duration(seconds: 5));
-
-        results[endpoint['name']!] = {
-          'status': response.statusCode < 500 ? 'healthy' : 'unhealthy',
-          'status_code': response.statusCode,
-          'response_time': DateTime.now().millisecondsSinceEpoch,
-        };
-      } catch (e) {
-        results[endpoint['name']!] = {
-          'status': 'error',
-          'error': e.toString(),
-        };
-      }
-    }
-
-    return {
-      'overall_health':
-          results.values.every((result) => result['status'] == 'healthy')
-              ? 'healthy'
-              : 'degraded',
-      'endpoints': results,
-      'checked_at': DateTime.now().toIso8601String(),
+        'Real-time Analytics',
+        'Transaction Management', 
+        'Savings Goals',
+        'Export & Reports',
+        'Budget Tracking'
+      ]
     };
   }
 }

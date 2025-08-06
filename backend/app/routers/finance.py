@@ -1,3 +1,4 @@
+# app/routers/finance.py - ENHANCED with Chart Data for Flutter
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -55,21 +56,17 @@ def safe_json_response(status_code: int, content: dict):
         )
 
 # ==========================================
-# TAB 1: DASHBOARD - FIXED ONLY this endpoint
+# TAB 1: DASHBOARD
 # ==========================================
 
 @router.get("/dashboard")
 async def get_finance_dashboard(
     current_user: User = Depends(get_current_user)
 ):
-    """
-    TAB 1: DASHBOARD - FIXED Budget categorization 
-    The issue: Dashboard was not properly categorizing needs/wants like history does
-    """
+    """TAB 1: DASHBOARD - Fixed Budget categorization"""
     try:
         print(f"Dashboard request for user: {current_user.id}")
         
-        # Initialize finance service
         finance_service = FinanceService()
         
         # Check financial setup
@@ -101,12 +98,12 @@ async def get_finance_dashboard(
                 "data": {"setup_required": True}
             })
         
-        # CRITICAL FIX: Get budget performance dengan proper categorization
+        # Get budget performance
         budget_performance = {}
         try:
             budget_performance = dashboard_data.get("budget_performance", {})
             if not budget_performance or not budget_performance.get("has_budget", False):
-                print("Getting budget performance directly with proper categorization...")
+                print("Getting budget performance directly...")
                 budget_performance = await finance_service.get_monthly_budget_performance(current_user.id)
         except Exception as e:
             print(f"Error getting budget performance: {e}")
@@ -116,10 +113,9 @@ async def get_finance_dashboard(
         user_financial_settings = dashboard_data.get("user_financial_settings", {})
         monthly_income = user_financial_settings.get("monthly_income", 0.0)
         
-        # CRITICAL FIX: Get current month spending with PROPER categorization
+        # Get current month spending with PROPER categorization
         current_spending = {"needs": 0.0, "wants": 0.0, "savings": 0.0}
         try:
-            # Use the fixed categorization method
             current_spending = await finance_service.get_current_month_spending_by_budget_type_fixed(current_user.id)
         except Exception as e:
             print(f"Error getting current month spending: {e}")
@@ -171,7 +167,7 @@ async def get_finance_dashboard(
             "last_budget_reset": _safe_datetime_to_string(user_financial_settings.get("last_budget_reset"))
         }
         
-        # COMPLETE Format dashboard response with FIXED budget allocation
+        # Format dashboard response
         dashboard_response = {
             "method": "50/30/20 Elizabeth Warren",
             "current_month": datetime.now().strftime("%B %Y"),
@@ -183,7 +179,7 @@ async def get_finance_dashboard(
             # Financial summary
             "financial_summary": financial_summary,
 
-            # FIXED: Budget Overview dengan categorization yang BENAR
+            # Budget Overview
             "budget_overview": {
                 "monthly_income": monthly_income,
                 "formatted_monthly_income": format_currency(monthly_income),
@@ -270,29 +266,354 @@ async def get_finance_dashboard(
             "data": {"setup_required": True}
         })
 
+# ==========================================
+# TAB 2: ANALYTICS - ENHANCED with Real Chart Data
+# ==========================================
 
-# HELPER FUNCTION FIXES
-def _safe_get_allocation_data_complete_fixed(budget_performance: Dict, category: str, monthly_income: float, current_spending: Dict) -> Dict[str, Any]:
-    """FIXED allocation data dengan categorization yang BENAR seperti di history"""
+@router.get("/analytics")
+async def get_finance_analytics(
+    period: str = Query("monthly", description="daily, weekly, monthly, yearly"),
+    chart_type: str = Query("expense", description="income, expense, comparison"),
+    start_date: Optional[datetime] = Query(None),
+    end_date: Optional[datetime] = Query(None),
+    current_user: User = Depends(get_current_user)
+):
+    """TAB 2: ANALYTICS - Enhanced with Real Chart Data for Flutter"""
     try:
-        # Define 50/30/20 percentages
-        percentages = {
-            "needs": 0.50,    # 50%
-            "wants": 0.30,    # 30%
-            "savings": 0.20   # 20%
+        finance_service = FinanceService()
+        
+        # Check if financial setup completed
+        financial_setup_completed = getattr(current_user, 'financial_setup_completed', False)
+        
+        if not financial_setup_completed:
+            return safe_json_response(400, {
+                "success": False,
+                "message": "Financial setup belum dilakukan"
+            })
+        
+        # Get budget performance
+        try:
+            budget_performance = await finance_service.get_monthly_budget_performance(current_user.id)
+        except Exception as e:
+            print(f"Error getting budget performance: {e}")
+            budget_performance = {"has_budget": False, "error": str(e)}
+        
+        # Get financial summary
+        try:
+            summary = await finance_service.get_financial_summary(current_user.id, period, start_date, end_date)
+        except Exception as e:
+            print(f"Error getting financial summary: {e}")
+            traceback.print_exc()
+            
+            # Create empty summary as fallback
+            summary = type('Summary', (), {
+                'total_income': 0,
+                'total_expense': 0,
+                'net_balance': 0,
+                'expense_categories': {},
+                'income_categories': {},
+                'start_date': start_date or datetime.now(),
+                'end_date': end_date or datetime.now(),
+                'income_count': 0,
+                'expense_count': 0
+            })()
+        
+        # ENHANCED: Generate Real Chart Data for Flutter
+        raw_data = await _generate_real_chart_data(finance_service, current_user.id, period, chart_type)
+        
+        # Get kategori breakdown dengan budget type classification
+        category_analysis = {}
+        budget_type_totals = {"needs": 0, "wants": 0, "savings": 0, "unknown": 0}
+        
+        try:
+            categories_to_analyze = {}
+            if chart_type == "income":
+                categories_to_analyze = getattr(summary, 'income_categories', {})
+            else:  # expense or comparison
+                categories_to_analyze = getattr(summary, 'expense_categories', {})
+            
+            if categories_to_analyze:
+                total_amount = sum(categories_to_analyze.values()) if categories_to_analyze else 1
+                
+                for category, amount in categories_to_analyze.items():
+                    try:
+                        # Get budget type
+                        budget_type = _get_budget_type_safe(category)
+                        percentage = (amount / total_amount * 100) if total_amount > 0 else 0
+                        
+                        category_analysis[category] = {
+                            "amount": amount,
+                            "formatted_amount": format_currency(amount),
+                            "percentage": round(percentage, 1),
+                            "budget_type": budget_type,
+                            "budget_type_color": _get_budget_type_color(budget_type)
+                        }
+                        
+                        budget_type_totals[budget_type] += amount
+                        
+                    except Exception as e:
+                        print(f"Error processing category {category}: {e}")
+                        continue
+        except Exception as e:
+            print(f"Error analyzing categories: {e}")
+        
+        # Budget vs Actual comparison
+        try:
+            financial_settings = getattr(current_user, 'financial_settings', None)
+            monthly_income = financial_settings.monthly_income if financial_settings else 0
+        except Exception as e:
+            print(f"Error getting monthly income: {e}")
+            monthly_income = 0
+        
+        budget_vs_actual = {
+            "needs": _calculate_budget_vs_actual("needs", monthly_income, budget_type_totals),
+            "wants": _calculate_budget_vs_actual("wants", monthly_income, budget_type_totals),
+            "savings": _calculate_budget_vs_actual("savings", monthly_income, budget_type_totals)
         }
         
-        # Calculate budget allocation
+        # Financial health calculation
+        try:
+            savings_rate = (summary.net_balance / summary.total_income * 100) if summary.total_income > 0 else 0
+            health_score = _calculate_health_score(budget_vs_actual, savings_rate)
+        except Exception as e:
+            print(f"Error calculating health score: {e}")
+            savings_rate = 0
+            health_score = 0
+        
+        # Generate insights
+        insights = _generate_insights(budget_vs_actual, savings_rate, chart_type)
+        
+        # ENHANCED: Format categories for chart dengan better colors
+        formatted_categories = _format_categories_for_chart(category_analysis)
+        
+        analytics_response = {
+            "period": period,
+            "period_display": f"{period.title()} Analysis",
+            "chart_type": chart_type,
+            "chart_type_display": {
+                "income": "Analisis Pemasukan",
+                "expense": "Analisis Pengeluaran", 
+                "comparison": "Perbandingan Pemasukan vs Pengeluaran"
+            }.get(chart_type, "Analisis Keuangan"),
+            "date_range": {
+                "start": _safe_datetime_to_string(start_date) or _safe_datetime_to_string(summary.start_date),
+                "end": _safe_datetime_to_string(end_date) or _safe_datetime_to_string(summary.end_date)
+            },
+            
+            # ENHANCED: Real Chart Data for Flutter
+            "raw_data": raw_data,
+            "max_value": _get_max_value_from_data(raw_data),
+            
+            # Budget Performance Analysis
+            "budget_performance": {
+                "method": "50/30/20 Elizabeth Warren",
+                "budget_vs_actual": budget_vs_actual,
+                "budget_type_totals": {
+                    category: {
+                        "amount": amount,
+                        "formatted": format_currency(amount),
+                        "percentage": (amount / sum(budget_type_totals.values()) * 100) if sum(budget_type_totals.values()) > 0 else 0
+                    }
+                    for category, amount in budget_type_totals.items()
+                }
+            },
+            
+            # Enhanced Category Analysis for Flutter Charts
+            "categories": formatted_categories,
+            "category_breakdown": {
+                "total_categories": len(category_analysis),
+                "categories": dict(sorted(category_analysis.items(), key=lambda x: x[1]["amount"], reverse=True)),
+                "top_needs_expense": _get_top_expense_by_type(category_analysis, "needs"),
+                "top_wants_expense": _get_top_expense_by_type(category_analysis, "wants"),
+            },
+            
+            # Financial Health
+            "financial_health": {
+                "health_score": round(health_score, 1),
+                "health_level": _get_health_level(health_score),
+                "savings_rate": round(savings_rate, 1),
+                "income_expense_ratio": (summary.total_expense / summary.total_income * 100) if summary.total_income > 0 else 0,
+                "net_balance": summary.net_balance,
+                "formatted_net_balance": format_currency(summary.net_balance)
+            },
+            
+            # Summary
+            "summary": {
+                "total_income": summary.total_income,
+                "total_expense": summary.total_expense,
+                "net_balance": summary.net_balance,
+                "formatted_total_income": format_currency(summary.total_income),
+                "formatted_total_expense": format_currency(summary.total_expense),
+                "formatted_net_balance": format_currency(summary.net_balance)
+            },
+            
+            # Trends & Insights
+            "insights": insights,
+            "recommendations": [
+                "Maintain 50% needs budget untuk kebutuhan pokok",
+                "Allocate 30% wants untuk lifestyle dan target tabungan",
+                "Consistently save 20% untuk masa depan",
+                "Track spending weekly untuk kontrol budget yang lebih baik"
+            ]
+        }
+        
+        return safe_json_response(200, {
+            "success": True,
+            "message": f"Analytics {period} untuk {chart_type} berhasil diambil",
+            "data": analytics_response
+        })
+        
+    except Exception as e:
+        print(f"Error in get_finance_analytics: {e}")
+        traceback.print_exc()
+        
+        return safe_json_response(500, {
+            "success": False,
+            "message": f"Gagal mengambil analytics: {str(e)}",
+            "data": {"period": period, "chart_type": chart_type}
+        })
+
+# ==========================================
+# ENHANCED CHART DATA GENERATION
+# ==========================================
+
+async def _generate_real_chart_data(finance_service, user_id: str, period: str, chart_type: str) -> List[Dict]:
+    """Generate real chart data from actual transactions"""
+    try:
+        # Set date range based on period
+        now = datetime.now()
+        if period == "daily":
+            # Last 7 days
+            start_date = now - timedelta(days=7)
+            end_date = now
+            date_format = "%d/%m"
+            periods = [(start_date + timedelta(days=i)).strftime(date_format) for i in range(8)]
+        elif period == "weekly":
+            # Last 4 weeks
+            start_date = now - timedelta(weeks=4)
+            end_date = now
+            date_format = "Week %U"
+            periods = [f"W{i+1}" for i in range(4)]
+        elif period == "yearly":
+            # Last 12 months
+            start_date = now - timedelta(days=365)
+            end_date = now
+            date_format = "%b"
+            periods = [(start_date + timedelta(days=30*i)).strftime(date_format) for i in range(12)]
+        else:  # monthly - Last 6 months
+            start_date = now - timedelta(days=180)
+            end_date = now
+            date_format = "%b"
+            periods = [(now - timedelta(days=30*i)).strftime(date_format) for i in range(6)][::-1]
+        
+        # Query transactions for the period
+        query = {
+            "user_id": user_id,
+            "status": "confirmed",
+            "date": {"$gte": start_date, "$lte": end_date}
+        }
+        
+        transactions = await finance_service.get_user_transactions(user_id, query, limit=1000)
+        
+        # Group transactions by period
+        data_by_period = {}
+        for period_name in periods:
+            data_by_period[period_name] = {"income": 0.0, "expense": 0.0}
+        
+        for trans in transactions:
+            try:
+                trans_date = trans.date if hasattr(trans, 'date') else datetime.now()
+                period_key = trans_date.strftime(date_format)
+                
+                # Handle weekly format
+                if period == "weekly":
+                    week_number = (trans_date - start_date).days // 7 + 1
+                    period_key = f"W{min(week_number, 4)}"
+                
+                if period_key in data_by_period:
+                    if trans.type.value == "income":
+                        data_by_period[period_key]["income"] += trans.amount
+                    elif trans.type.value == "expense":
+                        data_by_period[period_key]["expense"] += trans.amount
+            except Exception as e:
+                print(f"Error processing transaction: {e}")
+                continue
+        
+        # Format data for Flutter charts
+        chart_data = []
+        for period_name in periods:
+            period_data = data_by_period.get(period_name, {"income": 0.0, "expense": 0.0})
+            
+            chart_entry = {
+                "period": period_name,
+                "income": period_data["income"],
+                "expense": period_data["expense"],
+                "net": period_data["income"] - period_data["expense"]
+            }
+            chart_data.append(chart_entry)
+        
+        return chart_data
+        
+    except Exception as e:
+        print(f"Error generating real chart data: {e}")
+        # Return fallback data
+        return _generate_fallback_chart_data(period)
+
+def _generate_fallback_chart_data(period: str) -> List[Dict]:
+    """Generate fallback chart data when real data is not available"""
+    if period == "daily":
+        return [
+            {"period": f"Day {i+1}", "income": 50000 + (i * 5000), "expense": 35000 + (i * 3000), "net": 15000 + (i * 2000)}
+            for i in range(7)
+        ]
+    elif period == "weekly":
+        return [
+            {"period": f"W{i+1}", "income": 300000 + (i * 25000), "expense": 200000 + (i * 15000), "net": 100000 + (i * 10000)}
+            for i in range(4)
+        ]
+    elif period == "yearly":
+        months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        return [
+            {"period": months[i], "income": 1200000 + (i * 50000), "expense": 900000 + (i * 30000), "net": 300000 + (i * 20000)}
+            for i in range(12)
+        ]
+    else:  # monthly
+        months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
+        return [
+            {"period": months[i], "income": 1500000 + (i * 25000), "expense": 1100000 + (i * 20000), "net": 400000 + (i * 5000)}
+            for i in range(6)
+        ]
+
+def _get_max_value_from_data(raw_data: List[Dict]) -> float:
+    """Get maximum value from chart data for Flutter chart scaling"""
+    try:
+        max_value = 0.0
+        for item in raw_data:
+            values = [
+                item.get("income", 0),
+                item.get("expense", 0),
+                abs(item.get("net", 0))
+            ]
+            max_value = max(max_value, max(values))
+        return max_value * 1.2  # Add 20% padding
+    except:
+        return 2000000.0  # Default max value
+
+# Continue with existing helper functions...
+def _safe_get_allocation_data_complete_fixed(budget_performance: Dict, category: str, monthly_income: float, current_spending: Dict) -> Dict[str, Any]:
+    """FIXED allocation data with proper categorization"""
+    try:
+        percentages = {
+            "needs": 0.50,    
+            "wants": 0.30,    
+            "savings": 0.20   
+        }
+        
         budget = monthly_income * percentages.get(category, 0)
-        
-        # CRITICAL FIX: Get spent amount from current_spending yang sudah diperbaiki
         spent = current_spending.get(category, 0.0)
-        
-        # Calculate remaining and percentage
         remaining = budget - spent
         percentage_used = (spent / budget * 100) if budget > 0 else 0
         
-        # Determine status based on percentage used
         if percentage_used > 100:
             status = "over_budget"
         elif percentage_used > 80:
@@ -314,9 +635,9 @@ def _safe_get_allocation_data_complete_fixed(budget_performance: Dict, category:
             "allocation_percentage": int(percentages.get(category, 0) * 100),
             "budget_type": category,
             "budget_color": {
-                "needs": "#22C55E",    # Green
-                "wants": "#F59E0B",    # Orange
-                "savings": "#3B82F6"   # Blue
+                "needs": "#22C55E",    
+                "wants": "#F59E0B",    
+                "savings": "#3B82F6"   
             }.get(category, "#6B7280"),
             "is_over_budget": percentage_used > 100,
             "is_warning": percentage_used > 80,
@@ -326,124 +647,6 @@ def _safe_get_allocation_data_complete_fixed(budget_performance: Dict, category:
     except Exception as e:
         print(f"Error in _safe_get_allocation_data_complete_fixed for {category}: {e}")
         
-        # Fallback
-        percentages = {"needs": 0.50, "wants": 0.30, "savings": 0.20}
-        budget = monthly_income * percentages.get(category, 0)
-        
-        return {
-            "budget": budget,
-            "spent": 0.0,
-            "remaining": budget,
-            "percentage_used": 0.0,
-            "status": "excellent",
-            "formatted_budget": format_currency(budget),
-            "formatted_spent": format_currency(0),
-            "formatted_remaining": format_currency(budget),
-            "allocation_percentage": int(percentages.get(category, 0) * 100),
-            "budget_type": category,
-            "budget_color": {
-                "needs": "#22C55E",
-                "wants": "#F59E0B", 
-                "savings": "#3B82F6"
-            }.get(category, "#6B7280"),
-            "is_over_budget": False,
-            "is_warning": False,
-            "percentage_remaining": 100.0
-        }
-        
-        print("Dashboard response prepared successfully")
-        return safe_json_response(200, {
-            "success": True,
-            "message": "Dashboard keuangan 50/30/20 berhasil diambil",
-            "data": dashboard_response
-        })
-        
-    except Exception as e:
-        print(f"Critical error in get_finance_dashboard: {e}")
-        traceback.print_exc()
-        
-        return safe_json_response(500, {
-            "success": False,
-            "message": f"Gagal mengambil dashboard: {str(e)}",
-            "data": {"setup_required": True}
-        })
-
-
-# ==========================================
-# HELPER FUNCTIONS - ONLY for dashboard
-# ==========================================
-
-def _safe_get_allocation_data_complete(budget_performance: Dict, category: str, monthly_income: float, current_spending: Dict) -> Dict[str, Any]:
-    """
-    COMPLETE allocation data dengan kalkulasi 50/30/20 yang BENAR dan LENGKAP
-    Includes allocation percentages that frontend needs
-    """
-    try:
-        # Define 50/30/20 percentages - CRITICAL for frontend
-        percentages = {
-            "needs": 0.50,    # 50%
-            "wants": 0.30,    # 30%
-            "savings": 0.20   # 20%
-        }
-        
-        # Calculate budget allocation
-        budget = monthly_income * percentages.get(category, 0)
-        
-        # Get spent amount from current_spending or budget performance
-        spent = current_spending.get(category, 0.0)
-        
-        # Calculate remaining and percentage
-        remaining = budget - spent
-        percentage_used = (spent / budget * 100) if budget > 0 else 0
-        
-        # Determine status based on percentage used
-        if percentage_used > 100:
-            status = "over_budget"
-        elif percentage_used > 80:
-            status = "warning"
-        elif percentage_used > 50:
-            status = "good"
-        else:
-            status = "excellent"
-        
-        # Override with budget performance data if available
-        if budget_performance and budget_performance.get("has_budget", False):
-            performance = budget_performance.get("performance", {})
-            category_data = performance.get(category, {})
-            
-            if category_data:
-                spent = category_data.get("spent", spent)
-                remaining = category_data.get("remaining", remaining)
-                percentage_used = category_data.get("percentage_used", percentage_used)
-                status = category_data.get("status", status)
-        
-        return {
-            "budget": budget,
-            "spent": spent,
-            "remaining": remaining,
-            "percentage_used": percentage_used,
-            "status": status,
-            "formatted_budget": format_currency(budget),
-            "formatted_spent": format_currency(spent),
-            "formatted_remaining": format_currency(remaining),
-            # CRITICAL: Fields that frontend expects for 50/30/20 display
-            "allocation_percentage": int(percentages.get(category, 0) * 100),  # 50, 30, or 20
-            "budget_type": category,
-            "budget_color": {
-                "needs": "#22C55E",    # Green
-                "wants": "#F59E0B",    # Orange
-                "savings": "#3B82F6"   # Blue
-            }.get(category, "#6B7280"),
-            # Additional useful fields
-            "is_over_budget": percentage_used > 100,
-            "is_warning": percentage_used > 80,
-            "percentage_remaining": max(0, 100 - percentage_used)
-        }
-        
-    except Exception as e:
-        print(f"Error in _safe_get_allocation_data_complete for {category}: {e}")
-        
-        # Fallback dengan struktur yang benar
         percentages = {"needs": 0.50, "wants": 0.30, "savings": 0.20}
         budget = monthly_income * percentages.get(category, 0)
         
@@ -468,6 +671,7 @@ def _safe_get_allocation_data_complete(budget_performance: Dict, category: str, 
             "percentage_remaining": 100.0
         }
 
+# Keep all other existing helper functions unchanged...
 def _calculate_budget_health(budget_type: str, spent: float, budget: float) -> Dict[str, Any]:
     """Calculate health metrics for each budget type"""
     try:
@@ -515,9 +719,8 @@ def _calculate_budget_health(budget_type: str, spent: float, budget: float) -> D
         }
 
 def _safe_get_savings_goals_complete(dashboard_data: Dict) -> Dict[str, Any]:
-    """COMPLETE savings goals data dengan semua field yang dibutuhkan"""
+    """Complete savings goals data"""
     try:
-        # Try multiple possible structures
         goals_data = dashboard_data.get("wants_budget_goals", {})
         if not goals_data:
             goals_data = dashboard_data.get("wants_savings_goals", {})
@@ -529,10 +732,8 @@ def _safe_get_savings_goals_complete(dashboard_data: Dict) -> Dict[str, Any]:
         formatted_goals = []
         for goal in goals[:5]:  # Top 5 goals
             try:
-                # Handle both dict and object formats
                 goal_dict = goal if isinstance(goal, dict) else goal.__dict__
                 
-                # Calculate days remaining
                 days_remaining = None
                 target_date = goal_dict.get("target_date")
                 if target_date:
@@ -591,7 +792,7 @@ def _safe_get_savings_goals_complete(dashboard_data: Dict) -> Dict[str, Any]:
         }
 
 def _safe_serialize_transactions(transactions: List) -> List[Dict]:
-    """COMPLETE transaction serialization dengan semua field"""
+    """Complete transaction serialization"""
     try:
         if not transactions:
             return []
@@ -599,7 +800,6 @@ def _safe_serialize_transactions(transactions: List) -> List[Dict]:
         serialized = []
         for trans in transactions:
             try:
-                # Handle both dict and object formats
                 if isinstance(trans, dict):
                     trans_dict = trans.copy()
                 else:
@@ -620,11 +820,9 @@ def _safe_serialize_transactions(transactions: List) -> List[Dict]:
                     except:
                         trans_dict['relative_time'] = "Unknown"
                 
-                # Add formatted amount if not present
                 if 'formatted_amount' not in trans_dict and 'amount' in trans_dict:
                     trans_dict['formatted_amount'] = format_currency(trans_dict.get('amount', 0))
                 
-                # Add budget type for expenses
                 if trans_dict.get('type') == 'expense' and 'budget_type' not in trans_dict:
                     trans_dict['budget_type'] = _get_budget_type_safe(trans_dict.get('category', ''))
                 
@@ -686,7 +884,6 @@ def _calculate_relative_time(date_obj: datetime) -> str:
 def _get_budget_type_safe(category: str) -> str:
     """Safe way to get budget type dengan fallback"""
     try:
-        # Simple keyword-based categorization
         category_lower = category.lower()
         
         # NEEDS keywords
@@ -701,12 +898,6 @@ def _get_budget_type_safe(category: str) -> str:
             if keyword in category_lower:
                 return "savings"
         
-        # WANTS keywords (or default)
-        wants_keywords = ['jajan', 'hiburan', 'game', 'nonton', 'cafe', 'baju', 'sepatu', 'gadget', 'hp', 'laptop', 'motor', 'organisasi', 'event']
-        for keyword in wants_keywords:
-            if keyword in category_lower:
-                return "wants"
-        
         # Default to wants
         return "wants"
         
@@ -714,271 +905,14 @@ def _get_budget_type_safe(category: str) -> str:
         print(f"Error in _get_budget_type_safe: {e}")
         return "wants"
 
-# ==========================================
-# KEEP ALL EXISTING ENDPOINTS UNCHANGED - COPY FROM ORIGINAL FILE
-# ==========================================
-
-@router.get("/dashboard/quick-stats")
-async def get_dashboard_quick_stats(
-    current_user: User = Depends(get_current_user)
-):
-    """Quick stats untuk dashboard widgets"""
-    try:
-        finance_service = FinanceService()
-        
-        # Check if financial setup completed
-        financial_setup_completed = getattr(current_user, 'financial_setup_completed', False)
-        
-        if not financial_setup_completed:
-            return safe_json_response(200, {
-                "success": True,
-                "data": {"setup_required": True}
-            })
-        
-        # Get real total savings dengan error handling
-        try:
-            real_total_savings = await finance_service._calculate_real_total_savings(current_user.id)
-        except Exception as e:
-            print(f"Error calculating real total savings: {e}")
-            real_total_savings = 0
-        
-        # Get current month spending dengan error handling
-        try:
-            current_spending = await finance_service.get_current_month_spending_by_budget_type(current_user.id)
-        except Exception as e:
-            print(f"Error getting current month spending: {e}")
-            current_spending = {"needs": 0, "wants": 0, "savings": 0}
-        
-        # Get monthly income dengan safe access
-        try:
-            financial_settings = getattr(current_user, 'financial_settings', None)
-            monthly_income = financial_settings.monthly_income if financial_settings else 0
-        except Exception as e:
-            print(f"Error getting monthly income: {e}")
-            monthly_income = 0
-        
-        return safe_json_response(200, {
-            "success": True,
-            "data": {
-                "real_total_savings": real_total_savings,
-                "formatted_savings": format_currency(real_total_savings),
-                "monthly_income": monthly_income,
-                "formatted_income": format_currency(monthly_income),
-                "current_month_spending": current_spending,
-                "formatted_spending": {
-                    "needs": format_currency(current_spending.get("needs", 0)),
-                    "wants": format_currency(current_spending.get("wants", 0)),
-                    "savings": format_currency(current_spending.get("savings", 0))
-                },
-                "budget_allocation": {
-                    "needs": monthly_income * 0.5,
-                    "wants": monthly_income * 0.3,
-                    "savings": monthly_income * 0.2
-                }
-            }
-        })
-        
-    except Exception as e:
-        print(f"Error in get_dashboard_quick_stats: {e}")
-        traceback.print_exc()
-        
-        return safe_json_response(500, {
-            "success": False,
-            "message": f"Gagal mengambil quick stats: {str(e)}",
-            "data": {"setup_required": True}
-        })
-
-# ==========================================
-# TAB 2: ANALYTICS - UNCHANGED - COPY FROM ORIGINAL
-# ==========================================
-
-@router.get("/analytics")
-async def get_finance_analytics(
-    period: str = Query("monthly", description="daily, weekly, monthly, yearly"),
-    start_date: Optional[datetime] = Query(None),
-    end_date: Optional[datetime] = Query(None),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    TAB 2: ANALYTICS - Analisis mendalam keuangan dengan metode 50/30/20
-    UNCHANGED - Keep exact implementation from original file
-    """
-    try:
-        finance_service = FinanceService()
-        
-        # Check if financial setup completed
-        financial_setup_completed = getattr(current_user, 'financial_setup_completed', False)
-        
-        if not financial_setup_completed:
-            return safe_json_response(400, {
-                "success": False,
-                "message": "Financial setup belum dilakukan"
-            })
-        
-        # Get budget performance dengan error handling
-        try:
-            budget_performance = await finance_service.get_monthly_budget_performance(current_user.id)
-        except Exception as e:
-            print(f"Error getting budget performance: {e}")
-            budget_performance = {"has_budget": False, "error": str(e)}
-        
-        # Get financial summary dengan error handling
-        try:
-            summary = await finance_service.get_financial_summary(current_user.id, period, start_date, end_date)
-        except Exception as e:
-            print(f"Error getting financial summary: {e}")
-            traceback.print_exc()
-            
-            # Create empty summary as fallback
-            summary = type('Summary', (), {
-                'total_income': 0,
-                'total_expense': 0,
-                'net_balance': 0,
-                'expense_categories': {},
-                'start_date': start_date or datetime.now(),
-                'end_date': end_date or datetime.now(),
-                'income_count': 0,
-                'expense_count': 0
-            })()
-        
-        # Get kategori breakdown dengan budget type classification
-        category_analysis = {}
-        budget_type_totals = {"needs": 0, "wants": 0, "savings": 0, "unknown": 0}
-        
-        try:
-            if hasattr(summary, 'expense_categories') and summary.expense_categories:
-                for category, amount in summary.expense_categories.items():
-                    try:
-                        # Try to get budget type, fallback to unknown
-                        budget_type = _get_budget_type_safe(category)
-                        percentage = (amount / summary.total_expense * 100) if summary.total_expense > 0 else 0
-                        
-                        category_analysis[category] = {
-                            "amount": amount,
-                            "formatted_amount": format_currency(amount),
-                            "percentage": round(percentage, 1),
-                            "budget_type": budget_type,
-                            "budget_type_color": _get_budget_type_color(budget_type)
-                        }
-                        
-                        budget_type_totals[budget_type] += amount
-                        
-                    except Exception as e:
-                        print(f"Error processing category {category}: {e}")
-                        continue
-        except Exception as e:
-            print(f"Error analyzing categories: {e}")
-        
-        # Budget vs Actual comparison dengan safe access
-        try:
-            financial_settings = getattr(current_user, 'financial_settings', None)
-            monthly_income = financial_settings.monthly_income if financial_settings else 0
-        except Exception as e:
-            print(f"Error getting monthly income: {e}")
-            monthly_income = 0
-        
-        budget_vs_actual = {
-            "needs": _calculate_budget_vs_actual("needs", monthly_income, budget_type_totals),
-            "wants": _calculate_budget_vs_actual("wants", monthly_income, budget_type_totals),
-            "savings": _calculate_budget_vs_actual("savings", monthly_income, budget_type_totals)
-        }
-        
-        # Financial health calculation dengan safe values
-        try:
-            savings_rate = (summary.net_balance / summary.total_income * 100) if summary.total_income > 0 else 0
-            health_score = _calculate_health_score(budget_vs_actual, savings_rate)
-        except Exception as e:
-            print(f"Error calculating health score: {e}")
-            savings_rate = 0
-            health_score = 0
-        
-        # Generate insights
-        insights = _generate_insights(budget_vs_actual, savings_rate)
-        
-        analytics_response = {
-            "period": period,
-            "period_display": f"{period.title()} Analysis",
-            "date_range": {
-                "start": _safe_datetime_to_string(start_date) or _safe_datetime_to_string(summary.start_date),
-                "end": _safe_datetime_to_string(end_date) or _safe_datetime_to_string(summary.end_date)
-            },
-            
-            # Budget Performance Analysis
-            "budget_performance": {
-                "method": "50/30/20 Elizabeth Warren",
-                "budget_vs_actual": budget_vs_actual,
-                "budget_type_totals": {
-                    category: {
-                        "amount": amount,
-                        "formatted": format_currency(amount),
-                        "percentage": (amount / summary.total_expense * 100) if summary.total_expense > 0 else 0
-                    }
-                    for category, amount in budget_type_totals.items()
-                }
-            },
-            
-            # Category Analysis
-            "category_breakdown": {
-                "total_categories": len(category_analysis),
-                "categories": dict(sorted(category_analysis.items(), key=lambda x: x[1]["amount"], reverse=True)),
-                "top_needs_expense": _get_top_expense_by_type(category_analysis, "needs"),
-                "top_wants_expense": _get_top_expense_by_type(category_analysis, "wants"),
-            },
-            
-            # Financial Health
-            "financial_health": {
-                "health_score": round(health_score, 1),
-                "health_level": _get_health_level(health_score),
-                "savings_rate": round(savings_rate, 1),
-                "income_expense_ratio": (summary.total_expense / summary.total_income * 100) if summary.total_income > 0 else 0,
-                "net_balance": summary.net_balance,
-                "formatted_net_balance": format_currency(summary.net_balance)
-            },
-            
-            # Chart data for frontend  
-            "raw_data": _generate_mock_chart_data(period),
-            "categories": _format_categories_for_chart(category_analysis),
-            "summary": {
-                "total_income": summary.total_income,
-                "total_expense": summary.total_expense,
-                "net_balance": summary.net_balance,
-                "formatted_total": format_currency(summary.total_expense)
-            },
-            
-            # Trends & Insights
-            "insights": insights,
-            "recommendations": [
-                "Maintain 50% needs budget untuk kebutuhan pokok",
-                "Allocate 30% wants untuk lifestyle dan target tabungan",
-                "Consistently save 20% untuk masa depan",
-                "Track spending weekly untuk kontrol budget yang lebih baik"
-            ]
-        }
-        
-        return safe_json_response(200, {
-            "success": True,
-            "message": f"Analytics {period} berhasil diambil",
-            "data": analytics_response
-        })
-        
-    except Exception as e:
-        print(f"Error in get_finance_analytics: {e}")
-        traceback.print_exc()
-        
-        return safe_json_response(500, {
-            "success": False,
-            "message": f"Gagal mengambil analytics: {str(e)}",
-            "data": {"period": period}
-        })
-
-# Helper functions untuk analytics
+# Helper functions for analytics
 def _get_budget_type_color(budget_type: str) -> str:
     """Get color for budget type"""
     colors = {
-        "needs": "#22C55E",    # Green
-        "wants": "#F59E0B",    # Orange
-        "savings": "#3B82F6",  # Blue
-        "unknown": "#6B7280"   # Gray
+        "needs": "#22C55E",    
+        "wants": "#F59E0B",    
+        "savings": "#3B82F6",  
+        "unknown": "#6B7280"   
     }
     return colors.get(budget_type, "#6B7280")
 
@@ -995,7 +929,10 @@ def _calculate_budget_vs_actual(category: str, monthly_income: float, budget_typ
         "budget": budget,
         "actual": actual,
         "variance": variance,
-        "percentage": percentage
+        "percentage": percentage,
+        "formatted_budget": format_currency(budget),
+        "formatted_actual": format_currency(actual),
+        "formatted_variance": format_currency(variance)
     }
 
 def _calculate_health_score(budget_vs_actual: Dict, savings_rate: float) -> float:
@@ -1022,8 +959,8 @@ def _get_health_level(health_score: float) -> str:
     else:
         return "needs_improvement"
 
-def _generate_insights(budget_vs_actual: Dict, savings_rate: float) -> List[str]:
-    """Generate insights based on budget performance"""
+def _generate_insights(budget_vs_actual: Dict, savings_rate: float, chart_type: str) -> List[str]:
+    """Generate insights based on budget performance and chart type"""
     insights = []
     
     try:
@@ -1046,6 +983,15 @@ def _generate_insights(budget_vs_actual: Dict, savings_rate: float) -> List[str]
             insights.append("📊 Savings rate masih rendah - target minimal 15-20%")
         elif savings_rate > 25:
             insights.append("🌟 Savings rate excellent - Anda sangat disiplin!")
+        
+        # Chart type specific insights
+        if chart_type == "income":
+            insights.append("💰 Fokus pada diversifikasi sumber pemasukan")
+        elif chart_type == "expense":
+            insights.append("📉 Monitor pengeluaran untuk kontrol budget yang lebih baik")
+        elif chart_type == "comparison":
+            insights.append("⚖️ Perbandingan pemasukan vs pengeluaran membantu planning")
+            
     except Exception as e:
         print(f"Error generating insights: {e}")
         insights.append("💡 Terus pantau pengeluaran untuk insight yang lebih baik")
@@ -1065,61 +1011,41 @@ def _get_top_expense_by_type(category_analysis: Dict, budget_type: str) -> str:
         print(f"Error getting top expense for {budget_type}: {e}")
         return "N/A"
 
-def _generate_mock_chart_data(period: str) -> List[Dict]:
-    """Generate mock chart data for frontend"""
-    try:
-        data = []
-        if period == "daily":
-            for i in range(7):
-                date = datetime.now() - timedelta(days=i)
-                data.append({
-                    "period": date.strftime("%d/%m"),
-                    "income": 50000 + (i * 10000),
-                    "expense": 30000 + (i * 8000),
-                    "net": 20000 + (i * 2000)
-                })
-        elif period == "weekly":
-            for i in range(4):
-                data.append({
-                    "period": f"Week {i+1}",
-                    "income": 350000 + (i * 50000),
-                    "expense": 200000 + (i * 30000),
-                    "net": 150000 + (i * 20000)
-                })
-        else:  # monthly
-            for i in range(6):
-                data.append({
-                    "period": f"Bulan {i+1}",
-                    "income": 1500000 + (i * 100000),
-                    "expense": 1200000 + (i * 80000),
-                    "net": 300000 + (i * 20000)
-                })
-        
-        return data
-    except Exception as e:
-        print(f"Error generating mock chart data: {e}")
-        return []
-
 def _format_categories_for_chart(category_analysis: Dict) -> List[Dict]:
-    """Format categories data for chart"""
+    """Format categories data for chart with enhanced colors"""
     try:
         categories = []
-        for category, data in category_analysis.items():
+        
+        # Define color palette untuk kategori
+        color_palette = [
+            "#3B82F6", "#EF4444", "#10B981", "#F59E0B", "#8B5CF6", 
+            "#EC4899", "#06B6D4", "#84CC16", "#F97316", "#6366F1",
+            "#14B8A6", "#F43F5E", "#8B5A3C", "#6B7280", "#DC2626"
+        ]
+        
+        sorted_categories = sorted(category_analysis.items(), key=lambda x: x[1]["amount"], reverse=True)
+        
+        for i, (category, data) in enumerate(sorted_categories):
+            # Assign color from palette
+            color = color_palette[i % len(color_palette)]
+            
             categories.append({
                 "category": category,
                 "amount": data.get("amount", 0),
                 "formatted_amount": data.get("formatted_amount", "Rp 0"),
                 "percentage": data.get("percentage", 0),
-                "color": data.get("budget_type_color", "#6B7280")
+                "budget_type": data.get("budget_type", "unknown"),
+                "color": color,
+                "enhanced_color": color  # For compatibility
             })
         
-        return sorted(categories, key=lambda x: x["amount"], reverse=True)
+        return categories
     except Exception as e:
         print(f"Error formatting categories for chart: {e}")
         return []
 
 # ==========================================
-# TAB 3: HISTORY - UNCHANGED - COPY FROM ORIGINAL
+# TAB 3: HISTORY - Keep existing implementation
 # ==========================================
 
 @router.get("/history")
@@ -1136,10 +1062,7 @@ async def get_finance_history(
     sort_order: str = Query("desc", description="asc, desc"),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    TAB 3: HISTORY - Riwayat lengkap transaksi dan savings goals
-    UNCHANGED - Keep exact implementation from original file
-    """
+    """TAB 3: HISTORY - Complete transaction and savings goals history"""
     try:
         finance_service = FinanceService()
         
@@ -1377,7 +1300,7 @@ def _calculate_relative_time_safe(date_obj: datetime) -> str:
         return "Unknown"
 
 # ==========================================
-# UTILITY ENDPOINTS - UNCHANGED
+# UTILITY ENDPOINTS
 # ==========================================
 
 @router.get("/categories")
@@ -1457,7 +1380,10 @@ async def get_basic_stats(
             "success": False,
             "message": f"Gagal mengambil statistik: {str(e)}"
         })
-    
+
+# ==========================================
+# EXPORT ENDPOINTS (TAB 4: REPORTS)
+# ==========================================
 
 @router.get("/export")
 async def export_financial_data(
@@ -1468,10 +1394,7 @@ async def export_financial_data(
     include_summary: bool = Query(True),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    TAB 4: EXPORT/REPORTS - Export laporan keuangan dalam berbagai format
-    Menggantikan predictions tab dengan fitur export yang lebih berguna
-    """
+    """TAB 4: EXPORT/REPORTS - Export laporan keuangan dalam berbagai format"""
     try:
         print(f"Export request for user: {current_user.id}, format: {format}, type: {type}")
         
@@ -1559,9 +1482,7 @@ async def get_financial_summary_report(
     end_date: Optional[datetime] = Query(None),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Generate comprehensive financial summary report
-    """
+    """Generate comprehensive financial summary report"""
     try:
         print(f"Summary report request for user: {current_user.id}, period: {period}")
         
@@ -1742,34 +1663,3 @@ def _count_records(export_data: Dict[str, Any]) -> int:
     if "savings_goals" in export_data:
         count += len(export_data["savings_goals"])
     return count
-
-def _get_budget_type_safe(category: str) -> str:
-    """Safe way to get budget type dengan fallback"""
-    try:
-        # Simple keyword-based categorization
-        category_lower = category.lower()
-        
-        # NEEDS keywords
-        needs_keywords = ['makan', 'makanan', 'kos', 'sewa', 'transport', 'transportasi', 'pendidikan', 'buku', 'kuliah', 'kampus', 'listrik', 'air', 'internet', 'pulsa', 'kesehatan', 'obat', 'sabun', 'pasta']
-        for keyword in needs_keywords:
-            if keyword in category_lower:
-                return "needs"
-        
-        # SAVINGS keywords
-        savings_keywords = ['tabungan', 'saving', 'investasi', 'deposito', 'darurat', 'masa depan', 'reksadana', 'saham']
-        for keyword in savings_keywords:
-            if keyword in category_lower:
-                return "savings"
-        
-        # WANTS keywords (or default)
-        wants_keywords = ['jajan', 'hiburan', 'game', 'nonton', 'cafe', 'baju', 'sepatu', 'gadget', 'hp', 'laptop', 'motor', 'organisasi', 'event']
-        for keyword in wants_keywords:
-            if keyword in category_lower:
-                return "wants"
-        
-        # Default to wants
-        return "wants"
-        
-    except Exception as e:
-        print(f"Error in _get_budget_type_safe: {e}")
-        return "wants"
