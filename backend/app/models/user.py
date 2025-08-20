@@ -1,4 +1,4 @@
-# app/models/user_updated.py - Updated untuk metode 50/30/20
+# app/models/user.py - Updated untuk metode 50/30/20 (No Finance Service Dependencies)
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
@@ -233,7 +233,7 @@ class User(BaseModel):
         """Mengecek apakah setup user sudah lengkap"""
         return self.profile_setup_completed and self.financial_setup_completed
     
-    # === ENHANCED METHODS untuk sistem 50/30/20 ===
+    # === ENHANCED METHODS untuk sistem 50/30/20 (Simplified - No Finance Service) ===
     
     def get_current_budget_allocation(self) -> Dict[str, Any]:
         """Dapatkan alokasi budget 50/30/20 saat ini"""
@@ -252,7 +252,7 @@ class User(BaseModel):
             "allocation": allocation,
             "reset_date": "Tanggal 1 setiap bulan",
             "last_reset": self.financial_settings.last_budget_reset,
-            "needs_budget_remaining": allocation["needs_budget"],  # Will be calculated in service
+            "needs_budget_remaining": allocation["needs_budget"],  # Static without real transaction data
             "wants_budget_remaining": allocation["wants_budget"],
             "savings_budget_remaining": allocation["savings_budget"]
         }
@@ -274,8 +274,7 @@ class User(BaseModel):
     
     def get_real_total_savings(self) -> float:
         """
-        Hitung total tabungan real-time = tabungan_awal + akumulasi_savings
-        Note: Untuk total real-time, gunakan FinanceService._calculate_real_total_savings()
+        Hitung total tabungan (simplified version without finance service)
         """
         if self.financial_settings:
             return self.financial_settings.current_savings or 0.0
@@ -380,13 +379,13 @@ class User(BaseModel):
             ])
         elif health_level == "good":
             tips.extend([
-                "Excellent! Budget 50/30/20 sudah berjalan dengan baik",
+                "Budget 50/30/20 sudah berjalan dengan baik",
                 "Pertimbangkan untuk investasi sederhana dari 20% SAVINGS",
                 "Gunakan surplus WANTS untuk target tabungan barang impian"
             ])
         else:  # excellent
             tips.extend([
-                "🎉 Budget management Anda sudah sangat baik!",
+                "Budget management Anda sudah sangat baik!",
                 "Pertimbangkan untuk belajar investasi jangka panjang", 
                 "Bagikan tips budgeting 50/30/20 ke teman-teman mahasiswa"
             ])
@@ -428,7 +427,7 @@ class User(BaseModel):
             "budget_allocation": self.get_current_budget_allocation(),
             "financial_health_level": self._calculate_financial_health_level(),
             "student_tips": self.get_student_financial_tips(),
-            "budget_method": "5``0/30/20 Elizabeth Warren"
+            "budget_method": "50/30/20 Elizabeth Warren"
         }
         
         return response_data

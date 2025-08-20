@@ -28,10 +28,9 @@ class ConnectionManager:
         await websocket.accept()
         self.active_connections[user_id] = websocket
         
-        # Send connection success message dengan timezone Indonesia
         await self.send_personal_message({
             "type": WSMessageType.SUCCESS,
-            "data": {"message": "Connected to Luna chat"},
+            "data": {"message": "Connected to simple chat"},
             "timestamp": IndonesiaDatetime.now().isoformat(),
             "timezone": "WIB"
         }, user_id)
@@ -45,7 +44,6 @@ class ConnectionManager:
             try:
                 await self.active_connections[user_id].send_text(json.dumps(message))
             except:
-                # Connection closed, remove from active connections
                 self.disconnect(user_id)
     
     async def broadcast_to_user(self, message: dict, user_id: str):
@@ -56,12 +54,11 @@ chat_service = ChatService()
 
 @router.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
-    """WebSocket endpoint untuk real-time chat dengan Enhanced Luna AI"""
+    """WebSocket endpoint untuk simple chat (no AI)"""
     await manager.connect(websocket, user_id)
     
     try:
         while True:
-            # Receive message from client
             data = await websocket.receive_text()
             message_data = json.loads(data)
             
@@ -69,7 +66,6 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
             content = message_data.get("data", {})
             
             if message_type == WSMessageType.CHAT_MESSAGE:
-                # Handle chat message
                 conversation_id = content.get("conversation_id")
                 user_message = content.get("message")
                 
@@ -81,28 +77,13 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                     }, user_id)
                     continue
                 
-                # Send typing indicator
-                await manager.send_personal_message({
-                    "type": WSMessageType.TYPING_START,
-                    "data": {"sender": "luna"},
-                    "timestamp": IndonesiaDatetime.now().isoformat()
-                }, user_id)
-                
-                # Process message dengan Enhanced Luna
+                # Process message (no AI)
                 result = await chat_service.send_message(user_id, conversation_id, user_message)
                 
-                # Stop typing indicator
-                await manager.send_personal_message({
-                    "type": WSMessageType.TYPING_STOP,
-                    "data": {"sender": "luna"},
-                    "timestamp": IndonesiaDatetime.now().isoformat()
-                }, user_id)
-                
-                # Convert timestamps ke Indonesia timezone untuk response
                 user_timestamp_wib = IndonesiaDatetime.from_utc(result["user_message"].timestamp)
-                luna_timestamp_wib = IndonesiaDatetime.from_utc(result["luna_response"].timestamp)
+                system_timestamp_wib = IndonesiaDatetime.from_utc(result["system_response"].timestamp)
                 
-                # Send user message back (for confirmation)
+                # Send user message back
                 await manager.send_personal_message({
                     "type": WSMessageType.CHAT_MESSAGE,
                     "data": {
@@ -119,38 +100,23 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                     "timestamp": IndonesiaDatetime.now().isoformat()
                 }, user_id)
                 
-                # Send Luna response dengan metadata financial jika ada
-                luna_response_data = {
+                # Send system response
+                await manager.send_personal_message({
                     "type": WSMessageType.CHAT_MESSAGE,
                     "data": {
                         "message": {
-                            "id": result["luna_response"].id,
+                            "id": result["system_response"].id,
                             "conversation_id": conversation_id,
-                            "sender_type": "luna",
-                            "content": result["luna_response"].content,
-                            "timestamp": luna_timestamp_wib.isoformat(),
+                            "sender_type": "system",
+                            "content": result["system_response"].content,
+                            "timestamp": system_timestamp_wib.isoformat(),
                             "status": "delivered",
                             "timezone": "WIB",
-                            "message_type": result["luna_response"].message_type,
+                            "message_type": result["system_response"].message_type,
                         }
                     },
                     "timestamp": IndonesiaDatetime.now().isoformat()
-                }
-                
-                # Add financial metadata if available
-                if result.get("financial_data"):
-                    luna_response_data["data"]["financial_data"] = result["financial_data"]
-                    luna_response_data["data"]["response_type"] = result.get("response_type")
-                
-                await manager.send_personal_message(luna_response_data, user_id)
-                
-            elif message_type == WSMessageType.TYPING_START:
-                # Handle typing indicator (could be sent to other users in group chat)
-                pass
-            
-            elif message_type == WSMessageType.TYPING_STOP:
-                # Handle stop typing indicator
-                pass
+                }, user_id)
     
     except WebSocketDisconnect:
         manager.disconnect(user_id)
@@ -167,15 +133,11 @@ async def create_conversation(
     request: CreateConversationRequest = None,
     current_user: User = Depends(get_current_user)
 ):
-    """Membuat percakapan baru dan auto-cleanup conversations kosong"""
+    """Membuat percakapan baru"""
     try:
-        # Auto-cleanup empty conversations sebelum membuat yang baru
         cleanup_stats = await chat_service.auto_delete_empty_conversations(current_user.id)
-        print(f"🧹 Cleaned up {cleanup_stats} empty conversations before creating new one")
-        
         conversation = await chat_service.create_conversation(current_user.id)
         
-        # Convert timestamps ke Indonesia timezone untuk response
         created_time_wib = IndonesiaDatetime.from_utc(conversation.created_at)
         updated_time_wib = IndonesiaDatetime.from_utc(conversation.updated_at)
         
@@ -208,9 +170,8 @@ async def get_conversations(
     auto_cleanup: bool = True,
     current_user: User = Depends(get_current_user)
 ):
-    """Mengambil daftar percakapan user dengan timezone Indonesia yang benar"""
+    """Mengambil daftar percakapan user"""
     try:
-        # Auto-cleanup jika diminta
         cleanup_stats = {}
         if auto_cleanup:
             cleanup_stats = await chat_service.auto_delete_empty_conversations(current_user.id)
@@ -219,7 +180,6 @@ async def get_conversations(
         
         conversation_list = []
         for conv in conversations:
-            # Convert all timestamps ke Indonesia timezone
             created_time_wib = IndonesiaDatetime.from_utc(conv.created_at)
             updated_time_wib = IndonesiaDatetime.from_utc(conv.updated_at)
             last_message_time_wib = None
@@ -264,9 +224,8 @@ async def get_conversation_messages(
     limit: int = 50,
     current_user: User = Depends(get_current_user)
 ):
-    """Mengambil pesan dalam percakapan dengan timezone Indonesia yang benar"""
+    """Mengambil pesan dalam percakapan"""
     try:
-        # Verify conversation belongs to user
         conversation = await chat_service.get_conversation_by_id(conversation_id)
         if not conversation or conversation.user_id != current_user.id:
             raise HTTPException(status_code=404, detail="Percakapan tidak ditemukan")
@@ -275,7 +234,6 @@ async def get_conversation_messages(
         
         message_list = []
         for msg in messages:
-            # Convert timestamp ke Indonesia timezone
             timestamp_wib = IndonesiaDatetime.from_utc(msg.timestamp)
             
             message_data = {
@@ -291,13 +249,11 @@ async def get_conversation_messages(
                 "relative_time": IndonesiaDatetime.format_relative(msg.timestamp)
             }
             
-            # Add metadata if available (financial data)
             if msg.metadata:
                 message_data["metadata"] = msg.metadata
             
             message_list.append(message_data)
         
-        # Convert conversation timestamps
         created_time_wib = IndonesiaDatetime.from_utc(conversation.created_at)
         updated_time_wib = IndonesiaDatetime.from_utc(conversation.updated_at)
         
@@ -332,19 +288,16 @@ async def send_message_http(
     request: ChatMessageRequest,
     current_user: User = Depends(get_current_user)
 ):
-    """Mengirim pesan melalui HTTP dengan Enhanced Luna AI"""
+    """Mengirim pesan melalui HTTP (no AI)"""
     try:
-        # Verify conversation belongs to user
         conversation = await chat_service.get_conversation_by_id(conversation_id)
         if not conversation or conversation.user_id != current_user.id:
             raise HTTPException(status_code=404, detail="Percakapan tidak ditemukan")
         
-        # Enhanced send_message dengan financial parsing
         result = await chat_service.send_message(current_user.id, conversation_id, request.message)
         
-        # Convert timestamps ke Indonesia timezone
         user_timestamp_wib = IndonesiaDatetime.from_utc(result["user_message"].timestamp)
-        luna_timestamp_wib = IndonesiaDatetime.from_utc(result["luna_response"].timestamp)
+        system_timestamp_wib = IndonesiaDatetime.from_utc(result["system_response"].timestamp)
         
         response_data = {
             "success": True,
@@ -358,27 +311,21 @@ async def send_message_http(
                     "timezone": "WIB",
                     "formatted_time": IndonesiaDatetime.format_time_only(result["user_message"].timestamp)
                 },
-                "luna_response": {
-                    "id": result["luna_response"].id,
-                    "content": result["luna_response"].content,
-                    "timestamp": luna_timestamp_wib.isoformat(),
-                    "sender_type": "luna",
+                "system_response": {
+                    "id": result["system_response"].id,
+                    "content": result["system_response"].content,
+                    "timestamp": system_timestamp_wib.isoformat(),
+                    "sender_type": "system",
                     "timezone": "WIB",
-                    "formatted_time": IndonesiaDatetime.format_time_only(result["luna_response"].timestamp),
-                    "message_type": result["luna_response"].message_type
+                    "formatted_time": IndonesiaDatetime.format_time_only(result["system_response"].timestamp),
+                    "message_type": result["system_response"].message_type
                 },
                 "current_time_wib": IndonesiaDatetime.format(IndonesiaDatetime.now())
             }
         }
         
-        # Add financial data if available
-        if result.get("financial_data"):
-            response_data["data"]["financial_data"] = result["financial_data"]
-            response_data["data"]["response_type"] = result.get("response_type")
-        
-        # Add metadata if available
-        if result["luna_response"].metadata:
-            response_data["data"]["luna_response"]["metadata"] = result["luna_response"].metadata
+        if result["system_response"].metadata:
+            response_data["data"]["system_response"]["metadata"] = result["system_response"].metadata
         
         return JSONResponse(status_code=200, content=response_data)
         
@@ -487,11 +434,10 @@ async def cleanup_conversations(
 async def get_chat_statistics(
     current_user: User = Depends(get_current_user)
 ):
-    """Mendapatkan statistik chat dengan timezone Indonesia"""
+    """Mendapatkan statistik chat"""
     try:
         stats = await chat_service.get_chat_statistics(current_user.id)
         
-        # Convert last_activity timestamp if exists
         if stats.get("last_activity"):
             last_activity_wib = IndonesiaDatetime.from_utc(stats["last_activity"])
             stats["last_activity_wib"] = last_activity_wib.isoformat()
@@ -508,44 +454,3 @@ async def get_chat_statistics(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gagal mengambil statistik: {str(e)}")
-
-# Endpoint untuk testing financial parsing (development only)
-@router.post("/test-financial-parsing")
-async def test_financial_parsing(
-    message: dict,
-    current_user: User = Depends(get_current_user)
-):
-    """Test endpoint untuk financial parsing (development only)"""
-    import os
-    if os.getenv("DEBUG", "False").lower() != "true":
-        raise HTTPException(status_code=404, detail="Endpoint tidak tersedia")
-    
-    try:
-        from ..services.finance_service import FinanceService
-        finance_service = FinanceService()
-        
-        user_message = message.get("message", "")
-        if not user_message:
-            raise HTTPException(status_code=400, detail="Message required")
-        
-        result = finance_service.parse_financial_message(user_message)
-        
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "message": "Parsing test berhasil",
-                "data": {
-                    "original_message": user_message,
-                    "parse_result": result,
-                    "examples": [
-                        "Dapat gaji 5 juta",
-                        "Bayar listrik 200 ribu", 
-                        "Belanja groceries 150rb",
-                        "Mau nabung buat beli laptop 10 juta"
-                    ]
-                }
-            }
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error parsing: {str(e)}")

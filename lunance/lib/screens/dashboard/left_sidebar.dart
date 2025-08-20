@@ -278,21 +278,7 @@ class _LeftSidebarState extends State<LeftSidebar> {
                 // New Conversation Button
                 _buildNewConversationButton(),
                 
-                // Navigation Items
-                _buildSidebarItem(
-                  icon: Icons.analytics_outlined,
-                  title: 'Jelajahi Keuangan',
-                  isSelected: widget.selectedIndex == 1,
-                  onTap: () => widget.onNavigationItemSelected(1),
-                ),
                 
-                // NEW: Predictions Menu Item
-                _buildSidebarItem(
-                  icon: Icons.trending_up_outlined,
-                  title: 'Prediksi Keuangan',
-                  isSelected: widget.selectedIndex == 3, // NEW: index 3 for predictions
-                  onTap: () => widget.onNavigationItemSelected(3), // NEW: navigate to predictions
-                ),
                 
                 const SizedBox(height: 24),
                 

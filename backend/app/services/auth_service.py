@@ -1,4 +1,4 @@
-# app/services/auth_service.py - UPDATED untuk metode 50/30/20
+# app/services/auth_service.py - UPDATED tanpa FinanceService
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from fastapi import HTTPException, status
@@ -422,7 +422,7 @@ class AuthService:
                 detail="Gagal update profil"
             )
     
-    # === NEW METHODS: Financial Settings Management untuk 50/30/20 ===
+    # === Financial Settings Management untuk 50/30/20 ===
     
     async def update_financial_settings(self, user_id: str, financial_data: UpdateFinancialSettings) -> User:
         """Update financial settings dengan recalculate budget 50/30/20"""
@@ -509,15 +509,6 @@ class AuthService:
             # Get budget allocation 50/30/20
             budget_allocation = user.get_current_budget_allocation()
             
-            # Get financial dashboard dari finance service
-            try:
-                from ..services.finance_service import FinanceService
-                finance_service = FinanceService()
-                dashboard = await finance_service.get_financial_dashboard_50_30_20(user_id)
-            except Exception as e:
-                print(f"Error getting dashboard: {e}")
-                dashboard = {"error": "Could not load dashboard"}
-            
             # Calculate student-specific insights
             student_context = user.get_student_context()
             financial_tips = user.get_student_financial_tips()
@@ -532,7 +523,6 @@ class AuthService:
                     "is_student": user.is_student
                 },
                 "budget_allocation": budget_allocation,
-                "financial_dashboard": dashboard,
                 "student_context": student_context,
                 "student_tips": financial_tips,
                 "method_explanation": {
@@ -594,7 +584,7 @@ class AuthService:
             }
     
     async def get_budget_status(self, user_id: str) -> Dict[str, Any]:
-        """Cek status budget 50/30/20 current month"""
+        """Cek status budget 50/30/20 current month (tanpa FinanceService)"""
         try:
             user = await self.get_user_by_id(user_id)
             if not user or not user.financial_settings:
@@ -603,11 +593,6 @@ class AuthService:
                     "message": "Budget belum di-setup"
                 }
             
-            # Calculate budget status untuk bulan ini
-            from ..services.finance_service import FinanceService
-            finance_service = FinanceService()
-            
-            current_month_spending = await finance_service.get_current_month_spending_by_budget_type(user_id)
             budget_allocation = user.get_current_budget_allocation()
             
             if not budget_allocation["has_budget"]:
@@ -615,55 +600,22 @@ class AuthService:
             
             allocation = budget_allocation["allocation"]
             
-            # Calculate remaining budget
-            remaining_budget = {
-                "needs": max(allocation["needs_budget"] - current_month_spending["needs"], 0),
-                "wants": max(allocation["wants_budget"] - current_month_spending["wants"], 0),
-                "savings": max(allocation["savings_budget"] - current_month_spending["savings"], 0)
-            }
-            
-            # Calculate percentage used
-            percentage_used = {
-                "needs": (current_month_spending["needs"] / allocation["needs_budget"] * 100) if allocation["needs_budget"] > 0 else 0,
-                "wants": (current_month_spending["wants"] / allocation["wants_budget"] * 100) if allocation["wants_budget"] > 0 else 0,
-                "savings": (current_month_spending["savings"] / allocation["savings_budget"] * 100) if allocation["savings_budget"] > 0 else 0
-            }
-            
-            # Determine overall budget health
-            avg_usage = (percentage_used["needs"] + percentage_used["wants"] + percentage_used["savings"]) / 3
-            
-            if avg_usage <= 70:
-                budget_health = "excellent"
-            elif avg_usage <= 90:
-                budget_health = "good"
-            elif avg_usage <= 100:
-                budget_health = "warning"
-            else:
-                budget_health = "over_budget"
-            
-            # Generate recommendations
-            recommendations = []
-            if percentage_used["needs"] > 90:
-                recommendations.append("⚠️ Budget NEEDS hampir habis. Review pengeluaran kebutuhan pokok.")
-            if percentage_used["wants"] > 100:
-                recommendations.append("🚨 Budget WANTS sudah over. Kurangi pengeluaran hiburan dan jajan.")
-            if percentage_used["savings"] < 50:
-                recommendations.append("💡 Budget SAVINGS masih banyak. Pertimbangkan untuk menabung lebih atau investasi.")
-            
-            if not recommendations:
-                recommendations.append("✅ Budget management Anda sudah baik! Pertahankan pola ini.")
+            # Basic budget status tanpa data pengeluaran real
+            # Bisa diintegrasikan dengan transaction service nanti
             
             return {
                 "has_budget": True,
                 "method": "50/30/20 Elizabeth Warren",
                 "current_month": datetime.now().strftime("%B %Y"),
                 "budget_allocation": allocation,
-                "current_spending": current_month_spending,
-                "remaining_budget": remaining_budget,
-                "percentage_used": percentage_used,
-                "budget_health": budget_health,
-                "recommendations": recommendations,
-                "reset_date": "Tanggal 1 setiap bulan"
+                "budget_health": "good",  # Default status
+                "recommendations": [
+                    "✅ Budget 50/30/20 sudah di-setup dengan baik!",
+                    "💡 Mulai catat transaksi untuk monitoring yang lebih akurat.",
+                    "📊 Review budget setiap akhir bulan untuk optimasi."
+                ],
+                "reset_date": "Tanggal 1 setiap bulan",
+                "note": "Monitoring pengeluaran real-time akan tersedia saat transaction service diintegrasikan"
             }
             
         except Exception as e:

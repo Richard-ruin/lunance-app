@@ -95,7 +95,6 @@ def create_indexes():
         db.transactions.create_index([("user_id", 1), ("status", 1)])
         db.transactions.create_index([("user_id", 1), ("source", 1)])
         db.transactions.create_index([("conversation_id", 1)])
-        db.transactions.create_index([("chat_message_id", 1)])
         db.transactions.create_index([("created_at", -1)])
         # Compound index untuk filtering
         db.transactions.create_index([("user_id", 1), ("type", 1), ("status", 1), ("date", -1)])
@@ -108,57 +107,14 @@ def create_indexes():
         db.savings_goals.create_index([("user_id", 1), ("status", 1)])
         db.savings_goals.create_index([("user_id", 1), ("created_at", -1)])
         db.savings_goals.create_index([("user_id", 1), ("target_date", 1)])
-        db.savings_goals.create_index([("conversation_id", 1)])
-        db.savings_goals.create_index([("chat_message_id", 1)])
         db.savings_goals.create_index([("status", 1), ("target_date", 1)])
         print("✅ Savings Goals indexes berhasil dibuat")
     except Exception as e:
         print(f"⚠️ Warning creating savings_goals indexes: {e}")
-    
-    # Index untuk pending_financial_data collection
-    try:
-        db.pending_financial_data.create_index([("user_id", 1), ("is_confirmed", 1)])
-        db.pending_financial_data.create_index([("conversation_id", 1), ("created_at", -1)])
-        db.pending_financial_data.create_index([("expires_at", 1)])
-        db.pending_financial_data.create_index([("chat_message_id", 1)])
-        db.pending_financial_data.create_index([("data_type", 1)])
-        # TTL index untuk auto-delete expired data
-        db.pending_financial_data.create_index([("expires_at", 1)], expireAfterSeconds=0)
-        print("✅ Pending Financial Data indexes berhasil dibuat")
-    except Exception as e:
-        print(f"⚠️ Warning creating pending_financial_data indexes: {e}")
-    
-    # Index untuk financial summary/analytics (jika diperlukan)
-    try:
-        # Index untuk query analytics yang cepat
-        db.transactions.create_index([
-            ("user_id", 1), 
-            ("status", 1), 
-            ("date", 1),
-            ("type", 1)
-        ])
-        
-        # Index untuk category aggregation
-        db.transactions.create_index([
-            ("user_id", 1),
-            ("category", 1),
-            ("type", 1),
-            ("date", -1)
-        ])
-        
-        print("✅ Financial Analytics indexes berhasil dibuat")
-    except Exception as e:
-        print(f"⚠️ Warning creating analytics indexes: {e}")
     
     print("✅ Semua database indexes berhasil dibuat")
 
 def create_initial_data():
     """Membuat data awal jika diperlukan"""
     db = get_database()
-    
-    # Bisa ditambahkan data awal seperti:
-    # - Default categories untuk income/expense
-    # - System user untuk Luna AI
-    # - Default financial settings
-    
     pass

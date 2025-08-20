@@ -6,9 +6,7 @@ import '../../models/chat_model.dart'; // Added missing import for Conversation
 import 'left_sidebar.dart';
 import 'right_sidebar.dart';
 import 'chat_view.dart';
-import 'explore_finance_view.dart';
 import 'chat_history_view.dart';
-import 'predictions_view.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({Key? key}) : super(key: key);
@@ -211,15 +209,11 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     switch (_selectedIndex) {
       case 0:
         return ChatView(conversationId: _selectedConversationId); // Pass conversation ID
-      case 1:
-        return const ExploreFinanceView();
       case 2:
         return ChatHistoryView(
           onNavigationItemSelected: _onNavigationItemSelected,
           onConversationSelected: _onConversationSelected,
         );
-      case 3:
-        return const PredictionsView();
       default:
         return ChatView(conversationId: _selectedConversationId);
     }

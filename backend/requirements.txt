@@ -1,108 +1,163 @@
-# IndoBERT dan Transformers (sudah ada, tapi pastikan versi terbaru)
-transformers>=4.35.0
-torch>=2.0.0
-torchvision>=0.15.0
-tokenizers>=0.15.0
-
-# Additional ML Libraries
-scikit-learn>=1.3.0
-scipy>=1.10.0
-numpy>=1.24.0
-
-# Text Processing
-nltk>=3.8.1
-spacy>=3.7.0
-# id_core_news_sm  # Indonesian spaCy model (install separately)
-
-# Model Training & Evaluation
-datasets>=2.14.0
-evaluate>=0.4.0
-accelerate>=0.21.0
-
-# Additional Transformers Support
-sentencepiece>=0.1.99
-protobuf>=3.20.0
-
-# Indonesian NLP Specific
-# indobenchmark  # Indonesian benchmarks (if available)
-
-# Data Processing
-pandas>=2.0.0
-openpyxl>=3.1.0
-
-# Visualization (optional, untuk analysis)
-matplotlib>=3.7.0
-seaborn>=0.12.0
-plotly>=5.15.0
-
-# Model Optimization
-optimum>=1.13.0
-
-# Logging & Monitoring
-wandb>=0.15.0  # Weights & Biases untuk model tracking (optional)
-
-# Production ML
-onnx>=1.14.0  # Model optimization
-onnxruntime>=1.15.0
-
-# Memory Management
-psutil>=5.9.0
-
-# Configuration Management
-omegaconf>=2.3.0
-
-# Additional utilities
-tqdm>=4.65.0
-rich>=13.0.0
-
-# Development & Testing (ML specific)
-pytest-xdist>=3.3.0
-pytest-benchmark>=4.0.0
-
-# GPU Memory Management (jika pakai GPU)
-py3nvml>=0.2.7
-
-# Model Serialization
-joblib>=1.3.0
-dill>=0.3.7
-
-# Text Similarity & Embeddings
-sentence-transformers>=2.2.0
-
-# Indonesian Language Detection
-langdetect>=1.0.9
-
-
-# Advanced Text Processing
-regex>=2023.0.0
-unidecode>=1.3.0
-
-# Financial Text Processing Specific
-python-dateutil>=2.8.0
-fuzzywuzzy>=0.18.0
-python-Levenshtein>=0.21.0
-
-# Data Validation
-cerberus>=1.3.4
-
-# Caching for Models
-diskcache>=5.6.0
-
-# Progress Tracking
-alive-progress>=3.1.0
-
-# Memory Profiling (development)
-memory-profiler>=0.61.0
-
-# Model Versioning
-dvc>=3.0.0  # Data Version Control (optional)
-
-# API Rate Limiting (untuk production)
-slowapi>=0.1.9
-
-# Background Tasks (untuk model training)
-celery[redis]>=5.3.0
-
-# Configuration
-python-decouple>=3.8
-seqeval>=1.2.2
+accelerate
+aiofiles
+aiohappyeyeballs
+aiohttp
+aiosignal
+amqp
+annotated-types
+anyio
+asyncio
+attrs
+babel
+bcrypt
+bidict
+billiard
+cachetools
+celery
+certifi
+cffi
+charset-normalizer
+click
+click-didyoumean
+click-plugins
+click-repl
+cmdstanpy
+colorama
+contourpy
+convertdate
+coverage
+cryptography
+cycler
+datasets
+dill
+distro
+dnspython  
+ecdsa
+email-validator
+et_xmlfile
+fastapi
+filelock
+fonttools
+frozenlist
+fsspec
+ghp-import
+gTTS
+gunicorn
+h11
+holidays
+httpcore
+httptools
+httpx
+huggingface-hub
+idna
+imageio
+importlib_resources
+iniconfig
+Jinja2
+joblib
+kiwisolver
+kombu
+lazy_loader
+llvmlite
+loguru
+lunardate
+Markdown
+markdown-it-py
+MarkupSafe
+marshmallow
+matplotlib
+mdurl
+mergedeep
+mkdocs
+mkdocs-material
+mkdocs-material-extensions
+more-itertools
+motor
+mpmath
+multidict
+multiprocess
+ninja
+numba
+numpy
+openai
+openai-whisper
+opencv-python
+opencv-python-headless
+openpyxl
+packaging
+paginate
+pandas
+passlib
+pathspec
+Pillow
+platformdirs
+pluggy
+prompt_toolkit
+propcache
+prophet
+psutil
+pyarrow
+pyasn1
+pyclipper
+pycparser
+pydantic
+pydantic_core
+pydub
+Pygments
+pymdown-extensions
+PyMeeus
+pymongo
+pyparsing
+PyPDF2
+pytest
+pytest-asyncio
+pytest-cov
+pytest-mock
+python-bidi
+python-dateutil
+python-dotenv
+python-engineio
+python-jose
+python-magic
+python-multipart
+python-socketio
+pytz
+PyYAML
+pyyaml_env_tag
+redis
+regex
+requests
+scipy
+seqeval
+setuptools
+shapely
+simple-websocket
+six
+sniffio
+SpeechRecognition
+stanio
+starlette
+structlog
+sympy
+threadpoolctl
+tifffile
+tiktoken
+tokenizers
+torch
+torchvision
+tqdm
+transformers
+typing-inspection
+typing_extensions
+tzdata
+urllib3
+uvicorn
+vine
+watchdog
+watchfiles
+wcwidth
+websockets
+win32_setctime
+wsproto
+xxhash
+yarl

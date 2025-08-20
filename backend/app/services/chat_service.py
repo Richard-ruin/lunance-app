@@ -1,4 +1,4 @@
-# app/services/chat_service.py - FIXED VERSION dengan IndoRoBERTa integration
+# app/services/chat_service.py - CLEANED VERSION - No AI responses
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from bson import ObjectId
@@ -8,33 +8,14 @@ from ..config.database import get_database
 from ..models.chat import Conversation, Message, MessageType, ConversationStatus
 from ..utils.timezone_utils import IndonesiaDatetime, now_for_db
 
-# CRITICAL: Import the FIXED Luna AI Core
-from .luna_ai_core import LunaAICore
-
-# Setup logging for tracking IndoRoBERTa usage
 logger = logging.getLogger(__name__)
 
-class ChatServiceFixed:
-    """FIXED Chat Service dengan IndoRoBERTa parser tracking"""
+class ChatService:
+    """Simple Chat Service without AI responses"""
     
     def __init__(self):
         self.db = get_database()
-        
-        # CRITICAL: Initialize FIXED Luna AI Core with IndoRoBERTa
-        logger.info("🔧 Initializing ChatService with FIXED Luna AI Core...")
-        self.luna_ai = LunaAICore()
-        
-        # Log parser information for debugging
-        if hasattr(self.luna_ai, 'get_parser_info'):
-            parser_info = self.luna_ai.get_parser_info()
-            logger.info(f"📊 Luna AI Parser Info: {parser_info}")
-        
-        # Test parser with sample message
-        if hasattr(self.luna_ai, 'test_parser_with_message'):
-            test_result = self.luna_ai.test_parser_with_message("Bayar kos 800 ribu")
-            logger.info(f"🧪 Parser test result: {test_result.get('is_financial_data', False)} using {test_result.get('parser_info', {}).get('parser_type', 'Unknown')}")
-        
-        logger.info("✅ ChatService initialized with IndoRoBERTa integration")
+        logger.info("✅ ChatService initialized (No AI responses)")
     
     async def create_conversation(self, user_id: str) -> Conversation:
         """Membuat percakapan baru"""
@@ -120,15 +101,11 @@ class ChatServiceFixed:
             return []
     
     async def send_message(self, user_id: str, conversation_id: str, content: str) -> Dict[str, Any]:
-        """ENHANCED: Send message dengan IndoRoBERTa parser tracking"""
+        """Send message without AI response"""
         
         try:
             now = now_for_db()
             logger.info(f"📨 Processing message from user {user_id}: '{content}'")
-            
-            # Log parser type being used
-            parser_info = getattr(self.luna_ai, 'parser_type', 'Unknown')
-            logger.info(f"🔧 Using parser: {parser_info}")
             
             # Save user message
             user_message_data = {
@@ -155,103 +132,58 @@ class ChatServiceFixed:
                 timestamp=now
             )
             
-            # CRITICAL: Generate Luna response using FIXED Luna AI Core with IndoRoBERTa
-            logger.info(f"🤖 Generating Luna response with {parser_info} parser...")
-            luna_response_text = await self.luna_ai.generate_response(
-                content, user_id, conversation_id, user_message_id
-            )
+            # NO AI RESPONSE - Just echo message or return simple confirmation
+            echo_timestamp = now_for_db()
             
-            luna_timestamp = now_for_db()
-            
-            # Save Luna response with parser metadata
-            luna_message_data = {
+            echo_message_data = {
                 "conversation_id": conversation_id,
                 "sender_id": None,
-                "sender_type": "luna",
-                "content": luna_response_text,
+                "sender_type": "system",
+                "content": "Pesan Anda telah diterima",
                 "message_type": MessageType.TEXT.value,
                 "status": "sent",
-                "timestamp": luna_timestamp,
+                "timestamp": echo_timestamp,
                 "metadata": {
-                    "parser_type": parser_info,
-                    "response_generated_by": "IndoRoBERTa_Luna_AI_Core"
+                    "response_type": "simple_echo",
+                    "no_ai": True
                 }
             }
             
-            luna_result = self.db.messages.insert_one(luna_message_data)
-            luna_message_id = str(luna_result.inserted_id)
+            echo_result = self.db.messages.insert_one(echo_message_data)
+            echo_message_id = str(echo_result.inserted_id)
             
-            luna_message = Message(
-                id=luna_message_id,
+            echo_message = Message(
+                id=echo_message_id,
                 conversation_id=conversation_id,
                 sender_id=None,
-                sender_type="luna",
-                content=luna_response_text,
+                sender_type="system",
+                content="Pesan Anda telah diterima",
                 message_type=MessageType.TEXT,
                 status="sent",
-                timestamp=luna_timestamp,
+                timestamp=echo_timestamp,
                 metadata={
-                    "parser_type": parser_info,
-                    "response_generated_by": "IndoRoBERTa_Luna_AI_Core"
+                    "response_type": "simple_echo",
+                    "no_ai": True
                 }
             )
             
             # Update conversation
-            await self._update_conversation_safe(conversation_id, content, luna_response_text, user_id)
+            await self._update_conversation_safe(conversation_id, content, "Pesan Anda telah diterima", user_id)
             
-            logger.info(f"✅ Message processed successfully with {parser_info} parser")
-            
-            # Check for financial data metadata
-            financial_metadata = {}
-            response_type = "regular"
-            
-            # Enhanced detection for financial responses
-            if any(phrase in luna_response_text for phrase in ["detail transaksi", "target tabungan", "ketik **\"ya\"**"]):
-                financial_metadata = {
-                    "contains_financial_data": True,
-                    "requires_confirmation": True,
-                    "data_type": "confirmation_request",
-                    "parser_used": parser_info
-                }
-                response_type = "financial_confirmation"
-            elif any(phrase in luna_response_text for phrase in ["berhasil disimpan", "berhasil dibuat", "data dibatalkan"]):
-                financial_metadata = {
-                    "contains_financial_data": True,
-                    "requires_confirmation": False,
-                    "data_type": "financial_result",
-                    "parser_used": parser_info
-                }
-                response_type = "financial_result"
-            elif any(phrase in luna_response_text for phrase in ["total tabungan", "target bulan", "progress tabungan", "pengeluaran terbesar"]):
-                financial_metadata = {
-                    "contains_financial_data": True,
-                    "requires_confirmation": False,
-                    "data_type": "financial_query_result",
-                    "parser_used": parser_info
-                }
-                response_type = "financial_info"
-            
-            # Log financial data detection
-            if financial_metadata:
-                logger.info(f"💰 Financial data detected by {parser_info}: {financial_metadata}")
+            logger.info(f"✅ Message processed successfully (No AI)")
             
             return {
                 "user_message": user_message,
-                "luna_response": luna_message,
+                "system_response": echo_message,
                 "conversation_updated": True,
-                "financial_data": financial_metadata if financial_metadata else None,
-                "response_type": response_type,
-                "parser_info": {
-                    "parser_type": parser_info,
-                    "message_processed_by": "IndoRoBERTa_Luna_AI_Core"
-                }
+                "response_type": "simple_echo"
             }
             
         except Exception as e:
             logger.error(f"❌ Error in send_message: {e}")
             raise e
     
-    async def _update_conversation_safe(self, conversation_id: str, user_message: str, luna_response: str, user_id: str):
+    async def _update_conversation_safe(self, conversation_id: str, user_message: str, system_response: str, user_id: str):
         """Update conversation dengan title generation"""
         try:
             current_conv = self.db.conversations.find_one({"_id": ObjectId(conversation_id)})
@@ -264,9 +196,10 @@ class ChatServiceFixed:
             current_title = current_conv.get("title")
             new_title = current_title
             
-            # Generate title from first user message using Luna AI Core
+            # Simple title generation from first words
             if not current_title and current_count == 0:
-                new_title = self.luna_ai.generate_conversation_title(user_message, luna_response)
+                words = user_message.split()[:3]
+                new_title = " ".join(words) + "..." if len(words) == 3 else " ".join(words)
             
             update_time = now_for_db()
             
@@ -403,7 +336,7 @@ class ChatServiceFixed:
             return {"empty_conversations_deleted": 0, "conversations_updated": 0, "total_cleaned": 0}
     
     async def get_chat_statistics(self, user_id: str) -> Dict[str, Any]:
-        """Statistik chat dengan timezone Indonesia dan parser info"""
+        """Statistik chat"""
         try:
             total_conversations = self.db.conversations.count_documents({
                 "user_id": user_id,
@@ -420,16 +353,12 @@ class ChatServiceFixed:
                 "conversation_id": {"$in": conversation_ids}
             })
             
-            # Get recent activity
             recent_activity = self.db.conversations.find_one(
                 {"user_id": user_id, "status": {"$ne": ConversationStatus.DELETED.value}},
                 sort=[("updated_at", -1)]
             )
             
             last_activity = recent_activity.get("updated_at") if recent_activity else None
-            
-            # Get parser info
-            parser_info = getattr(self.luna_ai, 'parser_type', 'Unknown')
             
             return {
                 "total_conversations": total_conversations,
@@ -439,16 +368,12 @@ class ChatServiceFixed:
                 "last_activity": last_activity,
                 "timezone": "Asia/Jakarta (WIB/GMT+7)",
                 "current_time_wib": IndonesiaDatetime.format(IndonesiaDatetime.now()),
-                "luna_ai_version": "Enhanced with IndoRoBERTa Financial Parser",
-                "parser_type": parser_info,
+                "chat_version": "Simple Chat (No AI)",
                 "features_enabled": [
-                    "IndoRoBERTa Financial Intelligence",
-                    "Auto Transaction Parsing with ML",
-                    "Student Categories Recognition",
-                    "Target Date Recognition",
-                    "Real-time Financial Queries",
-                    "Bahasa Indonesia NLP Support",
-                    f"Parser: {parser_info}"
+                    "Simple Chat Interface",
+                    "Message Storage",
+                    "Conversation Management",
+                    "No AI Responses"
                 ]
             }
         except Exception as e:
@@ -461,135 +386,5 @@ class ChatServiceFixed:
                 "last_activity": None,
                 "timezone": "Asia/Jakarta (WIB/GMT+7)",
                 "current_time_wib": IndonesiaDatetime.format(IndonesiaDatetime.now()),
-                "parser_type": "Unknown",
                 "error": str(e)
             }
-    
-    # ==========================================
-    # PARSER TESTING METHODS
-    # ==========================================
-    
-    def test_parser_integration(self, test_message: str = "Bayar kos 800 ribu") -> Dict[str, Any]:
-        """Test IndoRoBERTa parser integration"""
-        try:
-            logger.info(f"🧪 Testing parser integration with: '{test_message}'")
-            
-            if hasattr(self.luna_ai, 'test_parser_with_message'):
-                result = self.luna_ai.test_parser_with_message(test_message)
-                logger.info(f"🧪 Parser integration test result: {result}")
-                return result
-            else:
-                return {
-                    "error": "test_parser_with_message method not available",
-                    "parser_type": getattr(self.luna_ai, 'parser_type', 'Unknown')
-                }
-                
-        except Exception as e:
-            logger.error(f"❌ Parser integration test failed: {e}")
-            return {
-                "error": str(e),
-                "parser_type": getattr(self.luna_ai, 'parser_type', 'Unknown')
-            }
-    
-    def get_parser_status(self) -> Dict[str, Any]:
-        """Get comprehensive parser status"""
-        try:
-            if hasattr(self.luna_ai, 'get_parser_info'):
-                return self.luna_ai.get_parser_info()
-            else:
-                return {
-                    "parser_type": getattr(self.luna_ai, 'parser_type', 'Unknown'),
-                    "error": "get_parser_info method not available"
-                }
-        except Exception as e:
-            return {
-                "error": str(e),
-                "parser_type": "Unknown"
-            }
-    
-    # === FINANCIAL CHAT INTEGRATION METHODS (unchanged) ===
-    
-    async def get_pending_financial_confirmations(self, user_id: str, conversation_id: str) -> List[Dict[str, Any]]:
-        """Dapatkan financial data yang belum dikonfirmasi untuk conversation ini"""
-        try:
-            pending_data = self.luna_ai.db.pending_financial_data.find({
-                "user_id": user_id,
-                "conversation_id": conversation_id,
-                "is_confirmed": False,
-                "expires_at": {"$gt": now_for_db()}
-            }).sort("created_at", -1)
-            
-            result = []
-            for data in pending_data:
-                result.append({
-                    "pending_id": str(data["_id"]),
-                    "data_type": data["data_type"],
-                    "parsed_data": data["parsed_data"],
-                    "original_message": data["original_message"],
-                    "created_at": data["created_at"],
-                    "expires_at": data["expires_at"]
-                })
-            
-            return result
-        except Exception as e:
-            logger.error(f"Error getting pending confirmations: {e}")
-            return []
-    
-    async def confirm_financial_data_via_chat(self, user_id: str, conversation_id: str, 
-                                           confirmed: bool, pending_id: str = None) -> Dict[str, Any]:
-        """Konfirmasi financial data melalui chat interface"""
-        try:
-            if not pending_id:
-                # Get latest pending data
-                pending_data = self.luna_ai.get_latest_pending_data(user_id, conversation_id)
-                if pending_data:
-                    pending_id = str(pending_data["_id"])
-            
-            if not pending_id:
-                return {"success": False, "message": "Tidak ada data yang menunggu konfirmasi"}
-            
-            # Use Luna AI Core confirmation logic
-            from .finance_service import FinanceService
-            finance_service = FinanceService()
-            
-            result = finance_service.confirm_pending_data(pending_id, user_id, confirmed)
-            
-            return result
-        except Exception as e:
-            logger.error(f"Error confirming financial data via chat: {e}")
-            return {"success": False, "message": f"Error: {str(e)}"}
-    
-    async def get_financial_chat_context(self, user_id: str) -> Dict[str, Any]:
-        """Dapatkan context keuangan untuk chat (untuk Luna AI responses)"""
-        try:
-            # Get user's current financial status for context
-            from .finance_service import FinanceService
-            finance_service = FinanceService()
-            
-            # Get basic financial dashboard
-            dashboard = await finance_service.get_financial_dashboard(user_id)
-            
-            context = {
-                "total_savings": dashboard["calculated_totals"]["actual_current_savings"],
-                "monthly_target": dashboard["user_financial_settings"]["monthly_savings_target"],
-                "active_goals_count": dashboard["active_goals"]["count"],
-                "recent_transactions_count": len(dashboard["recent_activity"]["transactions"]),
-                "needs_sync": dashboard["sync_status"]["needs_sync"],
-                "parser_type": getattr(self.luna_ai, 'parser_type', 'Unknown')
-            }
-            
-            return context
-        except Exception as e:
-            logger.error(f"Error getting financial chat context: {e}")
-            return {
-                "total_savings": 0,
-                "monthly_target": 0,
-                "active_goals_count": 0,
-                "recent_transactions_count": 0,
-                "needs_sync": False,
-                "parser_type": getattr(self.luna_ai, 'parser_type', 'Unknown'),
-                "error": str(e)
-            }
-
-# Export the fixed version as the main class
-ChatService = ChatServiceFixed
